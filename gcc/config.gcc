@@ -2286,7 +2286,10 @@ i[34567]86-*-mingw* | x86_64-*-mingw*)
 			tmake_file="${tmake_file} i386/t-mingw-w32"
 			;;
 	esac
-        native_system_header_dir=/mingw/include
+	# Don't ignore values passed in to configure via --native-system-header-dir
+	if test x$native_system_header_dir = x ; then
+		native_system_header_dir=/mingw/include
+	fi
 	target_gtfiles="$target_gtfiles \$(srcdir)/config/mingw/winnt.cc"
 	target_gtfiles="$target_gtfiles \$(srcdir)/config/mingw/winnt-dll.cc"
 	extra_options="${extra_options} mingw/cygming.opt mingw/mingw.opt"
