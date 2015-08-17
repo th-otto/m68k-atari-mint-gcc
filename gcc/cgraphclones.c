@@ -531,19 +531,30 @@ cgraph_node::create_clone (tree new_decl, gcov_type gcov_count, int freq,
 static GTY(()) unsigned int clone_fn_id_num;
 
 /* Return a new assembler name for a clone with SUFFIX of a decl named
-   NAME.  */
+   NAME. Final stdcall @N suffixes are maintained. */
 
 tree
 clone_function_name_1 (const char *name, const char *suffix)
 {
   size_t len = strlen (name);
   char *tmp_name, *prefix;
+  char *at_suffix = NULL;
 
   prefix = XALLOCAVEC (char, len + strlen (suffix) + 2);
+  /* name + 1 to skip fastcall which begins with '@' */
+  at_suffix = strchr (name + 1, '@');
+  size_t at_suffix_len = 0;
+  if (at_suffix)
+    {
+      at_suffix_len = strlen (at_suffix);
+      len -= at_suffix_len;
+    }
   memcpy (prefix, name, len);
   strcpy (prefix + len + 1, suffix);
   prefix[len] = symbol_table::symbol_suffix_separator ();
   ASM_FORMAT_PRIVATE_NAME (tmp_name, prefix, clone_fn_id_num++);
+  if (at_suffix)
+    strcat (tmp_name, at_suffix);
   return get_identifier (tmp_name);
 }
 
