@@ -1,3 +1,11 @@
+Sun Oct 16 18:17:25 CEST 2016 Krystian Baclawski
+
+  2001-06-09  Peter Jakubek <pjak@snafu.de>
+	* config/m68k/m68k.md (ashrdi_const): Fix right shift by 16.
+
+  Thu Oct 14 10:51:49 1999  Richard Henderson  <rth@cygnus.com>
+	* m68k.md (zero_extendsidi2): Add missing output reload constraint.
+
 Fri Mar 16 12:46:19 GMT 2001 Bernd Schmidt  (bernds@redhat.com)
 
 	* gcc-2.95.3 Released.
