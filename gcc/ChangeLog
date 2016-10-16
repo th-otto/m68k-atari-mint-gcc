@@ -1,3 +1,19 @@
+Sun Oct 16 20:02:26 CEST 2016 Krystian Baclawski
+
+  2004-03-16   Richard Zidlicky  <rz@linux-m68k.org>
+	* config/m68k/m68k.md: Fix constraints for bitfield instructions.
+
+  Thu Jan  9 12:00:36 CET 2003  Jan Hubicka  <jh@suse.cz>
+	* m68k.md (umulsidi, mulsidi expanders): Use register operand.
+
+  2002-04-02  Richard Henderson  <rth@redhat.com>
+	* config/m68k/m68k.md (dbcc peepholes): Match four forms of dbra.
+
+  2001-08-27  Roman Zippel  <zippel@linux-m68k.org>
+	* config/m68k/m68k.md (pushqi1): New.
+	(adddi_dilshr32, adddi_dishl32): Only data register can be
+	source for mem destination.
+
 Sun Oct 16 18:17:25 CEST 2016 Krystian Baclawski
 
   2001-06-09  Peter Jakubek <pjak@snafu.de>
