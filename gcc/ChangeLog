@@ -1,3 +1,20 @@
+Tue Oct 18 11:28:12 CEST 2016 Krystian Baclawski
+
+  2016-02-22  Jakub Jelinek  <jakub@redhat.com>
+	* config/m68k/m68k.md (ashldi3, ashrdi3, lshrdi3): Use
+	SImode for last match_operand.
+
+  2014-04-24  Segher Boessenkool  <segher@kernel.crashing.org>
+	* config/m68k/m68k.md (extendplussidi): Don't allow memory for
+	operand 1.
+
+  2009-12-30  Andreas Schwab  <schwab@linux-m68k.org>
+	* config/m68k/m68k.md (rotlsi_16): New insn.
+
+  2005-07-24  Andreas Schwab  <schwab@suse.de>
+	* config/m68k/m68k.md ("extendqidi2"): When source is an address
+	register use a word move.  Correct operand of ext.w in 68000 code.
+
 Sun Oct 16 20:02:26 CEST 2016 Krystian Baclawski
 
   2004-03-16   Richard Zidlicky  <rz@linux-m68k.org>
