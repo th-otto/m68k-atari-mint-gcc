@@ -2,9 +2,9 @@
 # Use multiple libraries
 # 
 
-MULTILIB_OPTIONS = m68020-60/mcpu=5475 mshort
+MULTILIB_OPTIONS = m68020-60/mcpu=5475 mshort mfastcall
 
-MULTILIB_DIRNAMES = m68020-60 m5475 mshort
+MULTILIB_DIRNAMES = m68020-60 m5475 mshort mfastcall
 
 MULTILIB_MATCHES = \
 	m68020-60=m68881 \
