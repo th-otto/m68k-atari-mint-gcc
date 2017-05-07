@@ -86,7 +86,7 @@ do {								\
    structure return, so have to use a1 for the static chain.  */
 
 #undef STATIC_CHAIN_REGNUM
-#define STATIC_CHAIN_REGNUM A1_REG
+#define STATIC_CHAIN_REGNUM (TARGET_FASTCALL ? A2_REG : A1_REG)
 #undef M68K_STATIC_CHAIN_REG_NAME
 #define M68K_STATIC_CHAIN_REG_NAME REGISTER_PREFIX "a1"
 

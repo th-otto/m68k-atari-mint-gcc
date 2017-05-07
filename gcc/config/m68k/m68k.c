@@ -1844,6 +1844,12 @@ m68k_ok_for_sibcall_p (tree decl, tree exp)
       && m68k_function_type_abi (type) == STD_ABI)
       return false;
 
+  /* FIXME: currently does not work at all for FASTCALL, because the
+     A2 register for the call will be restored in the epilogue
+     befor being used */
+  if (cfun->machine->call_abi == FASTCALL_ABI)
+      return false;
+
   kind = m68k_get_function_kind (current_function_decl);
   if (kind == m68k_fk_normal_function)
     /* We can always sibcall from a normal function, because it's
@@ -5444,7 +5450,7 @@ output_call (rtx x)
   if (symbolic_operand (x, VOIDmode))
     return m68k_symbolic_call;
   else
-    return "jsr %a0";
+    return "jsr %a0"; /* note: will be replaced by STATIC_CHAIN_REGNUM in m68k_legitimize_sibcall_address */
 }
 
 /* Likewise sibling calls.  */
@@ -5455,7 +5461,7 @@ output_sibcall (rtx x)
   if (symbolic_operand (x, VOIDmode))
     return m68k_symbolic_jump;
   else
-    return "jmp %a0";
+    return "jmp %a0"; /* note: will be replaced by STATIC_CHAIN_REGNUM in m68k_legitimize_sibcall_address */
 }
 
 static void
