@@ -27,6 +27,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 	FUNC(__mulsi3)
 	.globl	SYM (__mulsi3)
 SYM (__mulsi3):
+	move.l  d2,-(a7)
 	movel   d0, a0          | d0a0 = x0:x1
 	movel   d1, a1		| d1a1 = y0:y1
 	swap	d0              | d0   = x1:x0 
@@ -44,6 +45,7 @@ SYM (__mulsi3):
 	movel	a1,d1		| d1 = y0:y1
 	muluw	d2, d1		| d1 = x1*y1
 
+	move.l  (a7)+,d2
 	addl	d1, d0
 
 	rts
@@ -55,10 +57,11 @@ SYM (__mulsi3):
 	.globl	SYM (__udivsi3)
 SYM (__udivsi3):
 #ifndef __mcoldfire__
+	move.l  d2,-(a7)
 	movel	d0, a0
 
 	cmpl	IMM (0x10000), d1 /* divisor >= 2 ^ 16 ?   */
-	jcc	L3		/* then try next algorithm */
+	jcc	udivsi3_fast_L3		/* then try next algorithm */
 	movel	d0, d2
 	clrw	d2
 	swap	d2
@@ -68,13 +71,13 @@ SYM (__udivsi3):
 	movew	a0, d2		/* get low dividend + high rest */
 	divu	d1, d2		/* low quotient */
 	movew	d2, d0
-	jra	L6
+	jra	udivsi3_fast_L6
 
-L3:	movel	d1, d2		/* use d2 as divisor backup */
-L4:	lsrl	IMM (1), d1	/* shift divisor */
+udivsi3_fast_L3:	movel	d1, d2		/* use d2 as divisor backup */
+udivsi3_fast_L4:	lsrl	IMM (1), d1	/* shift divisor */
 	lsrl	IMM (1), d0	/* shift dividend */
 	cmpl	IMM (0x10000), d1 /* still divisor >= 2 ^ 16 ?  */
-	jcc	L4
+	jcc	udivsi3_fast_L4
 	divu	d1, d0		/* now we have 16-bit divisor */
 	andl	IMM (0xffff), d0 /* mask out divisor, ignore remainder */
 
@@ -87,32 +90,34 @@ L4:	lsrl	IMM (1), d1	/* shift divisor */
 	mulu	d0, d2		/* high part, at most 17 bits */
 	swap	d2		/* align high part with low part */
 	tstw	d2		/* high part 17 bits? */
-	jne	L5		/* if 17 bits, quotient was too large */
+	jne	udivsi3_fast_L5		/* if 17 bits, quotient was too large */
 	addl	d2, d1		/* add parts */
-	jcs	L5		/* if sum is 33 bits, quotient was too large */
+	jcs	udivsi3_fast_L5		/* if sum is 33 bits, quotient was too large */
 	cmpl	a0, d1		/* compare the sum with the dividend */
-	jls	L6		/* if sum > dividend, quotient was too large */
-L5:	subql	IMM (1), d0	/* adjust quotient */
+	jls	udivsi3_fast_L6		/* if sum > dividend, quotient was too large */
+udivsi3_fast_L5:	subql	IMM (1), d0	/* adjust quotient */
 
-L6:	rts
+udivsi3_fast_L6:
+	move.l  (a7)+,d2
+	rts
 
 #else /* __mcoldfire__ */
 
 /* ColdFire implementation of non-restoring division algorithm from
    Hennessy & Patterson, Appendix A. */
-	moveml	d3-d4,sp@
+	moveml	d2-d4,sp@
 	clrl	d2		| clear p
 	moveq	IMM (31),d4
-L1:	addl	d0,d0		| shift reg pair (p,a) one bit left
+udivsi3_fast_L1:	addl	d0,d0		| shift reg pair (p,a) one bit left
 	addxl	d2,d2
 	movl	d2,d3		| subtract b from p, store in tmp.
 	subl	d1,d3
-	jcs	L2		| if no carry,
+	jcs	udivsi3_fast_L2		| if no carry,
 	bset	IMM (0),d0	| set the low order bit of a to 1,
 	movl	d3,d2		| and store tmp in p.
-L2:	subql	IMM (1),d4
-	jcc	L1
-	moveml	sp@,d3-d4	| restore data registers
+udivsi3_fast_L2:	subql	IMM (1),d4
+	jcc	udivsi3_fast_L1
+	moveml	sp@,d2-d4	| restore data registers
 	rts
 #endif /* __mcoldfire__ */
 
@@ -123,17 +128,18 @@ L2:	subql	IMM (1),d4
 	FUNC(__divsi3)
 	.globl	SYM (__divsi3)
 SYM (__divsi3):
+	move.l  d2,-(a7)
 	moveq	IMM (1), d2	/* sign of result stored in d2 (=1 or =-1) */
 	tstl	d1
-	jpl	L1
+	jpl	divsi3_fast_L1
 	negl	d1
 #ifndef __mcoldfire__
 	negw	d2		/* change sign because divisor <0  */
 #else
 	negl	d2		/* change sign because divisor <0  */
 #endif
-L1:	tstl	d0		/* d0 = dividend */
-	jpl	L2
+divsi3_fast_L1:	tstl	d0		/* d0 = dividend */
+	jpl	divsi3_fast_L2
 	negl	d0
 #ifndef __mcoldfire__
 	negw	d2
@@ -141,14 +147,16 @@ L1:	tstl	d0		/* d0 = dividend */
 	negl	d2
 #endif
 
-L2:	movew	d2,a1		/* Called function MUST NOT clobber a1 */
+divsi3_fast_L2:	movew	d2,a1		/* Called function MUST NOT clobber a1 */
 	PICCALL	SYM (__udivsi3)	/* divide abs(dividend) by abs(divisor) */
 
 	movew	a1,d2
-	jpl	L3
+	jpl	divsi3_fast_L3
 	negl	d0
 
-L3:	rts
+divsi3_fast_L3:
+	move.l  (a7)+,d2
+	rts
 #endif /* L_divsi3 */
 
 #ifdef  L_umodsi3
@@ -156,6 +164,7 @@ L3:	rts
 	FUNC(__umodsi3)
 	.globl	SYM (__umodsi3)
 SYM (__umodsi3):
+	move.l  d2,-(a7)
 	movel	d0, d2
 	movel	d1, a1		/* a1 MUST NOT be clobbered by calls*/
 	PICCALL	SYM (__udivsi3)
@@ -168,6 +177,7 @@ SYM (__umodsi3):
 	movel	d2, d1		/* d1 = dividend */
 	subl	d0, d1		/* d1 = a - (a/b)*b */
 	movel	d1, d0
+	move.l  (a7)+,d2
 	rts
 #endif /* L_umodsi3 */
 
@@ -176,6 +186,7 @@ SYM (__umodsi3):
 	FUNC(__modsi3)
 	.globl	SYM (__modsi3)
 SYM (__modsi3):
+	move.l  d2,-(a7)
 	movel	d0, sp@-
 	movel	d1, sp@-
 	PICCALL	SYM (__divsi3)
@@ -188,6 +199,7 @@ SYM (__modsi3):
 	movel	sp@+, d1	/* d1 = dividend */
 	subl	d0, d1		/* d1 = a - (a/b)*b */
 	movel	d1, d0
+	move.l  (a7)+,d2
 	rts
 #endif /* L_modsi3 */
 
