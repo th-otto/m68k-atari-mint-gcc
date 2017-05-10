@@ -41,9 +41,10 @@
 #endif
 
 #ifdef _GLIBCXX_FILESYSTEM_IS_WINDOWS
-# undef opendir
-# define opendir _wopendir
-#endif
+# include "fs-win32.h"
+#else
+# include "fs-posix.h"
+#endif // _GLIBCXX_FILESYSTEM_IS_WINDOWS
 
 namespace fs = std::experimental::filesystem;
 
@@ -51,7 +52,7 @@ struct fs::_Dir
 {
   _Dir() : dirp(nullptr) { }
 
-  _Dir(DIR* dirp, const fs::path& path) : dirp(dirp), path(path) { }
+  _Dir(os_DIR_t* dirp, const fs::path& path) : dirp(dirp), path(path) { }
 
   _Dir(_Dir&& d)
   : dirp(std::exchange(d.dirp, nullptr)), path(std::move(d.path)),
@@ -60,11 +61,11 @@ struct fs::_Dir
 
   _Dir& operator=(_Dir&&) = delete;
 
-  ~_Dir() { if (dirp) ::closedir(dirp); }
+  ~_Dir() { if (dirp) ::os_closedir(dirp); }
 
   bool advance(std::error_code*, directory_options = directory_options::none);
 
-  DIR*			dirp;
+  os_DIR_t*			dirp;
   fs::path		path;
   directory_entry	entry;
   file_type		type = file_type::none;
@@ -87,7 +88,7 @@ namespace
     if (ec)
       ec->clear();
 
-    if (DIR* dirp = ::opendir(p.c_str()))
+    if (os_DIR_t* dirp = ::os_opendir(p.c_str()))
       return {dirp, p};
 
     const int err = errno;
@@ -105,7 +106,7 @@ namespace
   }
 
   inline fs::file_type
-  get_file_type(const ::dirent& d __attribute__((__unused__)))
+  get_file_type(const ::os_dirent_t& d __attribute__((__unused__)))
   {
 #ifdef _GLIBCXX_HAVE_STRUCT_DIRENT_D_TYPE
     switch (d.d_type)
@@ -145,13 +146,14 @@ fs::_Dir::advance(error_code* ec, directory_options options)
     ec->clear();
 
   int err = std::exchange(errno, 0);
-  const auto entp = readdir(dirp);
+  const auto entp = ::os_readdir(dirp);
   std::swap(errno, err);
 
   if (entp)
     {
       // skip past dot and dot-dot
-      if (!strcmp(entp->d_name, ".") || !strcmp(entp->d_name, ".."))
+      if (!std::char_traits<path::value_type>::compare(entp->d_name, _WS("."), 1) ||
+	    !std::char_traits<path::value_type>::compare(entp->d_name, _WS(".."), 2))
 	return advance(ec, options);
       entry = fs::directory_entry{path / entp->d_name};
       type = get_file_type(*entp);
@@ -239,7 +241,7 @@ recursive_directory_iterator(const path& p, directory_options options,
                              error_code* ec)
 : _M_options(options), _M_pending(true)
 {
-  if (DIR* dirp = ::opendir(p.c_str()))
+  if (os_DIR_t* dirp = ::os_opendir(p.c_str()))
     {
       auto sp = std::make_shared<_Dir_stack>();
       sp->push(_Dir{ dirp, p });

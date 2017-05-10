@@ -296,7 +296,7 @@ path::has_filename() const
 std::pair<const path::string_type*, std::size_t>
 path::_M_find_extension() const
 {
-  const std::string* s = nullptr;
+  const path::string_type* s = nullptr;
 
   if (_M_type != _Type::_Multi)
     s = &_M_pathname;

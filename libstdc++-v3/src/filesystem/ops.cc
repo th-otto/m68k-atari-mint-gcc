@@ -56,11 +56,10 @@
 #endif
 
 #ifdef _GLIBCXX_FILESYSTEM_IS_WINDOWS
-# undef utime
-# define utime _wutime
-# undef chmod
-# define chmod _wchmod
-#endif
+# include "fs-win32.h"
+#else
+# include "fs-posix.h"
+#endif // _GLIBCXX_FILESYSTEM_IS_WINDOWS
 
 namespace fs = std::experimental::filesystem;
 
@@ -88,11 +87,7 @@ fs::absolute(const path& p, const path& base)
 
 namespace
 {
-#ifdef _GLIBCXX_FILESYSTEM_IS_WINDOWS
-  inline bool is_dot(wchar_t c) { return c == L'.'; }
-#else
-  inline bool is_dot(char c) { return c == '.'; }
-#endif
+  inline bool is_dot(fs::path::value_type c) { return c == _WS('.'); }
 
   inline bool is_dot(const fs::path& path)
   {
@@ -111,7 +106,7 @@ namespace
     void operator()(void* p) const { ::free(p); }
   };
 
-  using char_ptr = std::unique_ptr<char[], free_as_in_malloc>;
+  using char_ptr = std::unique_ptr<fs::path::value_type[], free_as_in_malloc>;
 }
 
 fs::path
@@ -250,7 +245,7 @@ namespace
 #ifdef _GLIBCXX_HAVE_SYS_STAT_H
 namespace
 {
-  typedef struct ::stat stat_type;
+  typedef struct ::os_stat_t stat_type;
 
   inline fs::file_type
   make_file_type(const stat_type& st) noexcept
@@ -267,10 +262,12 @@ namespace
       return file_type::block;
     else if (S_ISFIFO(st.st_mode))
       return file_type::fifo;
+#ifndef _GLIBCXX_FILESYSTEM_IS_WINDOWS
     else if (S_ISLNK(st.st_mode))
       return file_type::symlink;
     else if (S_ISSOCK(st.st_mode))
       return file_type::socket;
+#endif // _GLIBCXX_FILESYSTEM_IS_WINDOWS
 #endif
     return file_type::unknown;
 
@@ -323,7 +320,7 @@ namespace
 
     if (to_st == nullptr)
       {
-	if (::stat(to.c_str(), &st1))
+	if (::os_stat(to.c_str(), &st1))
 	  {
 	    int err = errno;
 	    if (!is_not_found_errno(err))
@@ -345,7 +342,7 @@ namespace
 
     if (from_st == nullptr)
       {
-	if (::stat(from.c_str(), &st2))
+	if (::os_stat(from.c_str(), &st2))
 	  {
 	    ec.assign(errno, std::generic_category());
 	    return false;
@@ -410,7 +407,7 @@ namespace
       int fd;
     };
 
-    CloseFD in = { ::open(from.c_str(), O_RDONLY) };
+    CloseFD in = { ::os_open(from.c_str(), O_RDONLY) };
     if (in.fd == -1)
       {
 	ec.assign(errno, std::generic_category());
@@ -421,7 +418,7 @@ namespace
       oflag |= O_TRUNC;
     else
       oflag |= O_EXCL;
-    CloseFD out = { ::open(to.c_str(), oflag, S_IWUSR) };
+    CloseFD out = { ::os_open(to.c_str(), oflag, S_IWUSR) };
     if (out.fd == -1)
       {
 	if (errno == EEXIST && is_set(option, opts::skip_existing))
@@ -436,7 +433,7 @@ namespace
 #elif defined _GLIBCXX_USE_FCHMODAT
     if (::fchmodat(AT_FDCWD, to.c_str(), from_st->st_mode, 0))
 #else
-    if (::chmod(to.c_str(), from_st->st_mode))
+    if (::os_chmod(to.c_str(), from_st->st_mode))
 #endif
       {
 	ec.assign(errno, std::generic_category());
@@ -522,16 +519,24 @@ fs::copy(const path& from, const path& to, copy_options options,
   stat_type from_st, to_st;
   // _GLIBCXX_RESOLVE_LIB_DEFECTS
   // 2681. filesystem::copy() cannot copy symlinks
+#ifndef _GLIBCXX_FILESYSTEM_IS_WINDOWS
   if (use_lstat || copy_symlinks
       ? ::lstat(from.c_str(), &from_st)
       : ::stat(from.c_str(), &from_st))
+#else
+  if (::os_stat(from.c_str(), &from_st))
+#endif // _GLIBCXX_FILESYSTEM_IS_WINDOWS
     {
       ec.assign(errno, std::generic_category());
       return;
     }
+#ifndef _GLIBCXX_FILESYSTEM_IS_WINDOWS
   if (use_lstat
       ? ::lstat(to.c_str(), &to_st)
       : ::stat(to.c_str(), &to_st))
+#else
+  if (::os_stat(to.c_str(), &to_st))
+#endif // _GLIBCXX_FILESYSTEM_IS_WINDOWS
     {
       if (!is_not_found_errno(errno))
 	{
@@ -716,8 +721,12 @@ namespace
   {
     bool created = false;
 #ifdef _GLIBCXX_HAVE_SYS_STAT_H
+#ifndef _GLIBCXX_FILESYSTEM_IS_WINDOWS
     ::mode_t mode = static_cast<std::underlying_type_t<fs::perms>>(perm);
-    if (::mkdir(p.c_str(), mode))
+    if (::os_mkdir(p.c_str(), mode))
+#else
+    if (::os_mkdir(p.c_str()))
+#endif // _GLIBCXX_FILESYSTEM_IS_WINDOWS
       {
 	const int err = errno;
 	if (err != EEXIST || !is_directory(p, ec))
@@ -770,7 +779,7 @@ fs::create_directory(const path& p, const path& attributes,
 {
 #ifdef _GLIBCXX_HAVE_SYS_STAT_H
   stat_type st;
-  if (::stat(attributes.c_str(), &st))
+  if (::os_stat(attributes.c_str(), &st))
     {
       ec.assign(errno, std::generic_category());
       return false;
@@ -819,7 +828,7 @@ void
 fs::create_hard_link(const path& to, const path& new_hard_link,
 		     error_code& ec) noexcept
 {
-#ifdef _GLIBCXX_HAVE_UNISTD_H
+#if !defined(_GLIBCXX_FILESYSTEM_IS_WINDOWS) && defined(_GLIBCXX_HAVE_UNISTD_H)
   if (::link(to.c_str(), new_hard_link.c_str()))
     ec.assign(errno, std::generic_category());
   else
@@ -843,7 +852,7 @@ void
 fs::create_symlink(const path& to, const path& new_symlink,
 		   error_code& ec) noexcept
 {
-#ifdef _GLIBCXX_HAVE_UNISTD_H
+#if !defined(_GLIBCXX_FILESYSTEM_IS_WINDOWS) && defined(_GLIBCXX_HAVE_UNISTD_H)
   if (::symlink(to.c_str(), new_symlink.c_str()))
     ec.assign(errno, std::generic_category());
   else
@@ -869,8 +878,8 @@ fs::current_path(error_code& ec)
 {
   path p;
 #ifdef _GLIBCXX_HAVE_UNISTD_H
-#ifdef __GLIBC__
-  if (char_ptr cwd = char_ptr{::getcwd(nullptr, 0)})
+#if defined(__GLIBC__) || defined(_GLIBCXX_FILESYSTEM_IS_WINDOWS)
+  if (char_ptr cwd = char_ptr{::os_getcwd(nullptr, 0)})
     {
       p.assign(cwd.get());
       ec.clear();
@@ -928,7 +937,7 @@ void
 fs::current_path(const path& p, error_code& ec) noexcept
 {
 #ifdef _GLIBCXX_HAVE_UNISTD_H
-  if (::chdir(p.c_str()))
+  if (::os_chdir(p.c_str()))
     ec.assign(errno, std::generic_category());
   else
     ec.clear();
@@ -955,14 +964,14 @@ fs::equivalent(const path& p1, const path& p2, error_code& ec) noexcept
   int err = 0;
   file_status s1, s2;
   stat_type st1, st2;
-  if (::stat(p1.c_str(), &st1) == 0)
+  if (::os_stat(p1.c_str(), &st1) == 0)
     s1 = make_file_status(st1);
   else if (is_not_found_errno(errno))
     s1.type(file_type::not_found);
   else
     err = errno;
 
-  if (::stat(p2.c_str(), &st2) == 0)
+  if (::os_stat(p2.c_str(), &st2) == 0)
     s2 = make_file_status(st2);
   else if (is_not_found_errno(errno))
     s2.type(file_type::not_found);
@@ -1012,7 +1021,7 @@ namespace
     {
 #ifdef _GLIBCXX_HAVE_SYS_STAT_H
       stat_type st;
-      if (::stat(p.c_str(), &st))
+      if (::os_stat(p.c_str(), &st))
 	{
 	  ec.assign(errno, std::generic_category());
 	  return deflt;
@@ -1062,8 +1071,14 @@ fs::hard_link_count(const path& p)
 std::uintmax_t
 fs::hard_link_count(const path& p, error_code& ec) noexcept
 {
+#ifndef _GLIBCXX_FILESYSTEM_IS_WINDOWS
   return do_stat(p, ec, std::mem_fn(&stat::st_nlink),
 		 static_cast<uintmax_t>(-1));
+#else
+  ec = std::make_error_code(std::errc::not_supported);
+
+  return static_cast<uintmax_t>(-1);
+#endif // _GLIBCXX_FILESYSTEM_IS_WINDOWS
 }
 
 bool
@@ -1138,11 +1153,11 @@ fs::last_write_time(const path& p __attribute__((__unused__)),
   else
     ec.clear();
 #elif _GLIBCXX_HAVE_UTIME_H
-  ::utimbuf times;
+  ::os_utimbuf_t times;
   times.modtime = s.count();
   times.actime = do_stat(p, ec, [](const auto& st) { return st.st_atime; },
 			 times.modtime);
-  if (::utime(p.c_str(), &times))
+  if (::os_utime(p.c_str(), &times))
     ec.assign(errno, std::generic_category());
   else
     ec.clear();
@@ -1195,7 +1210,7 @@ fs::permissions(const path& p, perms prms, error_code& ec) noexcept
 #else
   if (nofollow && is_symlink(st))
     ec = std::make_error_code(std::errc::operation_not_supported);
-  else if (::chmod(p.c_str(), static_cast<mode_t>(prms)))
+  else if (::os_chmod(p.c_str(), static_cast<mode_t>(prms)))
     err = errno;
 #endif
 
@@ -1218,7 +1233,7 @@ fs::read_symlink(const path& p)
 fs::path fs::read_symlink(const path& p, error_code& ec)
 {
   path result;
-#ifdef _GLIBCXX_HAVE_SYS_STAT_H
+#if !defined(_GLIBCXX_FILESYSTEM_IS_WINDOWS) && defined(_GLIBCXX_HAVE_SYS_STAT_H)
   stat_type st;
   if (::lstat(p.c_str(), &st))
     {
@@ -1272,7 +1287,7 @@ fs::remove(const path& p)
 bool
 fs::remove(const path& p, error_code& ec) noexcept
 {
-  if (::remove(p.c_str()) == 0)
+  if (::os_remove(p.c_str()) == 0)
     {
       ec.clear();
       return true;
@@ -1334,7 +1349,7 @@ fs::rename(const path& from, const path& to)
 void
 fs::rename(const path& from, const path& to, error_code& ec) noexcept
 {
-  if (::rename(from.c_str(), to.c_str()))
+  if (::os_rename(from.c_str(), to.c_str()))
     ec.assign(errno, std::generic_category());
   else
     ec.clear();
@@ -1355,7 +1370,7 @@ fs::resize_file(const path& p, uintmax_t size, error_code& ec) noexcept
 #ifdef _GLIBCXX_HAVE_UNISTD_H
   if (size > static_cast<uintmax_t>(std::numeric_limits<off_t>::max()))
     ec.assign(EINVAL, std::generic_category());
-  else if (::truncate(p.c_str(), size))
+  else if (::os_truncate(p.c_str(), size))
     ec.assign(errno, std::generic_category());
   else
     ec.clear();
@@ -1409,7 +1424,7 @@ fs::status(const fs::path& p, error_code& ec) noexcept
 {
   file_status status;
   stat_type st;
-  if (::stat(p.c_str(), &st))
+  if (::os_stat(p.c_str(), &st))
     {
       int err = errno;
       ec.assign(err, std::generic_category());
@@ -1427,11 +1442,13 @@ fs::status(const fs::path& p, error_code& ec) noexcept
     }
   return status;
 }
+#endif // _GLIBCXX_FILESYSTEM_IS_WINDOWS
 
 fs::file_status
 fs::symlink_status(const fs::path& p, std::error_code& ec) noexcept
 {
   file_status status;
+#if !defined(_GLIBCXX_FILESYSTEM_IS_WINDOWS) && defined(_GLIBCXX_HAVE_SYS_STAT_H)
   stat_type st;
   if (::lstat(p.c_str(), &st))
     {
@@ -1445,9 +1462,11 @@ fs::symlink_status(const fs::path& p, std::error_code& ec) noexcept
       status = make_file_status(st);
       ec.clear();
     }
+#else
+  ec = std::make_error_code(std::errc::not_supported);
+#endif
   return status;
 }
-#endif
 
 fs::file_status
 fs::status(const fs::path& p)
