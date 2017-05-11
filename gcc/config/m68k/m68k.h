@@ -543,12 +543,12 @@ extern enum reg_class regno_reg_class[];
 #define LIBCALL_VALUE(MODE)  m68k_libcall_value (MODE)
 
 /* On the m68k, D0 is usually the only register used.  */
-#define FUNCTION_VALUE_REGNO_P(N) ((N) == D0_REG)
+#define FUNCTION_VALUE_REGNO_P(N) ((N) == D0_REG || (N) == A0_REG || (TARGET_68881 && (N) == FP0_REG))
 
 /* Define this to be true when FUNCTION_VALUE_REGNO_P is true for
    more than one register.
    XXX This macro is m68k specific and used only for m68kemb.h.  */
-#define NEEDS_UNTYPED_CALL 0
+#define NEEDS_UNTYPED_CALL 1
 
 /* On the m68k, all arguments are usually pushed on the stack.  */
 /* 1 if N is a possible register number for function argument passing.  */
@@ -565,7 +565,7 @@ extern enum reg_class regno_reg_class[];
 
 /* Call clobbered regs. */
 #define M68K_STD_USED_REGS 2
-#define M68K_FASTCALL_USED_DATA_REGS 3
+#define M68K_FASTCALL_USED_DATA_REGS 2
 #define M68K_FASTCALL_USED_ADDR_REGS 2
 
 /* On the m68k, this is a structure:

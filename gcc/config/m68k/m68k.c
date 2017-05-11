@@ -1066,7 +1066,7 @@ m68k_function_type_abi (const_tree fntype)
 static void
 m68k_maybe_switch_abi (void)
 {
-  if (call_used_regs[D2_REG] == (cfun->machine->call_abi == STD_ABI))
+  if ((call_used_regs[D2_REG] != 0) == (cfun->machine->call_abi == STD_ABI))
     reinit_regs ();
 }
 
@@ -7028,8 +7028,8 @@ m68k_conditional_register_usage (void)
   int i;
   HARD_REG_SET x;
   
-  int num_of_dregs = (TARGET_FASTCALL) ? M68K_FASTCALL_USED_DATA_REGS : M68K_STD_USED_REGS;
-  int num_of_aregs = (TARGET_FASTCALL) ? M68K_FASTCALL_USED_ADDR_REGS : M68K_STD_USED_REGS;
+  int num_of_dregs = m68k_cfun_abi() == FASTCALL_ABI ? M68K_FASTCALL_USED_DATA_REGS : M68K_STD_USED_REGS;
+  int num_of_aregs = m68k_cfun_abi() == FASTCALL_ABI ? M68K_FASTCALL_USED_ADDR_REGS : M68K_STD_USED_REGS;
   for (i = 0; i < 8; i++)
     {
       call_used_regs[i] = (i < num_of_dregs) | fixed_regs[i];
