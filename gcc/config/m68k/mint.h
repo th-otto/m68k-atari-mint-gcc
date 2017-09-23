@@ -143,9 +143,13 @@ along with GCC; see the file COPYING3.  If not see
       {							\
 	if (ADDRESS_REG_P (operands[0]))		\
 	  return "jmp %%pc@(2,%0:l)";			\
+	else if (TARGET_LONG_JUMP_TABLE_OFFSETS)	\
+	  return "jmp %%pc@(2,%0:l)";			\
 	else						\
 	  return "ext%.l %0\n\tjmp %%pc@(2,%0:l)";	\
       }							\
+    else if (TARGET_LONG_JUMP_TABLE_OFFSETS)		\
+      return "jmp %%pc@(2,%0:l)";			\
     else						\
       return "jmp %%pc@(2,%0:w)";			\
   } while (0)
@@ -159,9 +163,20 @@ along with GCC; see the file COPYING3.  If not see
    assembler operation to identify the following data as uninitialized global
    data.  */
 
+#ifdef USING_ELFOS_H
+#define BSS_SECTION_ASM_OP "\t.section\t.bss"
+
+#define TARGET_HAVE_NAMED_SECTIONS true
+
+/* Currently, JUMP_TABLES_IN_TEXT_SECTION must be defined in order to
+   keep switch tables in the text section.  */
+   
+#define JUMP_TABLES_IN_TEXT_SECTION 1
+#else
 #define BSS_SECTION_ASM_OP "\t.bss"
 
 #define TARGET_HAVE_NAMED_SECTIONS false
+#endif
 
 /* A C statement (sans semicolon) to output to the stdio stream
    FILE the assembler definition of uninitialized global DECL named
