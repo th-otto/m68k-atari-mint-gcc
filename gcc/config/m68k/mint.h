@@ -174,6 +174,17 @@ along with GCC; see the file COPYING3.  If not see
 #define JUMP_TABLES_IN_TEXT_SECTION 1
 
 #define EH_TABLES_CAN_BE_READ_ONLY 1
+
+/*
+ * our object format is elf, but not our executable format
+ */
+#undef HAVE_INITFINI_ARRAY_SUPPORT
+#define HAVE_INITFINI_ARRAY_SUPPORT 0
+
+#undef OBJECT_FORMAT_ELF 
+#undef INIT_SECTION_ASM_OP
+#undef FINI_SECTION_ASM_OP
+
 #else
 #define BSS_SECTION_ASM_OP "\t.bss"
 
