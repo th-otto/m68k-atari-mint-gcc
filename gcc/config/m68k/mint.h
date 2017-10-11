@@ -172,6 +172,8 @@ along with GCC; see the file COPYING3.  If not see
    keep switch tables in the text section.  */
    
 #define JUMP_TABLES_IN_TEXT_SECTION 1
+
+#define EH_TABLES_CAN_BE_READ_ONLY 1
 #else
 #define BSS_SECTION_ASM_OP "\t.bss"
 
