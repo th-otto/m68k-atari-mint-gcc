@@ -162,8 +162,16 @@ along with GCC; see the file COPYING3.  If not see
   crtend.o%s"
 
 /* Override startfile prefix defaults.  */
+/*
+ * change hardcoded /mingw prefix to the real prefix .. isn't this rubbish?
+ * it might work at build time and could be important there but beyond that?!
+ */
 #ifndef STANDARD_STARTFILE_PREFIX_1
-#define STANDARD_STARTFILE_PREFIX_1 "/mingw/lib/"
+#ifdef __MINGW64__
+#define STANDARD_STARTFILE_PREFIX_1 "C:/msys64/mingw64/x86_64-w64-mingw64/lib/"
+#else
+#define STANDARD_STARTFILE_PREFIX_1 "C:/msys64/mingw32/i686-w64-mingw32/lib/"
+#endif
 #endif
 #ifndef STANDARD_STARTFILE_PREFIX_2
 #define STANDARD_STARTFILE_PREFIX_2 ""
@@ -172,7 +180,11 @@ along with GCC; see the file COPYING3.  If not see
 /* For native mingw-version we need to take care that NATIVE_SYSTEM_HEADER_DIR
    macro contains POSIX-style path.  See bug 52947.  */
 #undef NATIVE_SYSTEM_HEADER_DIR
-#define NATIVE_SYSTEM_HEADER_DIR "/mingw/include"
+#ifdef __MINGW64__
+#define NATIVE_SYSTEM_HEADER_DIR "C:/msys64/mingw64/x86_64-w64-mingw64/include"
+#else
+#define NATIVE_SYSTEM_HEADER_DIR "C:/msys64/mingw32/i686-w64-mingw32/include"
+#endif
 
 /* Output STRING, a string representing a filename, to FILE.
    We canonicalize it to be in Unix format (backslashes are replaced
