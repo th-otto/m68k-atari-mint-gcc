@@ -99,6 +99,14 @@ along with GCC; see the file COPYING3.  If not see
 #include <isl/version.h>
 #endif
 
+#ifdef __MINGW32__
+#undef HOST_BIT_BUCKET
+#undef HOST_BIT_BUCKET2
+/* This is the name of the null device on windows.  */
+#define HOST_BIT_BUCKET "nul"
+#define HOST_BIT_BUCKET2 "/dev/null"
+#endif
+
 static void general_init (const char *, bool);
 static void do_compile ();
 static void process_options (void);
@@ -866,7 +874,8 @@ init_asm_output (const char *name)
       if (!strcmp (asm_file_name, "-"))
 	asm_out_file = stdout;
       else if (!canonical_filename_eq (asm_file_name, name)
-	       || !strcmp (asm_file_name, HOST_BIT_BUCKET))
+	       || !strcmp (asm_file_name, HOST_BIT_BUCKET)
+	       || !strcmp (asm_file_name, HOST_BIT_BUCKET2))
 	asm_out_file = fopen (asm_file_name, "w");
       else
 	/* Use UNKOWN_LOCATION to prevent gcc from printing the first

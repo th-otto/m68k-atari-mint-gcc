@@ -1262,7 +1262,8 @@ run_gcc (unsigned argc, char *argv[])
   if (linker_output)
     {
       char *output_dir, *base, *name;
-      bool bit_bucket = strcmp (linker_output, HOST_BIT_BUCKET) == 0;
+      bool bit_bucket = strcmp (linker_output, HOST_BIT_BUCKET) == 0 ||
+                        strcmp (linker_output, HOST_BIT_BUCKET2) == 0;
 
       output_dir = xstrdup (linker_output);
       base = output_dir;

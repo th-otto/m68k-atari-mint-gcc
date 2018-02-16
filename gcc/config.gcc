@@ -2020,6 +2020,7 @@ m68k-*-mintelf*)
 	tm_file="${tm_file} dbxelf.h elfos.h m68k/mint.h"
 	tm_defines="${tm_defines} MOTOROLA=1"
 	tmake_file="m68k/t-floatlib m68k/t-mint"
+	xm_file=m68k/xm-mint.h
 	gas=yes
 	gnu_ld=yes
 	;;
@@ -2029,6 +2030,7 @@ m68k-*-mint*)
 	tm_file="${tm_file} m68k/mint.h"
 	tm_defines="${tm_defines} MOTOROLA=1"
 	tmake_file="m68k/t-floatlib m68k/t-mint"
+	xm_file=m68k/xm-mint.h
 	gas=yes
 	gnu_ld=yes
 	;;

@@ -522,7 +522,7 @@ clone_function_name_1 (const char *name, const char *suffix)
 {
   size_t len = strlen (name);
   char *tmp_name, *prefix;
-  char *at_suffix = NULL;
+  const char *at_suffix;
 
   prefix = XALLOCAVEC (char, len + strlen (suffix) + 2);
   /* name + 1 to skip fastcall which begins with '@' */
