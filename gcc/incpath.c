@@ -27,6 +27,12 @@
 #include "incpath.h"
 #include "cppdefault.h"
 
+#if defined(__MSDOS__) || defined(_WIN32) || defined(__OS2__)
+#  define HOST_LACKS_INODE_NUMBERS 1
+#  undef PATH_SEPARATOR
+#  define PATH_SEPARATOR ';'
+#endif
+
 /* Microsoft Windows does not natively support inodes.
    VMS has non-numeric inodes.  */
 #ifdef VMS
@@ -177,10 +183,17 @@ add_standard_paths (const char *sysroot, const char *iprefix,
 	    {
 	      char *sysroot_no_trailing_dir_separator = xstrdup (sysroot);
 	      size_t sysroot_len = strlen (sysroot);
+	      const char *fname;
 
 	      if (sysroot_len > 0 && sysroot[sysroot_len - 1] == DIR_SEPARATOR)
 		sysroot_no_trailing_dir_separator[sysroot_len - 1] = '\0';
-	      str = concat (sysroot_no_trailing_dir_separator, p->fname, NULL);
+	      fname = p->fname;
+#if defined(__MSDOS__) || defined(_WIN32) || defined(__OS2__)
+	      /* skip the C:/msys64/ part of p->fname */
+	      if (HAS_DRIVE_SPEC(fname))
+		fname = strchr(fname + 3, DIR_SEPARATOR);
+#endif
+	      str = concat (sysroot_no_trailing_dir_separator, fname, NULL);
 	      free (sysroot_no_trailing_dir_separator);
 	    }
 	  else if (!p->add_sysroot && relocated
