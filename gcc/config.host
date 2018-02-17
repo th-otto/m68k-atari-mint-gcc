@@ -234,14 +234,14 @@ case ${host} in
     host_exeext=.exe
     host_lto_plugin_soname=cyglto_plugin-0.dll
     ;;
-  i[34567]86-*-mingw32*)
+  i[34567]86-*-mingw32* | i[34567]86-*-msys*)
     host_xm_file=i386/xm-mingw32.h
     host_xmake_file="${host_xmake_file} i386/x-mingw32"
     host_exeext=.exe
     out_host_hook_obj=host-mingw32.o
     host_lto_plugin_soname=liblto_plugin-0.dll
     ;;
-  x86_64-*-mingw*)
+  x86_64-*-mingw* | x86_64-*-msys*)
     use_long_long_for_widest_fast_int=yes
     host_xm_file=i386/xm-mingw32.h
     host_xmake_file="${host_xmake_file} i386/x-mingw32"
