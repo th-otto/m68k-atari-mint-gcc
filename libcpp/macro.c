@@ -3174,7 +3174,8 @@ parse_params (cpp_reader *pfile, cpp_macro *macro)
 			"anonymous variadic macros were introduced in C99");
 		}
 	      else if (CPP_OPTION (pfile, cpp_warn_c90_c99_compat) > 0
-		       && ! CPP_OPTION (pfile, cplusplus))
+		       && ! CPP_OPTION (pfile, cplusplus)
+		  && CPP_OPTION (pfile, warn_variadic_macros))
 		cpp_error (pfile, CPP_DL_WARNING,
 			   "anonymous variadic macros were introduced in C99");
 	    }

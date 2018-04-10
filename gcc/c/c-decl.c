@@ -9640,6 +9640,13 @@ check_for_loop_decls (location_t loc, bool turn_off_iso_c99_error)
 	}
       return NULL_TREE;
     }
+  if (warn_c90_c99_compat > 0)
+  {
+	warning_at (loc, OPT_Wc90_c99_compat,
+	   "%<for%> loop initial declarations "
+		"are only allowed in C99 or C11 mode");
+    
+  }
   /* C99 subclause 6.8.5 paragraph 3:
 
        [#3]  The  declaration  part  of  a for statement shall only
