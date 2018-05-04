@@ -2017,7 +2017,7 @@ m68k-*-linux*)			# Motorola m68k's running GNU/Linux
 m68k-*-mintelf*)
 	default_m68k_cpu=68000
 	default_cf_cpu=5475
-	tm_file="${tm_file} dbxelf.h elfos.h m68k/mint.h"
+	tm_file="${tm_file} dbxelf.h elfos.h m68k/mint.h m68k/mint-stdint.h"
 	tm_defines="${tm_defines} MOTOROLA=1"
 	tmake_file="m68k/t-floatlib m68k/t-mint"
 	xm_file=m68k/xm-mint.h
@@ -2027,7 +2027,7 @@ m68k-*-mintelf*)
 m68k-*-mint*)
 	default_m68k_cpu=68000
 	default_cf_cpu=5475
-	tm_file="${tm_file} m68k/mint.h"
+	tm_file="${tm_file} m68k/mint.h m68k/mint-stdint.h"
 	tm_defines="${tm_defines} MOTOROLA=1"
 	tmake_file="m68k/t-floatlib m68k/t-mint"
 	xm_file=m68k/xm-mint.h
