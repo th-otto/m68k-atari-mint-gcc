@@ -37,8 +37,8 @@ along with GCC; see the file COPYING3.  If not see
 
 #define ASM_CPU_SPEC "\
 %{m68851}%{mno-68851} %{m68881}%{mno-68881} %{msoft-float:-mno-float} \
-%{m68020-40:-m68040}%{m68020-60:-m68040}\
-%{mcpu=*:-mcpu=%*}%{march=*:-march=%*}\
+%{m68020-40:-m68040} %{m68020-60:-m68040} \
+%{mcpu=*:-mcpu=%*} %{march=*:-march=%*}\
 "
 #define ASM_PCREL_SPEC "%{" FPIE_OR_FPIC_SPEC ":--pcrel} \
  %{mpcrel:%{" NO_FPIE_AND_FPIC_SPEC ":--pcrel}} \
