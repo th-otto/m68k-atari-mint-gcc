@@ -100,6 +100,7 @@ init_integer (variable * v)
 
 /* Initialize an integer environment variable which has to be positive.  */
 
+#if 0
 static void
 init_unsigned_integer (variable * v)
 {
@@ -115,6 +116,7 @@ init_unsigned_integer (variable * v)
 
   *v->var = atoi (p);
 }
+#endif
 
 
 /* Initialize a boolean environment variable. We only look at the first

@@ -2460,7 +2460,7 @@ transfer_array (st_parameter_dt *dtp, gfc_array_char *desc, int kind,
     return;
 
   iotype = (bt) GFC_DESCRIPTOR_TYPE (desc);
-  size = iotype == BT_CHARACTER ? (index_type) charlen : GFC_DESCRIPTOR_SIZE (desc);
+  size = iotype == BT_CHARACTER ? (index_type) charlen : (index_type) GFC_DESCRIPTOR_SIZE (desc);
 
   rank = GFC_DESCRIPTOR_RANK (desc);
 

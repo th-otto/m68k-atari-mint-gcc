@@ -126,6 +126,9 @@ extern void date_and_time (char *, char *, char *, gfc_array_i4 *,
 			   GFC_INTEGER_4, GFC_INTEGER_4, GFC_INTEGER_4);
 export_proto(date_and_time);
 
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+
+
 void
 date_and_time (char *__date, char *__time, char *__zone,
 	       gfc_array_i4 *__values, GFC_INTEGER_4 __date_len,

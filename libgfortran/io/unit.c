@@ -597,7 +597,7 @@ init_units (void)
 
   if (sizeof (max_offset) == 8)
     {
-      max_offset = GFC_INTEGER_8_HUGE;
+      max_offset = (gfc_offset) GFC_INTEGER_8_HUGE;
       /* Why this weird value? Because if the recl specifier in the
 	 inquire statement is a 4 byte value, u->recl is truncated,
 	 and this trick ensures it becomes HUGE(0) rather than -1.
