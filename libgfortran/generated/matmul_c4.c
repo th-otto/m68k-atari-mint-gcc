@@ -242,6 +242,8 @@ matmul_c4_avx (gfc_array_c4 * const restrict retarray,
      itself.  */
 
 #define POW3(x) (((float) (x)) * ((float) (x)) * ((float) (x)))
+#undef min
+#undef max
 #define min(a,b) ((a) <= (b) ? (a) : (b))
 #define max(a,b) ((a) >= (b) ? (a) : (b))
 
@@ -799,6 +801,8 @@ matmul_c4_avx2 (gfc_array_c4 * const restrict retarray,
      itself.  */
 
 #define POW3(x) (((float) (x)) * ((float) (x)) * ((float) (x)))
+#undef min
+#undef max
 #define min(a,b) ((a) <= (b) ? (a) : (b))
 #define max(a,b) ((a) >= (b) ? (a) : (b))
 
@@ -1356,6 +1360,8 @@ matmul_c4_avx512f (gfc_array_c4 * const restrict retarray,
      itself.  */
 
 #define POW3(x) (((float) (x)) * ((float) (x)) * ((float) (x)))
+#undef min
+#undef max
 #define min(a,b) ((a) <= (b) ? (a) : (b))
 #define max(a,b) ((a) >= (b) ? (a) : (b))
 
@@ -1927,6 +1933,8 @@ matmul_c4_vanilla (gfc_array_c4 * const restrict retarray,
      itself.  */
 
 #define POW3(x) (((float) (x)) * ((float) (x)) * ((float) (x)))
+#undef min
+#undef max
 #define min(a,b) ((a) <= (b) ? (a) : (b))
 #define max(a,b) ((a) >= (b) ? (a) : (b))
 
@@ -2558,6 +2566,8 @@ matmul_c4 (gfc_array_c4 * const restrict retarray,
      itself.  */
 
 #define POW3(x) (((float) (x)) * ((float) (x)) * ((float) (x)))
+#undef min
+#undef max
 #define min(a,b) ((a) <= (b) ? (a) : (b))
 #define max(a,b) ((a) >= (b) ? (a) : (b))
 
