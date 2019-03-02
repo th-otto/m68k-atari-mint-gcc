@@ -111,10 +111,10 @@ __unordsf2(float a, float b)
   union float_long fl;
 
   fl.f = a;
-  if (EXP(fl.l) == EXP(~0u) && (MANT(fl.l) & ~HIDDEN) != 0)
+  if (EXP(fl.l) == EXP(~0ul) && (MANT(fl.l) & ~HIDDEN) != 0)
     return 1;
   fl.f = b;
-  if (EXP(fl.l) == EXP(~0u) && (MANT(fl.l) & ~HIDDEN) != 0)
+  if (EXP(fl.l) == EXP(~0ul) && (MANT(fl.l) & ~HIDDEN) != 0)
     return 1;
   return 0;
 }
@@ -290,7 +290,7 @@ __truncdfsf2 (double a1)
 
   exp = EXPD (dl1) - EXCESSD + EXCESS;
 
-  sticky = dl1.l.lower & ((1 << 22) - 1);
+  sticky = dl1.l.lower & ((1L << 22) - 1);
   mant = MANTD (dl1);
   /* shift double mantissa 6 bits so we can round */
   sticky |= mant & ((1 << 6) - 1);
