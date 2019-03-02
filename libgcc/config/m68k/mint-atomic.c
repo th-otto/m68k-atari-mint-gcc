@@ -66,7 +66,11 @@ __kernel_cmpxchg (uint32_t *mem, uint32_t oldval, uint32_t newval)
 #endif
 }
 
+#ifdef __ELF__
 #define HIDDEN __attribute__ ((visibility ("hidden")))
+#else
+#define HIDDEN
+#endif
 
 /* Big endian masks  */
 #define INVERT_MASK_1 24

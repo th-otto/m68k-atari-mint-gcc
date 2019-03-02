@@ -546,9 +546,10 @@ extern enum reg_class regno_reg_class[];
    The function name __transfer_from_trampoline is not actually used.
    The function definition just permits use of "asm with operands"
    (though the operand list is empty).  */
+void __transfer_from_trampoline (void);
 #define TRANSFER_FROM_TRAMPOLINE				\
 void								\
-__transfer_from_trampoline ()					\
+__transfer_from_trampoline (void)					\
 {								\
   register char *a0 asm (M68K_STATIC_CHAIN_REG_NAME);		\
   asm (GLOBAL_ASM_OP "___trampoline");				\
@@ -557,6 +558,7 @@ __transfer_from_trampoline ()					\
   asm volatile ("move%.l %1,%0" : "=a" (a0) : "m" (a0[18]));	\
   asm ("rts":);							\
 }
+
 
 /* There are two registers that can always be eliminated on the m68k.
    The frame pointer and the arg pointer can be replaced by either the
