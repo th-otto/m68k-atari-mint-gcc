@@ -28,10 +28,12 @@
 // we use the following crude approximations. We keep saying that we'll do
 // better later, but never do.
 
+#define WEAK __attribute__((weak))
+
 extern "C"
 {
 #ifndef _GLIBCXX_HAVE_FABSF
-  float
+  float WEAK
   fabsf(float x)
   {
     return (float) fabs(x);
@@ -39,7 +41,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_ACOSF
-  float
+  float WEAK
   acosf(float x)
   {
     return (float) acos(x);
@@ -47,7 +49,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_ASINF
-  float
+  float WEAK
   asinf(float x)
   {
     return (float) asin(x);
@@ -55,7 +57,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_ATANF
-  float
+  float WEAK
   atanf(float x)
   {
     return (float) atan(x);
@@ -63,7 +65,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_ATAN2F
-  float
+  float WEAK
   atan2f(float x, float y)
   {
     return (float) atan2(x, y);
@@ -71,7 +73,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_CEILF
-  float
+  float WEAK
   ceilf(float x)
   {
     return (float) ceil(x);
@@ -79,7 +81,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_COSF
-  float
+  float WEAK
   cosf(float x)
   {
     return (float) cos(x);
@@ -87,7 +89,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_COSHF
-  float
+  float WEAK
   coshf(float x)
   {
     return (float) cosh(x);
@@ -95,7 +97,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_EXPF
-  float
+  float WEAK
   expf(float x)
   {
     return (float) exp(x);
@@ -103,7 +105,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_FLOORF
-  float
+  float WEAK
   floorf(float x)
   {
     return (float) floor(x);
@@ -111,7 +113,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_FMODF
-  float
+  float WEAK
   fmodf(float x, float y)
   {
     return (float) fmod(x, y);
@@ -119,7 +121,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_FREXPF
-  float
+  float WEAK
   frexpf(float x, int *exp)
   {
     return (float) frexp(x, exp);
@@ -127,7 +129,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_SQRTF
-  float
+  float WEAK
   sqrtf(float x)
   {
     return (float) sqrt(x);
@@ -135,7 +137,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_HYPOTF
-  float
+  float WEAK
   hypotf(float x, float y)
   {
     float s = fabsf(x) + fabsf(y);
@@ -147,7 +149,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_LDEXPF
-  float
+  float WEAK
   ldexpf(float x, int exp)
   {
     return (float) ldexp(x, exp);
@@ -155,7 +157,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_LOGF
-  float
+  float WEAK
   logf(float x)
   {
     return (float) log(x);
@@ -163,7 +165,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_LOG10F
-  float
+  float WEAK
   log10f(float x)
   {
     return (float) log10(x);
@@ -171,7 +173,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_MODFF
-  float
+  float WEAK
   modff(float x, float *iptr)
   {
     double result, temp;
@@ -183,7 +185,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_POWF
-  float
+  float WEAK
   powf(float x, float y)
   {
     return (float) pow(x, y);
@@ -191,7 +193,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_SINF
-  float
+  float WEAK
   sinf(float x)
   {
     return (float) sin(x);
@@ -199,7 +201,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_SINHF
-  float
+  float WEAK
   sinhf(float x)
   {
     return (float) sinh(x);
@@ -207,7 +209,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_TANF
-  float
+  float WEAK
   tanf(float x)
   {
     return (float) tan(x);
@@ -215,7 +217,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_TANHF
-  float
+  float WEAK
   tanhf(float x)
   {
     return (float) tanh(x);
