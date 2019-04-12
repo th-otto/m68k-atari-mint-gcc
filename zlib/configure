@@ -8282,6 +8282,10 @@ _LT_EOF
       esac
       ;;
 
+    mint*)
+      ld_shlibs=no
+      ;;
+
     sunos4*)
       archive_cmds='$LD -assert pure-text -Bshareable -o $lib $libobjs $deplibs $linker_flags'
       wlarc=
