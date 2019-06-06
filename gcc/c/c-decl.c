@@ -9787,9 +9787,12 @@ check_for_loop_decls (location_t loc, bool turn_off_iso_c99_error)
 	}
       return NULL_TREE;
     }
-  else
-    pedwarn_c90 (loc, OPT_Wpedantic, "ISO C90 does not support %<for%> loop "
-		 "initial declarations");
+  if (warn_c90_c99_compat > 0)
+  {
+	warning_at (loc, OPT_Wc90_c99_compat,
+	   "ISO C90 does not support %<for%> loop "
+		"initial declarations");
+  }
 
   /* C99 subclause 6.8.5 paragraph 3:
 

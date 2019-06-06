@@ -5137,7 +5137,7 @@ if ($AR --version | sed 1q | grep "GNU ar" \
     && $CC $CFLAGS -c conftest.c \
     && $AR rcT conftest.a conftest.o \
     && $CC $CFLAGS $LDFLAGS -o conftest conftest.a) >/dev/null 2>&1; then
-  thin_archive_support=yes
+  thin_archive_support=no
 fi
 rm -f conftest.c conftest.o conftest.a conftest
 AC_MSG_RESULT($thin_archive_support)
