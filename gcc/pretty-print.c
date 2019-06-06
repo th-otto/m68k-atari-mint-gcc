@@ -42,6 +42,13 @@ along with GCC; see the file COPYING3.  If not see
 #define WIN32_LEAN_AND_MEAN 1
 #include <windows.h>
 
+#ifndef COMMON_LVB_REVERSE_VIDEO
+#define COMMON_LVB_REVERSE_VIDEO 0x4000
+#endif
+#ifndef COMMON_LVB_UNDERSCORE
+#define COMMON_LVB_UNDERSCORE 0x8000
+#endif
+
 /* Write all bytes in [s,s+n) into the specified stream.
    Errors are ignored. */
 static void
