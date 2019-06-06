@@ -294,7 +294,7 @@ fi
 # Check for the fcntl function.
 if test -n "${with_target_subdir}"; then
    case "${host}" in
-   *-*-mingw*) have_fcntl=no ;;
+   *-*-mingw* | *-*-msys*) have_fcntl=no ;;
    *) have_fcntl=yes ;;
    esac
 else
