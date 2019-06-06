@@ -2222,7 +2222,7 @@ list_formatted_read_scalar (st_parameter_dt *dtp, bt type, void *p,
 
 	  /* Call the user defined formatted READ procedure.  */
 	  dtp->u.p.current_unit->child_dtio++;
-	  dtp->u.p.fdtio_ptr (p, &unit, iotype, &vlist,
+	  dtp->u.p.fdtio_ptr (p, &unit, iotype, (gfc_array_i4 *)&vlist,
 			      child_iostat, child_iomsg,
 			      iotype_len, child_iomsg_len);
 	  dtp->u.p.child_saved_iostat = *child_iostat;
@@ -3024,7 +3024,7 @@ nml_read_obj (st_parameter_dt *dtp, namelist_info *nl, index_type offset,
 
 		/* Call the user defined formatted READ procedure.  */
 		dtp->u.p.current_unit->child_dtio++;
-		dtio_ptr ((void *)&list_obj, &unit, iotype, &vlist,
+		dtio_ptr ((void *)&list_obj, &unit, iotype, (gfc_array_i4 *)&vlist,
 			  child_iostat, child_iomsg,
 			  iotype_len, child_iomsg_len);
 		dtp->u.p.child_saved_iostat = *child_iostat;

@@ -1915,7 +1915,7 @@ list_formatted_write_scalar (st_parameter_dt *dtp, bt type, void *p, int kind,
 
 	  /* Call the user defined formatted WRITE procedure.  */
 	  dtp->u.p.current_unit->child_dtio++;
-	  dtp->u.p.fdtio_ptr (p, &unit, iotype, &vlist,
+	  dtp->u.p.fdtio_ptr (p, &unit, iotype, (gfc_full_array_i4 *)&vlist,
 			      child_iostat, child_iomsg,
 			      iotype_len, child_iomsg_len);
 	  dtp->u.p.current_unit->child_dtio--;
@@ -2247,13 +2247,13 @@ nml_write_obj (st_parameter_dt *dtp, namelist_info *obj, index_type offset,
 		      list_obj.data = p;
 		      list_obj.vptr = obj->vtable;
 		      list_obj.len = 0;
-		      dtio_ptr ((void *)&list_obj, &unit, iotype, &vlist,
+		      dtio_ptr ((void *)&list_obj, &unit, iotype, (gfc_full_array_i4 *)&vlist,
 				child_iostat, child_iomsg,
 				iotype_len, child_iomsg_len);
 		    }
 		  else
 		    {
-		      dtio_ptr (p, &unit, iotype, &vlist,
+		      dtio_ptr (p, &unit, iotype, (gfc_full_array_i4 *)&vlist,
 				child_iostat, child_iomsg,
 				iotype_len, child_iomsg_len);
 		    }
