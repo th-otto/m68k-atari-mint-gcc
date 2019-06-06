@@ -687,6 +687,9 @@ man7ext = .7
 objext = .o
 exeext = @host_exeext@
 build_exeext = @build_exeext@
+EVAL_MINGW := case `uname -s` in MINGW*) echo yes;; *) echo no;; esac
+MINGW := $(shell $(EVAL_MINGW))
+mingw_srcdir = $(shell if test "${MINGW}" = yes; then cmd //c echo ${srcdir}; else echo ${srcdir}; fi)
 
 # Directory in which to put man pages.
 mandir = @mandir@
@@ -901,7 +904,7 @@ REVISION_s  := "\"\""
 endif
 
 # Shorthand variables for dependency lists.
-DUMPFILE_H = $(srcdir)/../libcpp/include/line-map.h dumpfile.h
+DUMPFILE_H = $(mingw_srcdir)/../libcpp/include/line-map.h dumpfile.h
 VEC_H = vec.h statistics.h $(GGC_H)
 HASH_TABLE_H = $(HASHTAB_H) hash-table.h $(GGC_H)
 EXCEPT_H = except.h $(HASHTAB_H)
@@ -970,20 +973,20 @@ GCC_H = gcc.h version.h $(DIAGNOSTIC_CORE_H)
 GGC_H = ggc.h gtype-desc.h statistics.h
 TIMEVAR_H = timevar.h timevar.def
 INSN_ATTR_H = insn-attr.h insn-attr-common.h $(INSN_ADDR_H)
-INSN_ADDR_H = $(srcdir)/insn-addr.h
+INSN_ADDR_H = $(mingw_srcdir)/insn-addr.h
 C_COMMON_H = c-family/c-common.h c-family/c-common.def $(TREE_H) \
 	$(SPLAY_TREE_H) $(CPPLIB_H) $(GGC_H) $(DIAGNOSTIC_CORE_H)
 C_PRAGMA_H = c-family/c-pragma.h $(CPPLIB_H)
 C_TREE_H = c/c-tree.h $(C_COMMON_H) $(DIAGNOSTIC_H)
-SYSTEM_H = system.h hwint.h $(srcdir)/../include/libiberty.h \
-	$(srcdir)/../include/safe-ctype.h $(srcdir)/../include/filenames.h
+SYSTEM_H = system.h hwint.h $(mingw_srcdir)/../include/libiberty.h \
+	$(mingw_srcdir)/../include/safe-ctype.h $(mingw_srcdir)/../include/filenames.h
 PREDICT_H = predict.h predict.def
-CPPLIB_H = $(srcdir)/../libcpp/include/line-map.h \
-	$(srcdir)/../libcpp/include/cpplib.h
-INPUT_H = $(srcdir)/../libcpp/include/line-map.h input.h
+CPPLIB_H = $(mingw_srcdir)/../libcpp/include/line-map.h \
+	$(mingw_srcdir)/../libcpp/include/cpplib.h
+INPUT_H = $(mingw_srcdir)/../libcpp/include/line-map.h input.h
 OPTS_H = $(INPUT_H) $(VEC_H) opts.h $(OBSTACK_H)
-SYMTAB_H = $(srcdir)/../libcpp/include/symtab.h $(OBSTACK_H)
-CPP_INTERNAL_H = $(srcdir)/../libcpp/internal.h
+SYMTAB_H = $(mingw_srcdir)/../libcpp/include/symtab.h $(OBSTACK_H)
+CPP_INTERNAL_H = $(mingw_srcdir)/../libcpp/internal.h
 TREE_DUMP_H = tree-dump.h $(SPLAY_TREE_H) $(DUMPFILE_H)
 TREE_PASS_H = tree-pass.h $(TIMEVAR_H) $(DUMPFILE_H)
 TREE_SSA_H = tree-ssa.h tree-ssa-operands.h \
@@ -2503,9 +2506,9 @@ gimple-match.c: s-match gimple-match-head.c ; @true
 generic-match.c: s-match generic-match-head.c ; @true
 
 s-match: build/genmatch$(build_exeext) $(srcdir)/match.pd cfn-operators.pd
-	$(RUN_GEN) build/genmatch$(build_exeext) --gimple $(srcdir)/match.pd \
+	$(RUN_GEN) build/genmatch$(build_exeext) --gimple $(mingw_srcdir)/match.pd \
 	    > tmp-gimple-match.c
-	$(RUN_GEN) build/genmatch$(build_exeext) --generic $(srcdir)/match.pd \
+	$(RUN_GEN) build/genmatch$(build_exeext) --generic $(mingw_srcdir)/match.pd \
 	    > tmp-generic-match.c
 	$(SHELL) $(srcdir)/../move-if-change tmp-gimple-match.c \
 	    					gimple-match.c
@@ -2610,7 +2613,7 @@ GENGTYPE_FLAGS=
 
 gtyp-input.list: s-gtyp-input ; @true
 s-gtyp-input: Makefile
-	@: $(call write_entries_to_file,$(GTFILES),tmp-gi.list)
+	@: $(call write_entries_to_file,$(patsubst $(srcdir)/%, $(mingw_srcdir)/%, $(GTFILES)),tmp-gi.list)
 	$(SHELL) $(srcdir)/../move-if-change tmp-gi.list gtyp-input.list
 	$(STAMP) s-gtyp-input
 
@@ -2618,7 +2621,7 @@ s-gtype: build/gengtype$(build_exeext) $(filter-out [%], $(GTFILES)) \
 	 gtyp-input.list
 # First, parse all files and save a state file.
 	$(RUN_GEN) build/gengtype$(build_exeext) $(GENGTYPE_FLAGS) \
-                    -S $(srcdir) -I gtyp-input.list -w tmp-gtype.state
+                    -S $(mingw_srcdir) -I gtyp-input.list -w tmp-gtype.state
 # Second, read the state file and generate all files.  This ensure that
 # gtype.state is correctly read:
 	$(SHELL) $(srcdir)/../move-if-change tmp-gtype.state gtype.state
