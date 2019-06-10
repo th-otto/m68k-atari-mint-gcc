@@ -20,7 +20,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "coretypes.h"
 
 #include "dmd/aggregate.h"
-#include "dmd/compiler.h"
+#include "dmd/dcompiler.h"
 #include "dmd/declaration.h"
 #include "dmd/errors.h"
 #include "dmd/expression.h"
