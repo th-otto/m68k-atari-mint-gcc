@@ -69,10 +69,10 @@ host_modules= { module= gmp; lib_path=.libs; bootstrap=true;
 		// gmp's configure will complain if given anything
 		// different from host for target.
 	        target="none-${host_vendor}-${host_os}"; };
-host_modules= { module= mpfr; lib_path=.libs; bootstrap=true;
+host_modules= { module= mpfr; lib_path=src/.libs; bootstrap=true;
 		extra_configure_flags='--disable-shared @extra_mpfr_configure_flags@';
 		no_install= true; };
-host_modules= { module= mpc; lib_path=.libs; bootstrap=true;
+host_modules= { module= mpc; lib_path=src/.libs; bootstrap=true;
 		extra_configure_flags='--disable-shared @extra_mpc_gmp_configure_flags@ @extra_mpc_mpfr_configure_flags@';
 		no_install= true; };
 host_modules= { module= ppl; lib_path=src/.libs; bootstrap=true;

@@ -616,12 +616,12 @@ HOST_LIB_PATH_gmp = \
 
 @if mpfr
 HOST_LIB_PATH_mpfr = \
-  $$r/$(HOST_SUBDIR)/mpfr/.libs:$$r/$(HOST_SUBDIR)/prev-mpfr/.libs:
+  $$r/$(HOST_SUBDIR)/mpfr/src/.libs:$$r/$(HOST_SUBDIR)/prev-mpfr/src/.libs:
 @endif mpfr
 
 @if mpc
 HOST_LIB_PATH_mpc = \
-  $$r/$(HOST_SUBDIR)/mpc/.libs:$$r/$(HOST_SUBDIR)/prev-mpc/.libs:
+  $$r/$(HOST_SUBDIR)/mpc/src/.libs:$$r/$(HOST_SUBDIR)/prev-mpc/src/.libs:
 @endif mpc
 
 @if ppl
