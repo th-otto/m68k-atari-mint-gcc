@@ -3476,8 +3476,10 @@ set_debug_level (uint32_t dinfo, int extended, const char *arg,
 #endif
 	    }
 
+#if 0
 	  if (opts->x_write_symbols == NO_DEBUG)
 	    warning_at (loc, 0, "target system does not support debug output");
+#endif
 	}
       else if ((opts->x_write_symbols & CTF_DEBUG)
 	       || (opts->x_write_symbols & BTF_DEBUG))

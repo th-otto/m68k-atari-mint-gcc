@@ -436,7 +436,9 @@ $_exception_handler:
 	FUNC(__mulsi3)
 	.globl	SYM (__mulsi3)
 	.globl	SYM (__mulsi3_internal)
+#ifdef __ELF__
 	.hidden	SYM (__mulsi3_internal)
+#endif
 SYM (__mulsi3):
 SYM (__mulsi3_internal):
 	movew	sp@(4), d0	/* x0 -> d0 */
@@ -462,7 +464,9 @@ SYM (__mulsi3_internal):
 	FUNC(__udivsi3)
 	.globl	SYM (__udivsi3)
 	.globl	SYM (__udivsi3_internal)
+#ifdef __ELF__
 	.hidden	SYM (__udivsi3_internal)
+#endif
 SYM (__udivsi3):
 SYM (__udivsi3_internal):
 #ifndef __mcoldfire__
@@ -541,7 +545,9 @@ L2:	subql	IMM (1),d4
 	FUNC(__divsi3)
 	.globl	SYM (__divsi3)
 	.globl	SYM (__divsi3_internal)
+#ifdef __ELF__
 	.hidden	SYM (__divsi3_internal)
+#endif
 SYM (__divsi3):
 SYM (__divsi3_internal):
 	movel	d2, sp@-
@@ -675,7 +681,9 @@ ROUND_TO_MINUS    = 3 | round result towards minus infinity
 	.globl SYM (__negdf2)
 	.globl SYM (__cmpdf2)
 	.globl SYM (__cmpdf2_internal)
+#ifdef __ELF__
 	.hidden SYM (__cmpdf2_internal)
+#endif
 
 	.text
 	.even
@@ -2591,7 +2599,9 @@ ROUND_TO_MINUS    = 3 | round result towards minus infinity
 	.globl SYM (__negsf2)
 	.globl SYM (__cmpsf2)
 	.globl SYM (__cmpsf2_internal)
+#ifdef __ELF__
 	.hidden SYM (__cmpsf2_internal)
+#endif
 
 | These are common routines to return and signal exceptions.	
 
