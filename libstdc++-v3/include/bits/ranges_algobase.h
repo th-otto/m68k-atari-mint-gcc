@@ -220,29 +220,29 @@ namespace ranges
       constexpr bool __move_iterator_p = __detail::__is_move_iterator<_Iter>;
       if constexpr (__move_iterator_p)
 	{
-	  auto [__in, __out]
+	  auto [___in, ___out]
 	    = ranges::__copy_or_move<true>(std::move(__first).base(),
 					   std::move(__last).base(),
 					   std::move(__result));
-	  return {move_iterator{std::move(__in)}, std::move(__out)};
+	  return {move_iterator{std::move(___in)}, std::move(___out)};
 	}
       else if constexpr (__reverse_p)
 	{
-	  auto [__in,__out]
+	  auto [___in,___out]
 	    = ranges::__copy_or_move_backward<_IsMove>(__last.base(),
 						       __first.base(),
 						       __result.base());
-	  return {reverse_iterator{std::move(__in)},
-		  reverse_iterator{std::move(__out)}};
+	  return {reverse_iterator{std::move(___in)},
+		  reverse_iterator{std::move(___out)}};
 	}
       else if constexpr (__normal_iterator_p)
 	{
-	  auto [__in,__out]
+	  auto [___in,___out]
 	    = ranges::__copy_or_move<_IsMove>(std::__niter_base(__first),
 					      std::__niter_base(__last),
 					      std::__niter_base(__result));
-	  return {std::__niter_wrap(__first, std::move(__in)),
-		  std::__niter_wrap(__result, std::move(__out))};
+	  return {std::__niter_wrap(__first, std::move(___in)),
+		  std::__niter_wrap(__result, std::move(___out))};
 	}
       else if constexpr (sized_sentinel_for<_Sent, _Iter>)
 	{
@@ -361,22 +361,22 @@ namespace ranges
 	   && __detail::__is_reverse_iterator<_Out>);
       if constexpr (__reverse_p)
 	{
-	  auto [__in,__out]
+	  auto [___in,___out]
 	    = ranges::__copy_or_move<_IsMove>(__last.base(),
 					      __first.base(),
 					      __result.base());
-	  return {reverse_iterator{std::move(__in)},
-		  reverse_iterator{std::move(__out)}};
+	  return {reverse_iterator{std::move(___in)},
+		  reverse_iterator{std::move(___out)}};
 	}
       else if constexpr (__normal_iterator_p)
 	{
-	  auto [__in,__out]
+	  auto [___in,___out]
 	    = ranges::__copy_or_move_backward<_IsMove>
 	      (std::__niter_base(__first),
 	       std::__niter_base(__last),
 	       std::__niter_base(__result));
-	  return {std::__niter_wrap(__first, std::move(__in)),
-		  std::__niter_wrap(__result, std::move(__out))};
+	  return {std::__niter_wrap(__first, std::move(___in)),
+		  std::__niter_wrap(__result, std::move(___out))};
 	}
       else if constexpr (sized_sentinel_for<_Sent, _Iter>)
 	{
