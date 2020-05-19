@@ -164,11 +164,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       {
 	__format::_Str_sink<char> __buf;
 	std::vformat_to(__buf.out(), __os.getloc(), __fmt, __args);
-	auto __out = __buf.view();
+	auto ___out = __buf.view();
 
 	__try
 	  {
-	    std::__ostream_write(__os, __out.data(), __out.size());
+	    std::__ostream_write(__os, ___out.data(), ___out.size());
 	  }
 	__catch(const __cxxabiv1::__forced_unwind&)
 	  {
@@ -193,7 +193,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       {
 	__format::_Str_sink<char> __buf;
 	std::vformat_to(__buf.out(), __os.getloc(), __fmt, __args);
-	auto __out = __buf.view();
+	auto ___out = __buf.view();
 
 	void* __open_terminal(streambuf*);
 	error_code __write_to_terminal(void*, span<char>);
@@ -221,7 +221,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	      {
 		if (__os.rdbuf()->pubsync() == -1)
 		  __err = ios::badbit;
-		else if (auto __e = __write_to_terminal(__term, __out))
+		else if (auto __e = __write_to_terminal(__term, ___out))
 		  if (__e != std::make_error_code(errc::illegal_byte_sequence))
 		    __err = ios::badbit;
 	      }
@@ -241,7 +241,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	// Otherwise just insert the string as vprint_nonunicode does.
 	__try
 	  {
-	    std::__ostream_write(__os, __out.data(), __out.size());
+	    std::__ostream_write(__os, ___out.data(), ___out.size());
 	  }
 	__catch(const __cxxabiv1::__forced_unwind&)
 	  {

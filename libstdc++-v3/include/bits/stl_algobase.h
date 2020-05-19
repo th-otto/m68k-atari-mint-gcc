@@ -397,14 +397,14 @@ _GLIBCXX_END_NAMESPACE_CONTAINER
   template<bool _IsMove, typename _OutIter, typename _InIter>
     __attribute__((__always_inline__)) _GLIBCXX20_CONSTEXPR
     inline void
-    __assign_one(_OutIter& __out, _InIter& __in)
+    __assign_one(_OutIter& ___out, _InIter& ___in)
     {
 #if __cplusplus >= 201103L
       if constexpr (_IsMove)
-	*__out = std::move(*__in);
+	*___out = std::move(*___in);
       else
 #endif
-	*__out = *__in;
+	*___out = *___in;
     }
 
   template<bool _IsMove, typename _InIter, typename _Sent, typename _OutIter>
