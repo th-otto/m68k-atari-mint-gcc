@@ -18,7 +18,7 @@
 #define RYU_COMMON_H
 
 
-#if defined(_M_IX86) || defined(_M_ARM)
+#if defined(_M_IX86) || defined(_M_ARM) || defined(__m68k__)
 #define RYU_32_BIT_PLATFORM
 #endif
 

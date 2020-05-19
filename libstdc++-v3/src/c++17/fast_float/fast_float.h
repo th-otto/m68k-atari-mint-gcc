@@ -103,7 +103,7 @@ from_chars_result from_chars_advanced(const char *first, const char *last,
 #define FASTFLOAT_64BIT
 #elif (defined(__i386) || defined(__i386__) || defined(_M_IX86)   \
      || defined(__arm__) || defined(_M_ARM)                   \
-     || defined(__MINGW32__))
+     || defined(__MINGW32__) || defined(__m68k__))
 #define FASTFLOAT_32BIT
 #else
   // Need to check incrementally, since SIZE_MAX is a size_t, avoid overflow.
@@ -2497,7 +2497,7 @@ void round_nearest_tie_even(adjusted_mantissa& am, int32_t shift, callback cb) n
   uint64_t mask;
   uint64_t halfway;
   if (shift == 64) {
-    mask = UINT64_MAX;
+    mask = 0xFFFFFFFFFFFFFFFFULL;
   } else {
     mask = (uint64_t(1) << shift) - 1;
   }
