@@ -505,7 +505,7 @@ endif
 # Build lib2funcs.  For the static library also include LIB2FUNCS_ST.
 lib2funcs-o = $(patsubst %,%$(objext),$(lib2funcs) $(LIB2FUNCS_ST))
 $(lib2funcs-o): %$(objext): $(srcdir)/libgcc2.c
-	$(gcc_compile) -DL$* -c $< $(vis_hide)
+	$(gcc_compile) -fcommon -DL$* -c $< $(vis_hide)
 libgcc-objects += $(lib2funcs-o)
 
 ifeq ($(enable_shared),yes)

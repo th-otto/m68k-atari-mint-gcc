@@ -4130,7 +4130,7 @@ SYM (__lesf2):
 	rts
 #endif /* L_lesf2 */
 
-#if defined (__ELF__) && defined (__linux__)
+#if defined (__ELF__)
 	/* Make stack non-executable for ELF linux targets.  */
 	.section	.note.GNU-stack,"",@progbits
 #endif

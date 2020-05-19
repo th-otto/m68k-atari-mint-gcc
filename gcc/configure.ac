@@ -3976,6 +3976,9 @@ x:
 	addiu $4, $4, %tprel_lo(x)'
 	tls_as_opt='-32 --fatal-warnings'
 	;;
+  m68k-*-mintelf*)
+	# the assembler will support that, but we want to use emutls at runtime
+	;;
   m68k-*-*)
     conftest_s='
 	.section .tdata,"awT",@progbits
@@ -5150,6 +5153,14 @@ gd:
     AC_DEFINE_UNQUOTED(HAVE_AS_IX86_TLS_GET_ADDR_GOT,
       [`if test x"$gcc_cv_as_ix86_tls_get_addr_via_got" = xyes; then echo 1; else echo 0; fi`],
       [Define 0/1 if your assembler and linker support calling ___tls_get_addr via GOT.])
+    ;;
+
+   m68k-*-*)
+     gcc_GAS_CHECK_FEATURE([.gnu_attribute support],
+      gcc_cv_as_m68k_gnu_attribute,,
+      [.gnu_attribute 4,1],,
+      [AC_DEFINE(HAVE_AS_GNU_ATTRIBUTE, 1,
+	  [Define if your assembler supports .gnu_attribute.])])
     ;;
 
   ia64*-*-*)

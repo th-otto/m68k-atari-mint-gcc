@@ -1,7 +1,5 @@
-/* Definitions of target machine for GNU compiler.
-   Atari ST TOS/MiNT.
-   Copyright (C) 1994, 1995, 2007, 2008, 2009, 2010, 2011
-   Free Software Foundation, Inc.
+/* Definitions of target machine for GCC for Atari ST TOS/MiNT.
+   Copyright (C) 1994-2023 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -18,12 +16,6 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING3.  If not see
 <http://www.gnu.org/licenses/>.  */
-
-#ifndef USING_ELFOS_H
-/* We can only do STABS.  */
-#undef PREFERRED_DEBUGGING_TYPE
-#define PREFERRED_DEBUGGING_TYPE DBX_DEBUG
-#endif
 
 /* Here are four prefixes that are used by asm_fprintf to
    facilitate customization for alternate assembler syntaxes.
@@ -56,11 +48,18 @@ along with GCC; see the file COPYING3.  If not see
 #undef WCHAR_TYPE_SIZE
 #define WCHAR_TYPE_SIZE SHORT_TYPE_SIZE
 
+#if HAVE_INITFINI_ARRAY_SUPPORT
+#define GCC_HAVE_INITFINI_ARRAY_SUPPORT builtin_define ("__GCC_HAVE_INITFINI_ARRAY_SUPPORT");
+#else
+#define GCC_HAVE_INITFINI_ARRAY_SUPPORT
+#endif
+
 #undef TARGET_OS_CPP_BUILTINS
 #define TARGET_OS_CPP_BUILTINS()		\
   do						\
     {						\
       builtin_define ("__MINT__");		\
+      GCC_HAVE_INITFINI_ARRAY_SUPPORT \
       builtin_define_std ("atarist");		\
       builtin_assert ("machine=atari");		\
       builtin_assert ("system=mint");		\
@@ -83,11 +82,8 @@ along with GCC; see the file COPYING3.  If not see
   "%{!m680*:%{!mc680*:%{!mcpu=680*:-D__M68000__}}} "	\
   "%{mshort:-D__MSHORT__}"
 
-#define STARTFILE_SPEC	"%{pg|p|profile:gcrt0.o%s;:crt0.o%s}"
+#undef  LIB_SPEC
 #define LIB_SPEC	"-lc"
-
-/* Every structure or union's size must be a multiple of 2 bytes.  */
-#define STRUCTURE_SIZE_BOUNDARY 16
 
 /* The -g option generates stabs debug information.  */
 #define DBX_DEBUGGING_INFO 1
@@ -130,36 +126,140 @@ along with GCC; see the file COPYING3.  If not see
 
    MiNT: DWARF 2 frame unwind is not supported by a.out-mint.
 */
+#undef DWARF2_UNWIND_INFO
+/* If configured with --disable-sjlj-exceptions, use DWARF2
+   else default to SJLJ.  */
+#if defined(USING_ELFOS_H) && defined (CONFIG_SJLJ_EXCEPTIONS) && !CONFIG_SJLJ_EXCEPTIONS
+/* The logic of this #if must be kept synchronised with the logic
+   for selecting the tmake_eh_file fragment in libgcc/config.host.  */
+#define DWARF2_UNWIND_INFO 1
+#else
 #define DWARF2_UNWIND_INFO 0
+#endif
+
+#if DWARF2_UNWIND_INFO
+/* the default of DW_EH_PE_absptr creates relocations at odd addresses, which we cannot handle */
+#undef ASM_PREFERRED_EH_DATA_FORMAT
+#define ASM_PREFERRED_EH_DATA_FORMAT(CODE, GLOBAL)			   \
+  (flag_pic								   \
+   && !((TARGET_ID_SHARED_LIBRARY || TARGET_SEP_DATA)			   \
+	&& ((GLOBAL) || (CODE)))					   \
+   ? ((GLOBAL) ? DW_EH_PE_indirect : 0) | DW_EH_PE_pcrel | DW_EH_PE_sdata4 \
+   : DW_EH_PE_aligned)
+
+/* Define how the m68k registers should be numbered for Dwarf output.
+   The numbering provided here should be compatible with the native
+   SVR4 debugger in the m68k/SVR4 reference port, where d0-d7
+   are 0-7, a0-a7 are 8-15, and fp0-fp7 are 16-23.  */
+
+#undef DEBUGGER_REGNO
+#define DEBUGGER_REGNO(REGNO) (REGNO)
+#endif
 
 /* config/m68k.md has an explicit reference to the program counter,
    prefix this by the register prefix.  */
 
+#undef ASM_OUTPUT_CASE_LABEL
 #define ASM_RETURN_CASE_JUMP				\
   do {							\
     if (TARGET_COLDFIRE)				\
       {							\
 	if (ADDRESS_REG_P (operands[0]))		\
 	  return "jmp %%pc@(2,%0:l)";			\
+	else if (TARGET_LONG_JUMP_TABLE_OFFSETS)	\
+	  return "jmp %%pc@(2,%0:l)";			\
 	else						\
 	  return "ext%.l %0\n\tjmp %%pc@(2,%0:l)";	\
       }							\
+    else if (TARGET_LONG_JUMP_TABLE_OFFSETS)		\
+      return "jmp %%pc@(2,%0:l)";			\
     else						\
       return "jmp %%pc@(2,%0:w)";			\
   } while (0)
 
-/* The ADDR_DIFF_VEC must exactly follow the previous instruction.  */
+/* As offset 2 is hardcoded in the jmp instruction above,
+   the ADDR_VEC must immediately follow the jmp instruction.
+   https://gcc.gnu.org/bugzilla/show_bug.cgi?id=112413  */
 
 #undef ADDR_VEC_ALIGN
 #define ADDR_VEC_ALIGN(ADDR_VEC) 0
+
+/* we must define this to prevent alignment of the table,
+   otherwise the relative offset from ASM_RETURN_CASE_JUMP might not match */
+#undef ASM_OUTPUT_BEFORE_CASE_LABEL
+#define ASM_OUTPUT_BEFORE_CASE_LABEL(FILE,PREFIX,NUM,TABLE)
 
 /* If defined, a C expression whose value is a string containing the
    assembler operation to identify the following data as uninitialized global
    data.  */
 
+#ifdef USING_ELFOS_H
+#define BSS_SECTION_ASM_OP "\t.section\t.bss"
+
+#define TARGET_HAVE_NAMED_SECTIONS true
+
+/* Currently, JUMP_TABLES_IN_TEXT_SECTION must be defined in order to
+   keep switch tables in the text section.  */
+   
+#define JUMP_TABLES_IN_TEXT_SECTION 1
+
+#define EH_TABLES_CAN_BE_READ_ONLY 1
+
+/* avoid pulling in the tm_clone support which we don't need */
+#define USE_TM_CLONE_REGISTRY 0
+
+#undef INIT_SECTION_ASM_OP
+#undef FINI_SECTION_ASM_OP
+
+/* This is how to output an assembler line that says to advance the
+   location counter to a multiple of 2**LOG bytes.  */
+
+#undef ASM_OUTPUT_ALIGN
+#define ASM_OUTPUT_ALIGN(FILE,LOG)				\
+do {								\
+  if ((LOG) > 0)						\
+    fprintf ((FILE), "%s%u\n", ALIGN_ASM_OP, 1 << (LOG));	\
+} while (0)
+
+#undef  STARTFILE_SPEC
+#define STARTFILE_SPEC	"%{pg|p|profile:gcrt0.o%s;:crt0.o%s} crtbegin.o%s"
+ 
+#undef  ENDFILE_SPEC
+#define ENDFILE_SPEC "crtend.o%s"
+
+/* In order for bitfields to work on a 68000, or with -mnobitfield, we must
+   define either PCC_BITFIELD_TYPE_MATTERS or STRUCTURE_SIZE_BOUNDARY.
+   Defining STRUCTURE_SIZE_BOUNDARY results in structure packing problems,
+   so we define PCC_BITFIELD_TYPE_MATTERS.  */
+/*
+ * However for compatibility reasons, we keep the previous setting.
+ */
+#if 0
+#define PCC_BITFIELD_TYPE_MATTERS 1
+#else
+/* Every structure or union's size must be a multiple of 2 bytes.  */
+#define STRUCTURE_SIZE_BOUNDARY 16
+#endif
+
+#else
+/* We can only do STABS.  */
+#undef PREFERRED_DEBUGGING_TYPE
+#define PREFERRED_DEBUGGING_TYPE DBX_DEBUG
+
 #define BSS_SECTION_ASM_OP "\t.bss"
 
 #define TARGET_HAVE_NAMED_SECTIONS false
+
+#undef  STARTFILE_SPEC
+#define STARTFILE_SPEC	"%{pg|p|profile:gcrt0.o%s;:crt0.o%s}"
+ 
+#undef  ENDFILE_SPEC
+#define ENDFILE_SPEC ""
+
+/* Every structure or union's size must be a multiple of 2 bytes.  */
+#define STRUCTURE_SIZE_BOUNDARY 16
+
+#endif
 
 /* A C statement (sans semicolon) to output to the stdio stream
    FILE the assembler definition of uninitialized global DECL named

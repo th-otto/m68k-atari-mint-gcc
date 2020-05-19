@@ -199,6 +199,7 @@ static machine_mode m68k_promote_function_mode (const_tree, machine_mode,
 						int *, const_tree, int);
 static void m68k_asm_final_postscan_insn (FILE *, rtx_insn *insn, rtx [], int);
 static HARD_REG_SET m68k_zero_call_used_regs (HARD_REG_SET);
+static void m68k_file_end (void);
 
 /* Initialize the GCC target structure.  */
 
@@ -237,6 +238,8 @@ static HARD_REG_SET m68k_zero_call_used_regs (HARD_REG_SET);
 
 #undef TARGET_ASM_FILE_START_APP_OFF
 #define TARGET_ASM_FILE_START_APP_OFF true
+#undef TARGET_ASM_FILE_END
+#define TARGET_ASM_FILE_END m68k_file_end
 
 #undef TARGET_LEGITIMIZE_ADDRESS
 #define TARGET_LEGITIMIZE_ADDRESS m68k_legitimize_address
@@ -717,6 +720,14 @@ m68k_option_override (void)
       else
 	m68k_sched_mac = MAC_NO;
     }
+
+  /*
+   * disable -fcombine-stack-adjustments for coldfire/mshort combination,
+   * which generates wrong CFI offsets.
+   * https://gcc.gnu.org/bugzilla/show_bug.cgi?id=88160
+   */
+  if (PREFERRED_STACK_BOUNDARY > 16 && INT_TYPE_SIZE <= 16 && (write_symbols & DWARF2_DEBUG))
+    flag_combine_stack_adjustments = 0;
 }
 
 /* Implement TARGET_OVERRIDE_OPTIONS_AFTER_CHANGE.  */
@@ -7211,6 +7222,28 @@ m68k_zero_call_used_regs (HARD_REG_SET need_zeroed_hardregs)
       }
 
   return need_zeroed_hardregs;
+}
+
+/* Do not emit .note.GNU-stack by default.  */
+#undef NEED_INDICATE_EXEC_STACK
+#ifdef USING_ELFOS_H
+#define NEED_INDICATE_EXEC_STACK	1
+#else
+#define NEED_INDICATE_EXEC_STACK	0
+#endif
+
+static void
+m68k_file_end (void)
+{
+#if defined(HAVE_AS_GNU_ATTRIBUTE) && 0
+  /* Emit .gnu_attribute directive for Tag_GNU_M68K_ABI_FP.  */
+  int fp_abi = TARGET_68881 ? (FUNCTION_VALUE_REGNO_P(FP0_REG) ? 1 : 2) : 0;
+  fprintf (asm_out_file, "\t.gnu_attribute 4, %d\n", fp_abi);
+#endif
+
+  if (NEED_INDICATE_EXEC_STACK)
+    /* Add .note.GNU-stack.  */
+    file_end_indicate_exec_stack ();
 }
 
 #include "gt-m68k.h"
