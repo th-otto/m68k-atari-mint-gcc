@@ -102,6 +102,44 @@ union long_double_long
       unsigned long lower;
     } l;
 };
+
+/* Prototypes for functions defined here in case we use them.  */
+int __unordsf2(float a, float b);
+int __unorddf2(double a, double b);
+double __floatunsidf (unsigned long a1);
+double __floatsidf (long a1);
+float __floatunsisf (unsigned long l);
+float __floatsisf (long l);
+double __extendsfdf2 (float a1);
+float __truncdfsf2 (double a1);
+long __fixdfsi (double a1);
+long __fixsfsi (float a1);
+long __cmpdf2 (double x1, double x2);
+
+#if defined(EXTFLOAT) && !defined (__mcoldfire__)
+int __unordxf2(long double a, long double b);
+long double __extenddfxf2 (double d);
+double __truncxfdf2 (long double ld);
+long double __extendsfxf2 (float f);
+float __truncxfsf2 (long double ld);
+long double __floatsixf (long l);
+long double __floatunsixf (unsigned long l);
+long __fixxfsi (long double ld);
+long double __addxf3 (long double x1, long double x2);
+long double __subxf3 (long double x1, long double x2);
+long double __mulxf3 (long double x1, long double x2);
+long double __divxf3 (long double x1, long double x2);
+long double __negxf2 (long double x1);
+long __cmpxf2 (long double x1, long double x2);
+long __eqxf2 (long double x1, long double x2);
+long __nexf2 (long double x1, long double x2);
+long __ltxf2 (long double x1, long double x2);
+long __lexf2 (long double x1, long double x2);
+long __gtxf2 (long double x1, long double x2);
+long __gexf2 (long double x1, long double x2);
+
+#endif
+
 
 #ifndef EXTFLOAT
 
@@ -111,10 +149,10 @@ __unordsf2(float a, float b)
   union float_long fl;
 
   fl.f = a;
-  if (EXP(fl.l) == EXP(~0u) && (MANT(fl.l) & ~HIDDEN) != 0)
+  if (EXP(fl.l) == EXP(~0ul) && (MANT(fl.l) & ~HIDDEN) != 0)
     return 1;
   fl.f = b;
-  if (EXP(fl.l) == EXP(~0u) && (MANT(fl.l) & ~HIDDEN) != 0)
+  if (EXP(fl.l) == EXP(~0ul) && (MANT(fl.l) & ~HIDDEN) != 0)
     return 1;
   return 0;
 }
@@ -290,7 +328,7 @@ __truncdfsf2 (double a1)
 
   exp = EXPD (dl1) - EXCESSD + EXCESS;
 
-  sticky = dl1.l.lower & ((1 << 22) - 1);
+  sticky = dl1.l.lower & ((1L << 22) - 1);
   mant = MANTD (dl1);
   /* shift double mantissa 6 bits so we can round */
   sticky |= mant & ((1 << 6) - 1);
@@ -386,15 +424,6 @@ __fixsfsi (float a1)
 /* Primitive extended precision floating point support.
 
    We assume all numbers are normalized, don't do any rounding, etc.  */
-
-/* Prototypes for the above in case we use them.  */
-double __floatunsidf (unsigned long);
-double __floatsidf (long);
-float __floatsisf (long);
-double __extendsfdf2 (float);
-float __truncdfsf2 (double);
-long __fixdfsi (double);
-long __fixsfsi (float);
 
 int
 __unordxf2(long double a, long double b)

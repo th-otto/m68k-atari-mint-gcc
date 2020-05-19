@@ -28,10 +28,12 @@
 // we use the following crude approximations. We keep saying that we'll do
 // better later, but never do.
 
+#define WEAK __attribute__((weak))
+
 extern "C"
 {
 #ifndef _GLIBCXX_HAVE_FABSL
-  long double
+  long double WEAK
   fabsl(long double x)
   {
     return fabs((double) x);
@@ -39,7 +41,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_ACOSL
-  long double
+  long double WEAK
   acosl(long double x)
   {
     return acos((double) x);
@@ -47,7 +49,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_ASINL
-  long double
+  long double WEAK
   asinl(long double x)
   {
     return asin((double) x);
@@ -55,7 +57,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_ATANL
-  long double
+  long double WEAK
   atanl(long double x)
   {
     return atan ((double) x);
@@ -63,7 +65,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_ATAN2L
-  long double
+  long double WEAK
   atan2l(long double x, long double y)
   {
     return atan2((double) x, (double) y);
@@ -71,7 +73,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_CEILL
-  long double
+  long double WEAK
   ceill(long double x)
   {
     return ceil((double) x);
@@ -79,7 +81,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_COSL
-  long double
+  long double WEAK
   cosl(long double x)
   {
     return cos((double) x);
@@ -87,7 +89,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_COSHL
-  long double
+  long double WEAK
   coshl(long double x)
   {
     return cosh((double) x);
@@ -95,7 +97,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_EXPL
-  long double
+  long double WEAK
   expl(long double x)
   {
     return exp((double) x);
@@ -103,7 +105,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_FLOORL
-  long double
+  long double WEAK
   floorl(long double x)
   {
     return floor((double) x);
@@ -111,7 +113,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_FMODL
-  long double
+  long double WEAK
   fmodl(long double x, long double y)
   {
     return fmod((double) x, (double) y);
@@ -119,7 +121,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_FREXPL
-  long double
+  long double WEAK
   frexpl(long double x, int *exp)
   {
     return frexp((double) x, exp);
@@ -127,7 +129,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_SQRTL
-  long double
+  long double WEAK
   sqrtl(long double x)
   {
     return  sqrt((double) x);
@@ -135,7 +137,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_HYPOTL
-  long double
+  long double WEAK
   hypotl(long double x, long double y)
   {
     long double s = fabsl(x) + fabsl(y);
@@ -147,7 +149,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_LDEXPL
-  long double
+  long double WEAK
   ldexpl(long double x, int exp)
   {
     return ldexp((double) x, exp);
@@ -155,7 +157,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_LOGL
-  long double
+  long double WEAK
   logl(long double x)
   {
     return log((double) x);
@@ -163,7 +165,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_LOG10L
-  long double
+  long double WEAK
   log10l(long double x)
   {
     return log10((double) x);
@@ -171,7 +173,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_MODFL
-  long double
+  long double WEAK
   modfl(long double x, long double *iptr)
   {
     double result, temp;
@@ -183,7 +185,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_POWL
-  long double
+  long double WEAK
   powl(long double x, long double y)
   {
     return pow((double) x, (double) y);
@@ -191,7 +193,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_SINL
-  long double
+  long double WEAK
   sinl(long double x)
   {
     return sin((double) x);
@@ -199,7 +201,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_SINHL
-  long double
+  long double WEAK
   sinhl(long double x)
   {
     return sinh((double) x);
@@ -207,7 +209,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_TANL
-  long double
+  long double WEAK
   tanl(long double x)
   {
     return tan((double) x);
@@ -215,7 +217,7 @@ extern "C"
 #endif
 
 #ifndef _GLIBCXX_HAVE_TANHL
-  long double
+  long double WEAK
   tanhl(long double x)
   {
     return tanh((double) x);
