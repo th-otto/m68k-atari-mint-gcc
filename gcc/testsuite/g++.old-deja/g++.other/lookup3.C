@@ -8,10 +8,10 @@ int main ()
    ({
      union
      {
-       __typeof__ (stat_loc) __in;
+       __typeof__ (stat_loc) ___in;
        int 		__i;
      } __u;
-     __u.__in = (stat_loc);
+     __u.___in = (stat_loc);
      __u.__i;
    })
    );

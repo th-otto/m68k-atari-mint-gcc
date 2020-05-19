@@ -1996,7 +1996,7 @@ _GLIBCXX_BEGIN_NAMESPACE_LDBL
        *  except if the value is 1, sets @a v to true, if the value is 0, sets
        *  @a v to false, and otherwise set err to ios_base::failbit.
        *
-       *  @param  __in  Start of input stream.
+       *  @param  ___in  Start of input stream.
        *  @param  __end  End of input stream.
        *  @param  __io  Source of locale and flags.
        *  @param  __err  Error flags to set.
@@ -2004,9 +2004,9 @@ _GLIBCXX_BEGIN_NAMESPACE_LDBL
        *  @return  Iterator after reading.
       */
       iter_type
-      get(iter_type __in, iter_type __end, ios_base& __io,
+      get(iter_type ___in, iter_type __end, ios_base& __io,
 	  ios_base::iostate& __err, bool& __v) const
-      { return this->do_get(__in, __end, __io, __err, __v); }
+      { return this->do_get(___in, __end, __io, __err, __v); }
 
       ///@{
       /**
@@ -2033,7 +2033,7 @@ _GLIBCXX_BEGIN_NAMESPACE_LDBL
        *  Otherwise, sets err to ios_base::failbit and leaves @a v unaltered.
        *  Sets err to ios_base::eofbit if the stream is emptied.
        *
-       *  @param  __in  Start of input stream.
+       *  @param  ___in  Start of input stream.
        *  @param  __end  End of input stream.
        *  @param  __io  Source of locale and flags.
        *  @param  __err  Error flags to set.
@@ -2041,35 +2041,35 @@ _GLIBCXX_BEGIN_NAMESPACE_LDBL
        *  @return  Iterator after reading.
       */
       iter_type
-      get(iter_type __in, iter_type __end, ios_base& __io,
+      get(iter_type ___in, iter_type __end, ios_base& __io,
 	  ios_base::iostate& __err, long& __v) const
-      { return this->do_get(__in, __end, __io, __err, __v); }
+      { return this->do_get(___in, __end, __io, __err, __v); }
 
       iter_type
-      get(iter_type __in, iter_type __end, ios_base& __io,
+      get(iter_type ___in, iter_type __end, ios_base& __io,
 	  ios_base::iostate& __err, unsigned short& __v) const
-      { return this->do_get(__in, __end, __io, __err, __v); }
+      { return this->do_get(___in, __end, __io, __err, __v); }
 
       iter_type
-      get(iter_type __in, iter_type __end, ios_base& __io,
+      get(iter_type ___in, iter_type __end, ios_base& __io,
 	  ios_base::iostate& __err, unsigned int& __v)   const
-      { return this->do_get(__in, __end, __io, __err, __v); }
+      { return this->do_get(___in, __end, __io, __err, __v); }
 
       iter_type
-      get(iter_type __in, iter_type __end, ios_base& __io,
+      get(iter_type ___in, iter_type __end, ios_base& __io,
 	  ios_base::iostate& __err, unsigned long& __v)  const
-      { return this->do_get(__in, __end, __io, __err, __v); }
+      { return this->do_get(___in, __end, __io, __err, __v); }
 
 #ifdef _GLIBCXX_USE_LONG_LONG
       iter_type
-      get(iter_type __in, iter_type __end, ios_base& __io,
+      get(iter_type ___in, iter_type __end, ios_base& __io,
 	  ios_base::iostate& __err, long long& __v) const
-      { return this->do_get(__in, __end, __io, __err, __v); }
+      { return this->do_get(___in, __end, __io, __err, __v); }
 
       iter_type
-      get(iter_type __in, iter_type __end, ios_base& __io,
+      get(iter_type ___in, iter_type __end, ios_base& __io,
 	  ios_base::iostate& __err, unsigned long long& __v)  const
-      { return this->do_get(__in, __end, __io, __err, __v); }
+      { return this->do_get(___in, __end, __io, __err, __v); }
 #endif
       ///@}
 
@@ -2093,7 +2093,7 @@ _GLIBCXX_BEGIN_NAMESPACE_LDBL
        *  Otherwise, sets err to ios_base::failbit and leaves @a v unaltered.
        *  Sets err to ios_base::eofbit if the stream is emptied.
        *
-       *  @param  __in  Start of input stream.
+       *  @param  ___in  Start of input stream.
        *  @param  __end  End of input stream.
        *  @param  __io  Source of locale and flags.
        *  @param  __err  Error flags to set.
@@ -2101,19 +2101,19 @@ _GLIBCXX_BEGIN_NAMESPACE_LDBL
        *  @return  Iterator after reading.
       */
       iter_type
-      get(iter_type __in, iter_type __end, ios_base& __io,
+      get(iter_type ___in, iter_type __end, ios_base& __io,
 	  ios_base::iostate& __err, float& __v) const
-      { return this->do_get(__in, __end, __io, __err, __v); }
+      { return this->do_get(___in, __end, __io, __err, __v); }
 
       iter_type
-      get(iter_type __in, iter_type __end, ios_base& __io,
+      get(iter_type ___in, iter_type __end, ios_base& __io,
 	  ios_base::iostate& __err, double& __v) const
-      { return this->do_get(__in, __end, __io, __err, __v); }
+      { return this->do_get(___in, __end, __io, __err, __v); }
 
       iter_type
-      get(iter_type __in, iter_type __end, ios_base& __io,
+      get(iter_type ___in, iter_type __end, ios_base& __io,
 	  ios_base::iostate& __err, long double& __v) const
-      { return this->do_get(__in, __end, __io, __err, __v); }
+      { return this->do_get(___in, __end, __io, __err, __v); }
       ///@}
 
       /**
@@ -2136,7 +2136,7 @@ _GLIBCXX_BEGIN_NAMESPACE_LDBL
        *  Otherwise, sets err to ios_base::failbit and leaves @a v unaltered.
        *  Sets err to ios_base::eofbit if the stream is emptied.
        *
-       *  @param  __in  Start of input stream.
+       *  @param  ___in  Start of input stream.
        *  @param  __end  End of input stream.
        *  @param  __io  Source of locale and flags.
        *  @param  __err  Error flags to set.
@@ -2144,9 +2144,9 @@ _GLIBCXX_BEGIN_NAMESPACE_LDBL
        *  @return  Iterator after reading.
       */
       iter_type
-      get(iter_type __in, iter_type __end, ios_base& __io,
+      get(iter_type ___in, iter_type __end, ios_base& __io,
 	  ios_base::iostate& __err, void*& __v) const
-      { return this->do_get(__in, __end, __io, __err, __v); }
+      { return this->do_get(___in, __end, __io, __err, __v); }
 
     protected:
       /// Destructor.
