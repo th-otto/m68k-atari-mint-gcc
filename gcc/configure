@@ -13571,6 +13571,10 @@ else
     lt_cv_sys_max_cmd_len=8192;
     ;;
 
+  mint*)
+    lt_cv_sys_max_cmd_len=8192;
+    ;;
+
   netbsd* | freebsd* | openbsd* | darwin* | dragonfly*)
     # This has been around since 386BSD, at least.  Likely further.
     if test -x /sbin/sysctl; then
@@ -28763,7 +28767,7 @@ if ($AR --version | sed 1q | grep "GNU ar" \
     && $CC $CFLAGS -c conftest.c \
     && $AR rcT conftest.a conftest.o \
     && $CC $CFLAGS $LDFLAGS -o conftest conftest.a) >/dev/null 2>&1; then
-  thin_archive_support=yes
+  thin_archive_support=no
 fi
 rm -f conftest.c conftest.o conftest.a conftest
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $thin_archive_support" >&5
