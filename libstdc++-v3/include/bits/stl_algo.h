@@ -5726,7 +5726,7 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
            typename _Size, typename _UniformRandomBitGenerator>
     _RandomAccessIterator
     __sample(_InputIterator __first, _InputIterator __last, input_iterator_tag,
-	     _RandomAccessIterator __out, random_access_iterator_tag,
+	     _RandomAccessIterator ___out, random_access_iterator_tag,
 	     _Size __n, _UniformRandomBitGenerator&& __g)
     {
       using __distrib_type = uniform_int_distribution<_Size>;
@@ -5735,7 +5735,7 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
       _Size __sample_sz = 0;
       while (__first != __last && __sample_sz != __n)
 	{
-	  __out[__sample_sz++] = *__first;
+	  ___out[__sample_sz++] = *__first;
 	  ++__first;
 	}
       for (auto __pop_sz = __sample_sz; __first != __last;
@@ -5743,9 +5743,9 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
 	{
 	  const auto __k = __d(__g, __param_type{0, __pop_sz});
 	  if (__k < __n)
-	    __out[__k] = *__first;
+	    ___out[__k] = *__first;
 	}
-      return __out + __sample_sz;
+      return ___out + __sample_sz;
     }
 
   /// Selection sampling algorithm.
@@ -5754,7 +5754,7 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
     _OutputIterator
     __sample(_ForwardIterator __first, _ForwardIterator __last,
 	     forward_iterator_tag,
-	     _OutputIterator __out, _Cat,
+	     _OutputIterator ___out, _Cat,
 	     _Size __n, _UniformRandomBitGenerator&& __g)
     {
       using __distrib_type = uniform_int_distribution<_Size>;
@@ -5764,7 +5764,7 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
       using __uc_type = common_type_t<typename _Gen::result_type, _USize>;
 
       if (__first == __last)
-	return __out;
+	return ___out;
 
       __distrib_type __d{};
       _Size __unsampled_sz = std::distance(__first, __last);
@@ -5786,7 +5786,7 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
 	      --__unsampled_sz;
 	      if (__p.first < __n)
 		{
-		  *__out++ = *__first;
+		  *___out++ = *__first;
 		  --__n;
 		}
 
@@ -5797,7 +5797,7 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
 	      --__unsampled_sz;
 	      if (__p.second < __n)
 		{
-		  *__out++ = *__first;
+		  *___out++ = *__first;
 		  --__n;
 		}
 
@@ -5810,10 +5810,10 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
       for (; __n != 0; ++__first)
 	if (__d(__g, __param_type{0, --__unsampled_sz}) < __n)
 	  {
-	    *__out++ = *__first;
+	    *___out++ = *__first;
 	    --__n;
 	  }
-      return __out;
+      return ___out;
     }
 #endif // C++14
 
@@ -5823,7 +5823,7 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
            typename _Distance, typename _UniformRandomBitGenerator>
     _SampleIterator
     sample(_PopulationIterator __first, _PopulationIterator __last,
-	   _SampleIterator __out, _Distance __n,
+	   _SampleIterator ___out, _Distance __n,
 	   _UniformRandomBitGenerator&& __g)
     {
       using __pop_cat = typename
@@ -5842,7 +5842,7 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
 
       typename iterator_traits<_PopulationIterator>::difference_type __d = __n;
       return _GLIBCXX_STD_A::
-	__sample(__first, __last, __pop_cat{}, __out, __samp_cat{}, __d,
+	__sample(__first, __last, __pop_cat{}, ___out, __samp_cat{}, __d,
 		 std::forward<_UniformRandomBitGenerator>(__g));
     }
 #endif // __glibcxx_sample

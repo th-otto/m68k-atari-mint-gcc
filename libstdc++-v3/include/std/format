@@ -646,24 +646,24 @@ namespace __format
   template<typename _Out, typename _CharT>
     requires output_iterator<_Out, const _CharT&>
     inline _Out
-    __write(_Out __out, basic_string_view<_CharT> __str)
+    __write(_Out ___out, basic_string_view<_CharT> __str)
     {
       if constexpr (is_same_v<_Out, _Sink_iter<_CharT>>)
 	{
 	  if (__str.size())
-	    __out = __str;
+	    ___out = __str;
 	}
       else
 	for (_CharT __c : __str)
-	  *__out++ = __c;
-      return __out;
+	  *___out++ = __c;
+      return ___out;
     }
 
   // Write STR to OUT with NFILL copies of FILL_CHAR specified by ALIGN.
   // pre: __align != _Align_default
   template<typename _Out, typename _CharT>
     _Out
-    __write_padded(_Out __out, basic_string_view<_CharT> __str,
+    __write_padded(_Out ___out, basic_string_view<_CharT> __str,
 		   _Align __align, size_t __nfill, char32_t __fill_char)
     {
       const size_t __buflen = 0x20;
@@ -713,11 +713,11 @@ namespace __format
 	    basic_string<_CharT> __padstr(__v.begin(), __v.end());
 	    __padding = __padstr;
 	    while (__l-- > 0)
-	      __out = __format::__write(std::move(__out), __padding);
-	    __out = __format::__write(std::move(__out), __str);
+	      ___out = __format::__write(std::move(___out), __padding);
+	    ___out = __format::__write(std::move(___out), __str);
 	    while (__r-- > 0)
-	      __out = __format::__write(std::move(__out), __padding);
-	    return __out;
+	      ___out = __format::__write(std::move(___out), __padding);
+	    return ___out;
 	  }
 
       if (__max < __buflen)
@@ -726,11 +726,11 @@ namespace __format
 	__max = __buflen;
 
       char_traits<_CharT>::assign(__padding_chars, __max, __fill_char);
-      __pad(__l, __out);
-      __out = __format::__write(std::move(__out), __str);
-      __pad(__r, __out);
+      __pad(__l, ___out);
+      ___out = __format::__write(std::move(___out), __str);
+      __pad(__r, ___out);
 
-      return __out;
+      return ___out;
     }
 
   // Write STR to OUT, with alignment and padding as determined by SPEC.
@@ -1266,7 +1266,7 @@ namespace __format
 	  _Align __align = _M_spec._M_align;
 
 	  size_t __nfill = __width - __str.size();
-	  auto __out = __fc.out();
+	  auto ___out = __fc.out();
 	  if (__align == _Align_default)
 	    {
 	      __align = _Align_right;
@@ -1276,7 +1276,7 @@ namespace __format
 		  // Write sign and base prefix before zero filling.
 		  if (__prefix_len != 0)
 		    {
-		      __out = __format::__write(std::move(__out),
+		      ___out = __format::__write(std::move(___out),
 						__str.substr(0, __prefix_len));
 		      __str.remove_prefix(__prefix_len);
 		    }
@@ -1284,7 +1284,7 @@ namespace __format
 	      else
 		__fill_char = _CharT(' ');
 	    }
-	  return __format::__write_padded(std::move(__out), __str,
+	  return __format::__write_padded(std::move(___out), __str,
 					  __align, __nfill, __fill_char);
 	}
 
@@ -1750,7 +1750,7 @@ namespace __format
 	  _Align __align = _M_spec._M_align;
 
 	  size_t __nfill = __width - __str.size();
-	  auto __out = __fc.out();
+	  auto ___out = __fc.out();
 	  if (__align == _Align_default)
 	    {
 	      __align = _Align_right;
@@ -1760,14 +1760,14 @@ namespace __format
 		  // Write sign before zero filling.
 		  if (!__format::__is_xdigit(__narrow_str[0]))
 		    {
-		      *__out++ = __str[0];
+		      *___out++ = __str[0];
 		      __str.remove_prefix(1);
 		    }
 		}
 	      else
 		__fill_char = _CharT(' ');
 	    }
-	  return __format::__write_padded(std::move(__out), __str,
+	  return __format::__write_padded(std::move(___out), __str,
 					  __align, __nfill, __fill_char);
 	}
 
@@ -2420,12 +2420,12 @@ namespace __format
 	      if (__width <= __str.size())
 		return __format::__write(__fc.out(), __str);
 
-	      auto __out = __fc.out();
+	      auto ___out = __fc.out();
 	      // Write "0x" or "0X" prefix before zero-filling.
-	      __out = __format::__write(std::move(__out), __str.substr(0, 2));
+	      ___out = __format::__write(std::move(___out), __str.substr(0, 2));
 	      __str.remove_prefix(2);
 	      size_t __nfill = __width - __n;
-	      return __format::__write_padded(std::move(__out), __str,
+	      return __format::__write_padded(std::move(___out), __str,
 					      __format::_Align_right,
 					      __nfill, _CharT('0'));
 	    }
@@ -2936,8 +2936,8 @@ namespace __format
     public:
       [[__gnu__::__always_inline__]]
       explicit
-      _Iter_sink(_OutIter __out, iter_difference_t<_OutIter> __max = -1)
-      : _M_out(std::move(__out)), _M_max(__max)
+      _Iter_sink(_OutIter ___out, iter_difference_t<_OutIter> __max = -1)
+      : _M_out(std::move(___out)), _M_max(__max)
       { }
 
       using _Sink<_CharT>::out;
@@ -3046,9 +3046,9 @@ namespace __format
 
     public:
       explicit
-      _Iter_sink(_OutIter __out, iter_difference_t<_OutIter> __n = -1) noexcept
-      : _Sink<_CharT>(_S_make_span(std::to_address(__out), __n, _M_buf)),
-	_M_first(__out), _M_max(__n)
+      _Iter_sink(_OutIter ___out, iter_difference_t<_OutIter> __n = -1) noexcept
+      : _Sink<_CharT>(_S_make_span(std::to_address(___out), __n, _M_buf)),
+	_M_first(___out), _M_max(__n)
       { }
 
       format_to_n_result<_OutIter>
@@ -3842,13 +3842,13 @@ namespace __format
       __format::_Optional_locale _M_loc;
 
       basic_format_context(basic_format_args<basic_format_context> __args,
-			   _Out __out)
-      : _M_args(__args), _M_out(std::move(__out))
+			   _Out ___out)
+      : _M_args(__args), _M_out(std::move(___out))
       { }
 
       basic_format_context(basic_format_args<basic_format_context> __args,
-			   _Out __out, const std::locale& __loc)
-      : _M_args(__args), _M_out(std::move(__out)), _M_loc(__loc)
+			   _Out ___out, const std::locale& __loc)
+      : _M_args(__args), _M_out(std::move(___out)), _M_loc(__loc)
       { }
 
       template<typename _Out2, typename _CharT2, typename _Context2>
@@ -4101,15 +4101,15 @@ namespace __format
 
   template<typename _Out, typename _CharT, typename _Context>
     inline _Out
-    __do_vformat_to(_Out __out, basic_string_view<_CharT> __fmt,
+    __do_vformat_to(_Out ___out, basic_string_view<_CharT> __fmt,
 		    const basic_format_args<_Context>& __args,
 		    const locale* __loc)
     {
-      _Iter_sink<_CharT, _Out> __sink(std::move(__out));
+      _Iter_sink<_CharT, _Out> __sink(std::move(___out));
       _Sink_iter<_CharT> __sink_out;
 
       if constexpr (is_same_v<_Out, _Sink_iter<_CharT>>)
-	__sink_out = __out; // Already a sink iterator, safe to use post-move.
+	__sink_out = ___out; // Already a sink iterator, safe to use post-move.
       else
 	__sink_out = __sink.out();
 
@@ -4213,34 +4213,34 @@ namespace __format
   template<typename _Out> requires output_iterator<_Out, const char&>
     [[__gnu__::__always_inline__]]
     inline _Out
-    vformat_to(_Out __out, string_view __fmt, format_args __args)
-    { return __format::__do_vformat_to(std::move(__out), __fmt, __args); }
+    vformat_to(_Out ___out, string_view __fmt, format_args __args)
+    { return __format::__do_vformat_to(std::move(___out), __fmt, __args); }
 
 #ifdef _GLIBCXX_USE_WCHAR_T
   template<typename _Out> requires output_iterator<_Out, const wchar_t&>
     [[__gnu__::__always_inline__]]
     inline _Out
-    vformat_to(_Out __out, wstring_view __fmt, wformat_args __args)
-    { return __format::__do_vformat_to(std::move(__out), __fmt, __args); }
+    vformat_to(_Out ___out, wstring_view __fmt, wformat_args __args)
+    { return __format::__do_vformat_to(std::move(___out), __fmt, __args); }
 #endif
 
   template<typename _Out> requires output_iterator<_Out, const char&>
     [[__gnu__::__always_inline__]]
     inline _Out
-    vformat_to(_Out __out, const locale& __loc, string_view __fmt,
+    vformat_to(_Out ___out, const locale& __loc, string_view __fmt,
 	       format_args __args)
     {
-      return __format::__do_vformat_to(std::move(__out), __fmt, __args, &__loc);
+      return __format::__do_vformat_to(std::move(___out), __fmt, __args, &__loc);
     }
 
 #ifdef _GLIBCXX_USE_WCHAR_T
   template<typename _Out> requires output_iterator<_Out, const wchar_t&>
     [[__gnu__::__always_inline__]]
     inline _Out
-    vformat_to(_Out __out, const locale& __loc, wstring_view __fmt,
+    vformat_to(_Out ___out, const locale& __loc, wstring_view __fmt,
 	       wformat_args __args)
     {
-      return __format::__do_vformat_to(std::move(__out), __fmt, __args, &__loc);
+      return __format::__do_vformat_to(std::move(___out), __fmt, __args, &__loc);
     }
 #endif
 
@@ -4323,9 +4323,9 @@ namespace __format
   template<typename _Out, typename... _Args>
     requires output_iterator<_Out, const char&>
     inline _Out
-    format_to(_Out __out, format_string<_Args...> __fmt, _Args&&... __args)
+    format_to(_Out ___out, format_string<_Args...> __fmt, _Args&&... __args)
     {
-      return std::vformat_to(std::move(__out), __fmt.get(),
+      return std::vformat_to(std::move(___out), __fmt.get(),
 			     std::make_format_args(__args...));
     }
 
@@ -4333,9 +4333,9 @@ namespace __format
   template<typename _Out, typename... _Args>
     requires output_iterator<_Out, const wchar_t&>
     inline _Out
-    format_to(_Out __out, wformat_string<_Args...> __fmt, _Args&&... __args)
+    format_to(_Out ___out, wformat_string<_Args...> __fmt, _Args&&... __args)
     {
-      return std::vformat_to(std::move(__out), __fmt.get(),
+      return std::vformat_to(std::move(___out), __fmt.get(),
 			     std::make_wformat_args(__args...));
     }
 #endif
@@ -4343,10 +4343,10 @@ namespace __format
   template<typename _Out, typename... _Args>
     requires output_iterator<_Out, const char&>
     inline _Out
-    format_to(_Out __out, const locale& __loc, format_string<_Args...> __fmt,
+    format_to(_Out ___out, const locale& __loc, format_string<_Args...> __fmt,
 	      _Args&&... __args)
     {
-      return std::vformat_to(std::move(__out), __loc, __fmt.get(),
+      return std::vformat_to(std::move(___out), __loc, __fmt.get(),
 			     std::make_format_args(__args...));
     }
 
@@ -4354,10 +4354,10 @@ namespace __format
   template<typename _Out, typename... _Args>
     requires output_iterator<_Out, const wchar_t&>
     inline _Out
-    format_to(_Out __out, const locale& __loc, wformat_string<_Args...> __fmt,
+    format_to(_Out ___out, const locale& __loc, wformat_string<_Args...> __fmt,
 	      _Args&&... __args)
     {
-      return std::vformat_to(std::move(__out), __loc, __fmt.get(),
+      return std::vformat_to(std::move(___out), __loc, __fmt.get(),
 			     std::make_wformat_args(__args...));
     }
 #endif
@@ -4365,10 +4365,10 @@ namespace __format
   template<typename _Out, typename... _Args>
     requires output_iterator<_Out, const char&>
     inline format_to_n_result<_Out>
-    format_to_n(_Out __out, iter_difference_t<_Out> __n,
+    format_to_n(_Out ___out, iter_difference_t<_Out> __n,
 		format_string<_Args...> __fmt, _Args&&... __args)
     {
-      __format::_Iter_sink<char, _Out> __sink(std::move(__out), __n);
+      __format::_Iter_sink<char, _Out> __sink(std::move(___out), __n);
       std::vformat_to(__sink.out(), __fmt.get(),
 		      std::make_format_args(__args...));
       return std::move(__sink)._M_finish();
@@ -4378,10 +4378,10 @@ namespace __format
   template<typename _Out, typename... _Args>
     requires output_iterator<_Out, const wchar_t&>
     inline format_to_n_result<_Out>
-    format_to_n(_Out __out, iter_difference_t<_Out> __n,
+    format_to_n(_Out ___out, iter_difference_t<_Out> __n,
 		wformat_string<_Args...> __fmt, _Args&&... __args)
     {
-      __format::_Iter_sink<wchar_t, _Out> __sink(std::move(__out), __n);
+      __format::_Iter_sink<wchar_t, _Out> __sink(std::move(___out), __n);
       std::vformat_to(__sink.out(), __fmt.get(),
 		      std::make_wformat_args(__args...));
       return std::move(__sink)._M_finish();
@@ -4391,10 +4391,10 @@ namespace __format
   template<typename _Out, typename... _Args>
     requires output_iterator<_Out, const char&>
     inline format_to_n_result<_Out>
-    format_to_n(_Out __out, iter_difference_t<_Out> __n, const locale& __loc,
+    format_to_n(_Out ___out, iter_difference_t<_Out> __n, const locale& __loc,
 		format_string<_Args...> __fmt, _Args&&... __args)
     {
-      __format::_Iter_sink<char, _Out> __sink(std::move(__out), __n);
+      __format::_Iter_sink<char, _Out> __sink(std::move(___out), __n);
       std::vformat_to(__sink.out(), __loc, __fmt.get(),
 		      std::make_format_args(__args...));
       return std::move(__sink)._M_finish();
@@ -4404,10 +4404,10 @@ namespace __format
   template<typename _Out, typename... _Args>
     requires output_iterator<_Out, const wchar_t&>
     inline format_to_n_result<_Out>
-    format_to_n(_Out __out, iter_difference_t<_Out> __n, const locale& __loc,
+    format_to_n(_Out ___out, iter_difference_t<_Out> __n, const locale& __loc,
 		wformat_string<_Args...> __fmt, _Args&&... __args)
     {
-      __format::_Iter_sink<wchar_t, _Out> __sink(std::move(__out), __n);
+      __format::_Iter_sink<wchar_t, _Out> __sink(std::move(___out), __n);
       std::vformat_to(__sink.out(), __loc, __fmt.get(),
 		      std::make_wformat_args(__args...));
       return std::move(__sink)._M_finish();

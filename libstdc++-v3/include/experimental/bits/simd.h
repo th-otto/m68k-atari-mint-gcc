@@ -2210,20 +2210,20 @@ template <int _Offset,
 	  typename _TVT = _VectorTraits<_Tp>,
 	  typename _R = __vector_type_t<typename _TVT::value_type, _TVT::_S_full_size / _SplitBy>>
   _GLIBCXX_SIMD_INTRINSIC constexpr _R
-  __extract(_Tp __in)
+  __extract(_Tp ___in)
   {
     using value_type = typename _TVT::value_type;
 #if _GLIBCXX_SIMD_X86INTRIN // {{{
     if constexpr (sizeof(_Tp) == 64 && _SplitBy == 4 && _Offset > 0)
       {
 	if constexpr (__have_avx512dq && is_same_v<double, value_type>)
-	  return _mm512_extractf64x2_pd(__to_intrin(__in), _Offset);
+	  return _mm512_extractf64x2_pd(__to_intrin(___in), _Offset);
 	else if constexpr (is_floating_point_v<value_type>)
 	  return __vector_bitcast<value_type>(
-	    _mm512_extractf32x4_ps(__intrin_bitcast<__m512>(__in), _Offset));
+	    _mm512_extractf32x4_ps(__intrin_bitcast<__m512>(___in), _Offset));
 	else
 	  return reinterpret_cast<_R>(
-	    _mm512_extracti32x4_epi32(__intrin_bitcast<__m512i>(__in),
+	    _mm512_extracti32x4_epi32(__intrin_bitcast<__m512i>(___in),
 				      _Offset));
       }
     else
@@ -2236,12 +2236,12 @@ template <int _Offset,
 	static_assert(sizeof(_R) % sizeof(_W) == 0);
 	constexpr int __return_width = sizeof(_R) / sizeof(_W);
 	using _Up = __vector_type_t<_W, __return_width>;
-	const auto __x = __vector_bitcast<_W>(__in);
+	const auto __x = __vector_bitcast<_W>(___in);
 #else
       constexpr int __return_width = _TVT::_S_full_size / _SplitBy;
       using _Up = _R;
       const __vector_type_t<value_type, _TVT::_S_full_size>& __x
-	= __in; // only needed for _Tp = _SimdWrapper<value_type, _Np>
+	= ___in; // only needed for _Tp = _SimdWrapper<value_type, _Np>
 #endif
 	constexpr int _O = _Offset * __return_width;
 	return __call_with_subscripts<__return_width, _O>(

@@ -103,19 +103,19 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   template<size_t _Int, class _Tp1, class _Tp2>
     constexpr typename tuple_element<_Int, pair<_Tp1, _Tp2>>::type&
-    get(pair<_Tp1, _Tp2>& __in) noexcept;
+    get(pair<_Tp1, _Tp2>& ___in) noexcept;
 
   template<size_t _Int, class _Tp1, class _Tp2>
     constexpr typename tuple_element<_Int, pair<_Tp1, _Tp2>>::type&&
-    get(pair<_Tp1, _Tp2>&& __in) noexcept;
+    get(pair<_Tp1, _Tp2>&& ___in) noexcept;
 
   template<size_t _Int, class _Tp1, class _Tp2>
     constexpr const typename tuple_element<_Int, pair<_Tp1, _Tp2>>::type&
-    get(const pair<_Tp1, _Tp2>& __in) noexcept;
+    get(const pair<_Tp1, _Tp2>& ___in) noexcept;
 
   template<size_t _Int, class _Tp1, class _Tp2>
     constexpr const typename tuple_element<_Int, pair<_Tp1, _Tp2>>::type&&
-    get(const pair<_Tp1, _Tp2>&& __in) noexcept;
+    get(const pair<_Tp1, _Tp2>&& ___in) noexcept;
 
   template<size_t __i, typename... _Elements>
     constexpr __tuple_element_t<__i, tuple<_Elements...>>&
@@ -1247,23 +1247,23 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   template<size_t _Int, class _Tp1, class _Tp2>
     constexpr typename tuple_element<_Int, pair<_Tp1, _Tp2>>::type&
-    get(pair<_Tp1, _Tp2>& __in) noexcept
-    { return __pair_get<_Int>::__get(__in); }
+    get(pair<_Tp1, _Tp2>& ___in) noexcept
+    { return __pair_get<_Int>::__get(___in); }
 
   template<size_t _Int, class _Tp1, class _Tp2>
     constexpr typename tuple_element<_Int, pair<_Tp1, _Tp2>>::type&&
-    get(pair<_Tp1, _Tp2>&& __in) noexcept
-    { return __pair_get<_Int>::__move_get(std::move(__in)); }
+    get(pair<_Tp1, _Tp2>&& ___in) noexcept
+    { return __pair_get<_Int>::__move_get(std::move(___in)); }
 
   template<size_t _Int, class _Tp1, class _Tp2>
     constexpr const typename tuple_element<_Int, pair<_Tp1, _Tp2>>::type&
-    get(const pair<_Tp1, _Tp2>& __in) noexcept
-    { return __pair_get<_Int>::__const_get(__in); }
+    get(const pair<_Tp1, _Tp2>& ___in) noexcept
+    { return __pair_get<_Int>::__const_get(___in); }
 
   template<size_t _Int, class _Tp1, class _Tp2>
     constexpr const typename tuple_element<_Int, pair<_Tp1, _Tp2>>::type&&
-    get(const pair<_Tp1, _Tp2>&& __in) noexcept
-    { return __pair_get<_Int>::__const_move_get(std::move(__in)); }
+    get(const pair<_Tp1, _Tp2>&& ___in) noexcept
+    { return __pair_get<_Int>::__const_move_get(std::move(___in)); }
 
 
 #ifdef __glibcxx_tuples_by_type // C++ >= 14

@@ -56,8 +56,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   {
     __format::_Str_sink<char> __buf;
     std::vformat_to(__buf.out(), __fmt, __args);
-    auto __out = __buf.view();
-    if (std::fwrite(__out.data(), 1, __out.size(), __stream) != __out.size())
+    auto ___out = __buf.view();
+    if (std::fwrite(___out.data(), 1, ___out.size(), __stream) != ___out.size())
       __throw_system_error(EIO);
   }
 
@@ -71,18 +71,18 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 #else
     __format::_Str_sink<char> __buf;
     std::vformat_to(__buf.out(), __fmt, __args);
-    auto __out = __buf.view();
+    auto ___out = __buf.view();
 
     void* __open_terminal(FILE*);
     error_code __write_to_terminal(void*, span<char>);
     // If stream refers to a terminal, write a native Unicode string to it.
     if (auto __term = __open_terminal(__stream))
       {
-	string __out = std::vformat(__fmt, __args);
+	string ___out = std::vformat(__fmt, __args);
 	error_code __e;
 	if (!std::fflush(__stream))
 	  {
-	    __e = __write_to_terminal(__term, __out);
+	    __e = __write_to_terminal(__term, ___out);
 	    if (!__e)
 	      return;
 	    if (__e == std::make_error_code(errc::illegal_byte_sequence))
@@ -94,7 +94,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       }
 
     // Otherwise just write the string to the file as vprint_nonunicode does.
-    if (std::fwrite(__out.data(), 1, __out.size(), __stream) != __out.size())
+    if (std::fwrite(___out.data(), 1, ___out.size(), __stream) != ___out.size())
       __throw_system_error(EIO);
 #endif
   }
