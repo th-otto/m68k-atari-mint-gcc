@@ -748,6 +748,8 @@ gt_pch_restore (FILE *f)
   size_t i;
   struct mmap_info mmi;
   int result;
+  long pch_tabs_off;
+  long pch_data_off;
 
   /* We are about to reload the line maps along with the rest of the PCH
      data, which means that the (loaded) ones cannot be guaranteed to be
@@ -763,19 +765,22 @@ gt_pch_restore (FILE *f)
     for (rti = *rt; rti->base != NULL; rti++)
       memset (rti->base, 0, rti->stride);
 
-  /* Read in all the scalar variables.  */
+  /* We need to read tables after mapping, or fatal_error will
+     segfault when gt_pch_use_address returns -1. Skip them for now. */
+  pch_tabs_off = ftell(f);
+     
+  /* Skip all the scalar variables. */
   for (rt = gt_pch_scalar_rtab; *rt; rt++)
     for (rti = *rt; rti->base != NULL; rti++)
-      if (fread (rti->base, rti->stride, 1, f) != 1)
-	fatal_error (input_location, "cannot read PCH file: %m");
+      if (fseek (f, rti->stride, SEEK_CUR) != 0)
+        fatal_error (input_location, "cannot read PCH file: %m");
 
-  /* Read in all the global pointers, in 6 easy loops.  */
+  /* Skip all the global pointers. */
   bool error_reading_pointers = false;
   for (rt = gt_ggc_rtab; *rt; rt++)
     for (rti = *rt; rti->base != NULL; rti++)
       for (i = 0; i < rti->nelt; i++)
-	if (fread ((char *)rti->base + rti->stride * i,
-		   sizeof (void *), 1, f) != 1)
+        if (fseek (f, sizeof (void *), SEEK_CUR) != 0)
 	  error_reading_pointers = true;
 
   /* Stash the newly read-in line table pointer - it does not point to
@@ -785,6 +790,7 @@ gt_pch_restore (FILE *f)
   if (error_reading_pointers)
     fatal_error (input_location, "cannot read PCH file: %m");
 
+  /* mmi still has to be read now. */          
   if (fread (&mmi, sizeof (mmi), 1, f) != 1)
     fatal_error (input_location, "cannot read PCH file: %m");
 
@@ -814,6 +820,30 @@ gt_pch_restore (FILE *f)
   else if (fseek (f, mmi.offset + mmi.size, SEEK_SET) != 0)
     fatal_error (input_location, "cannot read PCH file: %m");
 
+    
+  /* File mapping done, read tables now. */
+  pch_data_off = ftell(f);
+  
+  if (fseek (f, pch_tabs_off, SEEK_SET) != 0)
+    fatal_error (input_location, "cannot read PCH file: %m");
+
+  /* Read in all the scalar variables.  */
+  for (rt = gt_pch_scalar_rtab; *rt; rt++)
+    for (rti = *rt; rti->base != NULL; rti++)
+      if (fread (rti->base, rti->stride, 1, f) != 1)
+        fatal_error (input_location, "cannot read PCH file: %m");
+
+  /* Read in all the global pointers, in 6 easy loops.  */
+  for (rt = gt_ggc_rtab; *rt; rt++)
+    for (rti = *rt; rti->base != NULL; rti++)
+      for (i = 0; i < rti->nelt; i++)
+        if (fread ((char *)rti->base + rti->stride * i,
+            sizeof (void *), 1, f) != 1)
+          fatal_error (input_location, "cannot read PCH file: %m");
+
+  if (fseek (f, pch_data_off, SEEK_SET) != 0)
+    fatal_error (input_location, "cannot read PCH file: %m");
+            
   size_t reloc_addrs_size;
   if (fread (&reloc_addrs_size, sizeof (reloc_addrs_size), 1, f) != 1)
     fatal_error (input_location, "cannot read PCH file: %m");
