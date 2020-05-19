@@ -828,7 +828,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   ///@{
   /**
    *  @brief  Character extractors
-   *  @param  __in  An input stream.
+   *  @param  ___in  An input stream.
    *  @param  __c  A character reference.
    *  @return  in
    *
@@ -839,17 +839,17 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   */
   template<typename _CharT, typename _Traits>
     basic_istream<_CharT, _Traits>&
-    operator>>(basic_istream<_CharT, _Traits>& __in, _CharT& __c);
+    operator>>(basic_istream<_CharT, _Traits>& ___in, _CharT& __c);
 
   template<class _Traits>
     inline basic_istream<char, _Traits>&
-    operator>>(basic_istream<char, _Traits>& __in, unsigned char& __c)
-    { return (__in >> reinterpret_cast<char&>(__c)); }
+    operator>>(basic_istream<char, _Traits>& ___in, unsigned char& __c)
+    { return (___in >> reinterpret_cast<char&>(__c)); }
 
   template<class _Traits>
     inline basic_istream<char, _Traits>&
-    operator>>(basic_istream<char, _Traits>& __in, signed char& __c)
-    { return (__in >> reinterpret_cast<char&>(__c)); }
+    operator>>(basic_istream<char, _Traits>& ___in, signed char& __c)
+    { return (___in >> reinterpret_cast<char&>(__c)); }
   ///@}
 
 
@@ -862,9 +862,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   ///@{
   /**
    *  @brief  Character string extractors
-   *  @param  __in  An input stream.
+   *  @param  ___in  An input stream.
    *  @param  __s  A character array (or a pointer to an array before C++20).
-   *  @return  __in
+   *  @return  ___in
    *
    *  Behaves like one of the formatted arithmetic extractors described in
    *  `std::basic_istream`.  After constructing a sentry object with good
@@ -890,7 +890,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   template<typename _CharT, typename _Traits>
     __attribute__((__nonnull__(2), __access__(__write_only__, 2)))
     inline basic_istream<_CharT, _Traits>&
-    operator>>(basic_istream<_CharT, _Traits>& __in, _CharT* __s)
+    operator>>(basic_istream<_CharT, _Traits>& ___in, _CharT* __s)
     {
 #ifdef __OPTIMIZE__
       // Function inlining might make the buffer size known, allowing us to
@@ -901,22 +901,22 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	  // There is not even space for the required null terminator.
 	  __glibcxx_assert(__n >= sizeof(_CharT));
 	  // No point calling __istream_extract, but still need to reset width.
-	  __in.width(0);
-	  __in.setstate(ios_base::failbit);
+	  ___in.width(0);
+	  ___in.setstate(ios_base::failbit);
 	}
       else if (__n != (size_t)-1)
 	{
 	  __n /= sizeof(_CharT);
-	  streamsize __w = __in.width();
-	  std::__istream_extract(__in, __s, __n);
-	  if (__in.good() && (__w <= 0 || __n < __w))
+	  streamsize __w = ___in.width();
+	  std::__istream_extract(___in, __s, __n);
+	  if (___in.good() && (__w <= 0 || __n < __w))
 	    {
 	      // Stopped extracting early to avoid overflowing the buffer,
 	      // but might have stopped anyway (and set eofbit) if at EOF.
-	      const typename _Traits::int_type __c = __in.rdbuf()->sgetc();
+	      const typename _Traits::int_type __c = ___in.rdbuf()->sgetc();
 	      const bool __eof = _Traits::eq_int_type(__c, _Traits::eof());
 	      if (__builtin_expect(__eof, true)) // Assume EOF, not overflow.
-		__in.setstate(ios_base::eofbit);
+		___in.setstate(ios_base::eofbit);
 	    }
 	}
       else
@@ -925,43 +925,43 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	  // Buffer size is unknown, have to assume it's huge.
 	  streamsize __n = __gnu_cxx::__numeric_traits<streamsize>::__max;
 	  __n /= sizeof(_CharT);
-	  std::__istream_extract(__in, __s, __n);
+	  std::__istream_extract(___in, __s, __n);
 	}
-      return __in;
+      return ___in;
     }
 
   template<class _Traits>
     __attribute__((__nonnull__(2), __access__(__write_only__, 2)))
     inline basic_istream<char, _Traits>&
-    operator>>(basic_istream<char, _Traits>& __in, unsigned char* __s)
-    { return __in >> reinterpret_cast<char*>(__s); }
+    operator>>(basic_istream<char, _Traits>& ___in, unsigned char* __s)
+    { return ___in >> reinterpret_cast<char*>(__s); }
 
   template<class _Traits>
     __attribute__((__nonnull__(2), __access__(__write_only__, 2)))
     inline basic_istream<char, _Traits>&
-    operator>>(basic_istream<char, _Traits>& __in, signed char* __s)
-    { return __in >> reinterpret_cast<char*>(__s); }
+    operator>>(basic_istream<char, _Traits>& ___in, signed char* __s)
+    { return ___in >> reinterpret_cast<char*>(__s); }
 #else
   // _GLIBCXX_RESOLVE_LIB_DEFECTS
   // 2499. operator>>(istream&, char*) makes it hard to avoid buffer overflows
   template<typename _CharT, typename _Traits, size_t _Num>
     inline basic_istream<_CharT, _Traits>&
-    operator>>(basic_istream<_CharT, _Traits>& __in, _CharT (&__s)[_Num])
+    operator>>(basic_istream<_CharT, _Traits>& ___in, _CharT (&__s)[_Num])
     {
       static_assert(_Num <= __gnu_cxx::__numeric_traits<streamsize>::__max);
-      std::__istream_extract(__in, __s, _Num);
-      return __in;
+      std::__istream_extract(___in, __s, _Num);
+      return ___in;
     }
 
   template<class _Traits, size_t _Num>
     inline basic_istream<char, _Traits>&
-    operator>>(basic_istream<char, _Traits>& __in, unsigned char (&__s)[_Num])
-    { return __in >> reinterpret_cast<char(&)[_Num]>(__s); }
+    operator>>(basic_istream<char, _Traits>& ___in, unsigned char (&__s)[_Num])
+    { return ___in >> reinterpret_cast<char(&)[_Num]>(__s); }
 
   template<class _Traits, size_t _Num>
     inline basic_istream<char, _Traits>&
-    operator>>(basic_istream<char, _Traits>& __in, signed char (&__s)[_Num])
-    { return __in >> reinterpret_cast<char(&)[_Num]>(__s); }
+    operator>>(basic_istream<char, _Traits>& ___in, signed char (&__s)[_Num])
+    { return ___in >> reinterpret_cast<char(&)[_Num]>(__s); }
 #endif
   ///@}
 

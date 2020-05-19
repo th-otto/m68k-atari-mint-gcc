@@ -116,7 +116,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
       template<class _CharT, class _Traits>
 	friend basic_ostream<_CharT, _Traits>&
-	operator<<(basic_ostream<_CharT, _Traits>& __out, id __id);
+	operator<<(basic_ostream<_CharT, _Traits>& ___out, id __id);
     };
 
   private:

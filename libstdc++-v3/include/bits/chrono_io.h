@@ -491,7 +491,7 @@ namespace __format
 	  if (__first == __last)
 	    return _M_format_to_ostream(__t, __fc, __is_neg);
 
-	  _Sink_iter<_CharT> __out;
+	  _Sink_iter<_CharT> ___out;
 	  __format::_Str_sink<_CharT> __sink;
 	  bool __write_direct = false;
 	  if constexpr (is_same_v<typename _FormatContext::iterator,
@@ -499,22 +499,22 @@ namespace __format
 	    {
 	      if (_M_spec._M_width_kind == __format::_WP_none)
 		{
-		  __out = __fc.out();
+		  ___out = __fc.out();
 		  __write_direct = true;
 		}
 	      else
-		__out = __sink.out();
+		___out = __sink.out();
 	    }
 	  else
-	    __out = __sink.out();
+	    ___out = __sink.out();
 
-	  auto __print_sign = [&__is_neg, &__out] {
+	  auto __print_sign = [&__is_neg, &___out] {
 	    if (__is_neg)
 	      {
-		*__out++ = _S_plus_minus[1];
+		*___out++ = _S_plus_minus[1];
 		__is_neg = false;
 	      }
-	    return std::move(__out);
+	    return std::move(___out);
 	  };
 
 	  // Characters to output for "%n", "%t" and "%%" specifiers.
@@ -530,121 +530,121 @@ namespace __format
 		{
 		case 'a':
 		case 'A':
-		  __out = _M_a_A(__t, std::move(__out), __fc, __c == 'A');
+		  ___out = _M_a_A(__t, std::move(___out), __fc, __c == 'A');
 		  break;
 		case 'b':
 		case 'h':
 		case 'B':
-		  __out = _M_b_B(__t, std::move(__out), __fc, __c == 'B');
+		  ___out = _M_b_B(__t, std::move(___out), __fc, __c == 'B');
 		  break;
 		case 'c':
-		  __out = _M_c(__t, std::move(__out), __fc, __mod == 'E');
+		  ___out = _M_c(__t, std::move(___out), __fc, __mod == 'E');
 		  break;
 		case 'C':
 		case 'y':
 		case 'Y':
-		  __out = _M_C_y_Y(__t, std::move(__out), __fc, __c, __mod);
+		  ___out = _M_C_y_Y(__t, std::move(___out), __fc, __c, __mod);
 		  break;
 		case 'd':
 		  // %d  The day of month as a decimal number.
 		  // %Od Locale's alternative representation.
-		  __out = _S_dd_zero_fill((unsigned)_S_day(__t),
-					  std::move(__out),
+		  ___out = _S_dd_zero_fill((unsigned)_S_day(__t),
+					  std::move(___out),
 					  __fc, __mod == 'O');
 		  break;
 		case 'D':
-		  __out = _M_D(__t, std::move(__out), __fc);
+		  ___out = _M_D(__t, std::move(___out), __fc);
 		  break;
 		case 'e':
-		  __out = _M_e(__t, std::move(__out), __fc, __mod == 'O');
+		  ___out = _M_e(__t, std::move(___out), __fc, __mod == 'O');
 		  break;
 		case 'F':
-		  __out = _M_F(__t, std::move(__out), __fc);
+		  ___out = _M_F(__t, std::move(___out), __fc);
 		  break;
 		case 'g':
 		case 'G':
-		  __out = _M_g_G(__t, std::move(__out), __fc, __c == 'G');
+		  ___out = _M_g_G(__t, std::move(___out), __fc, __c == 'G');
 		  break;
 		case 'H':
 		  // %H  The hour (24-hour clock) as a decimal number.
 		  // %OH Locale's alternative representation.
-		  __out = _S_dd_zero_fill(_S_hms(__t).hours().count(),
+		  ___out = _S_dd_zero_fill(_S_hms(__t).hours().count(),
 					  __print_sign(), __fc, __mod == 'O');
 		  break;
 		case 'I':
-		  __out = _M_I(__t, __print_sign(), __fc, __mod == 'O');
+		  ___out = _M_I(__t, __print_sign(), __fc, __mod == 'O');
 		  break;
 		case 'j':
-		  __out = _M_j(__t, __print_sign(), __fc);
+		  ___out = _M_j(__t, __print_sign(), __fc);
 		  break;
 		case 'm':
 		  // %m  month as a decimal number.
 		  // %Om Locale's alternative representation.
-		  __out = _S_dd_zero_fill((unsigned)_S_month(__t),
-					  std::move(__out), __fc,
+		  ___out = _S_dd_zero_fill((unsigned)_S_month(__t),
+					  std::move(___out), __fc,
 					  __mod == 'O');
 		  break;
 		case 'M':
 		  // %M  The minute as a decimal number.
 		  // %OM Locale's alternative representation.
-		  __out = _S_dd_zero_fill(_S_hms(__t).minutes().count(),
+		  ___out = _S_dd_zero_fill(_S_hms(__t).minutes().count(),
 					  __print_sign(), __fc, __mod == 'O');
 		  break;
 		case 'p':
-		  __out = _M_p(__t, std::move(__out), __fc);
+		  ___out = _M_p(__t, std::move(___out), __fc);
 		  break;
 		case 'q':
-		  __out = _M_q(__t, std::move(__out), __fc);
+		  ___out = _M_q(__t, std::move(___out), __fc);
 		  break;
 		case 'Q':
 		  // %Q The duration's numeric value.
 		  if constexpr (chrono::__is_duration_v<_Tp>)
-		    __out = std::format_to(__print_sign(), _S_empty_spec,
+		    ___out = std::format_to(__print_sign(), _S_empty_spec,
 					   __t.count());
 		  else
 		    __throw_format_error("chrono format error: argument is "
 					 "not a duration");
 		  break;
 		case 'r':
-		  __out = _M_r(__t, __print_sign(), __fc);
+		  ___out = _M_r(__t, __print_sign(), __fc);
 		  break;
 		case 'R':
 		case 'T':
-		  __out = _M_R_T(__t, __print_sign(), __fc, __c == 'T');
+		  ___out = _M_R_T(__t, __print_sign(), __fc, __c == 'T');
 		  break;
 		case 'S':
-		  __out = _M_S(__t, __print_sign(), __fc, __mod == 'O');
+		  ___out = _M_S(__t, __print_sign(), __fc, __mod == 'O');
 		  break;
 		case 'u':
 		case 'w':
-		  __out = _M_u_w(__t, std::move(__out), __fc, __c, __mod == 'O');
+		  ___out = _M_u_w(__t, std::move(___out), __fc, __c, __mod == 'O');
 		  break;
 		case 'U':
 		case 'V':
 		case 'W':
-		  __out = _M_U_V_W(__t, std::move(__out), __fc, __c,
+		  ___out = _M_U_V_W(__t, std::move(___out), __fc, __c,
 				   __mod == 'O');
 		  break;
 		case 'x':
-		  __out = _M_x(__t, std::move(__out), __fc, __mod == 'E');
+		  ___out = _M_x(__t, std::move(___out), __fc, __mod == 'E');
 		  break;
 		case 'X':
-		  __out = _M_X(__t, __print_sign(), __fc, __mod == 'E');
+		  ___out = _M_X(__t, __print_sign(), __fc, __mod == 'E');
 		  break;
 		case 'z':
-		  __out = _M_z(__t, std::move(__out), __fc, (bool)__mod);
+		  ___out = _M_z(__t, std::move(___out), __fc, (bool)__mod);
 		  break;
 		case 'Z':
-		  __out = _M_Z(__t, std::move(__out), __fc);
+		  ___out = _M_Z(__t, std::move(___out), __fc);
 		  break;
 		case 'n':
-		  *__out++ = __literals[0];
+		  *___out++ = __literals[0];
 		  break;
 		case 't':
-		  *__out++ = __literals[1];
+		  *___out++ = __literals[1];
 		  break;
 		case '%':
-		  *__out++ = __literals[2];
+		  *___out++ = __literals[2];
 		  break;
 		case 'O':
 		case 'E':
@@ -669,7 +669,7 @@ namespace __format
 		      __str.remove_suffix(__str.length() - __pos);
 		      __first += __pos + 1;
 		    }
-		  __out = __format::__write(std::move(__out), __str);
+		  ___out = __format::__write(std::move(___out), __str);
 		}
 	    }
 	  while (__first != __last);
@@ -677,7 +677,7 @@ namespace __format
 	  if constexpr (is_same_v<typename _FormatContext::iterator,
 				  _Sink_iter<_CharT>>)
 	    if (__write_direct)
-	      return __out;
+	      return ___out;
 
 	  auto __str = std::move(__sink).get();
 	  return __format::__write_padded_as_spec(__str, __str.size(),
@@ -742,7 +742,7 @@ namespace __format
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_a_A(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_a_A(const _Tp& __t, typename _FormatContext::iterator ___out,
 	       _FormatContext& __ctx, bool __full) const
 	{
 	  // %a Locale's abbreviated weekday name.
@@ -759,12 +759,12 @@ namespace __format
 	  else
 	    __tp._M_days_abbreviated(__days);
 	  __string_view __str(__days[__wd.c_encoding()]);
-	  return __format::__write(std::move(__out), __str);
+	  return __format::__write(std::move(___out), __str);
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_b_B(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_b_B(const _Tp& __t, typename _FormatContext::iterator ___out,
 	       _FormatContext& __ctx, bool __full) const
 	{
 	  // %b Locale's abbreviated month name.
@@ -780,12 +780,12 @@ namespace __format
 	  else
 	    __tp._M_months_abbreviated(__months);
 	  __string_view __str(__months[(unsigned)__m - 1]);
-	  return __format::__write(std::move(__out), __str);
+	  return __format::__write(std::move(___out), __str);
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_c(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_c(const _Tp& __t, typename _FormatContext::iterator ___out,
 	     _FormatContext& __ctx, bool __mod = false) const
 	{
 	  // %c  Locale's date and time representation.
@@ -801,13 +801,13 @@ namespace __format
 	  basic_string<_CharT> __fmt(_S_empty_spec);
 	  __fmt.insert(1u, 1u, _S_colon);
 	  __fmt.insert(2u, __rep);
-	  return std::vformat_to(std::move(__out), __loc, __fmt,
+	  return std::vformat_to(std::move(___out), __loc, __fmt,
 				 std::make_format_args<_FormatContext>(__t));
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_C_y_Y(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_C_y_Y(const _Tp& __t, typename _FormatContext::iterator ___out,
 	       _FormatContext& __ctx, char __conv, char __mod = 0) const
 	{
 	  // %C  Year divided by 100 using floored division.
@@ -823,7 +823,7 @@ namespace __format
 	  if (__mod == 'E')
 	    {
 	      // TODO: %EC, %Ey or %EY
-	      // return __out;
+	      // return ___out;
 	    }
 
 	  basic_string<_CharT> __s;
@@ -850,12 +850,12 @@ namespace __format
 	  if (__mod == 'O') // %OY
 	    _S_altnum(_M_locale(__ctx), __s, __is_neg);
 
-	  return __format::__write(std::move(__out), __string_view(__s));
+	  return __format::__write(std::move(___out), __string_view(__s));
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_D(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_D(const _Tp& __t, typename _FormatContext::iterator ___out,
 	     _FormatContext&) const
 	{
 	  auto __ymd = _S_date(__t);
@@ -868,12 +868,12 @@ namespace __format
 	  __s += _S_two_digits((unsigned)__ymd.day());
 	  __s += _S_slash;
 	  __s += _S_two_digits(__builtin_abs((int)__ymd.year()) % 100);
-	  return __format::__write(std::move(__out), __string_view(__s));
+	  return __format::__write(std::move(___out), __string_view(__s));
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_e(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_e(const _Tp& __t, typename _FormatContext::iterator ___out,
 	     _FormatContext& __ctx, bool __mod = false) const
 	{
 	  // %e  Day of month as decimal number, padded with space.
@@ -886,12 +886,12 @@ namespace __format
 	    __sv = _S_altnum(_M_locale(__ctx), __s.assign(__sv));
 	  if (__i < 10)
 	    __sv = __s = {_S_space, __sv[1]};
-	  return __format::__write(std::move(__out), __sv);
+	  return __format::__write(std::move(___out), __sv);
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_F(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_F(const _Tp& __t, typename _FormatContext::iterator ___out,
 	     _FormatContext&) const
 	{
 	  auto __ymd = _S_date(__t);
@@ -907,12 +907,12 @@ namespace __format
 	  __s[__s.size() - 2] = __sv[0];
 	  __s[__s.size() - 1] = __sv[1];
 	  __sv = __s;
-	  return __format::__write(std::move(__out), __sv);
+	  return __format::__write(std::move(___out), __sv);
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_g_G(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_g_G(const _Tp& __t, typename _FormatContext::iterator ___out,
 	     _FormatContext& __ctx, bool __full) const
 	{
 	  // %g last two decimal digits of the ISO week-based year.
@@ -923,12 +923,12 @@ namespace __format
 	  __d -= (weekday(__d) - Monday) - days(3);
 	  // ISO week-based year is the year that contains that Thursday:
 	  year __y = year_month_day(__d).year();
-	  return _M_C_y_Y(__y, std::move(__out), __ctx, "yY"[__full]);
+	  return _M_C_y_Y(__y, std::move(___out), __ctx, "yY"[__full]);
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_I(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_I(const _Tp& __t, typename _FormatContext::iterator ___out,
 	     _FormatContext& __ctx, bool __mod = false) const
 	{
 	  auto __hms = _S_hms(__t);
@@ -941,19 +941,19 @@ namespace __format
 	  basic_string<_CharT> __s;
 	  if (__mod)
 	    __sv = _S_altnum(_M_locale(__ctx), __s.assign(__sv));
-	  return __format::__write(std::move(__out), __sv);
+	  return __format::__write(std::move(___out), __sv);
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_j(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_j(const _Tp& __t, typename _FormatContext::iterator ___out,
 	     _FormatContext& __ctx) const
 	{
 	  if constexpr (chrono::__is_duration_v<_Tp>)
 	    {
 	      // Decimal number of days, without padding.
 	      unsigned __d = chrono::duration_cast<chrono::days>(__t).count();
-	      return std::format_to(std::move(__out), _S_empty_spec, __d);
+	      return std::format_to(std::move(___out), _S_empty_spec, __d);
 	    }
 	  else
 	    {
@@ -968,14 +968,14 @@ namespace __format
 		__d = __day - local_days(__ymd.year()/January/0);
 	      else
 		__d = __day - sys_days(__ymd.year()/January/0);
-	      return std::format_to(std::move(__out), _GLIBCXX_WIDEN("{:03d}"),
+	      return std::format_to(std::move(___out), _GLIBCXX_WIDEN("{:03d}"),
 				    __d.count());
 	    }
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_p(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_p(const _Tp& __t, typename _FormatContext::iterator ___out,
 	     _FormatContext& __ctx) const
 	{
 	  // %p The locale's equivalent of the AM/PM designations.
@@ -984,13 +984,13 @@ namespace __format
 	  const auto& __tp = use_facet<__timepunct<_CharT>>(__loc);
 	  const _CharT* __ampm[2];
 	  __tp._M_am_pm(__ampm);
-	  return std::format_to(std::move(__out), _S_empty_spec,
+	  return std::format_to(std::move(___out), _S_empty_spec,
 				__ampm[__hms.hours().count() >= 12]);
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_q(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_q(const _Tp& __t, typename _FormatContext::iterator ___out,
 	     _FormatContext& __ctx) const
 	{
 	  // %q The duration's unit suffix
@@ -1004,7 +1004,7 @@ namespace __format
 	      auto __s = chrono::__detail::__units_suffix<period, _CharT>(__buf,
 									  __n);
 	      if constexpr (is_same_v<decltype(__s), const _CharT*>)
-		return std::format_to(std::move(__out), _S_empty_spec, __s);
+		return std::format_to(std::move(___out), _S_empty_spec, __s);
 	      else
 		{
 		  // Suffix was written to __buf as narrow string.
@@ -1014,7 +1014,7 @@ namespace __format
 		  auto& __ct = use_facet<ctype<_CharT>>(__loc);
 		  __ct.widen(__buf, __len, __wbuf);
 		  __wbuf[__len] = 0;
-		  return std::format_to(std::move(__out), _S_empty_spec,
+		  return std::format_to(std::move(___out), _S_empty_spec,
 					__wbuf);
 		}
 	    }
@@ -1022,7 +1022,7 @@ namespace __format
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_r(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_r(const _Tp& __t, typename _FormatContext::iterator ___out,
 	     _FormatContext& __ctx) const
 	{
 	  // %r locale's 12-hour clock time.
@@ -1033,13 +1033,13 @@ namespace __format
 	  basic_string<_CharT> __fmt(_S_empty_spec);
 	  __fmt.insert(1u, 1u, _S_colon);
 	  __fmt.insert(2u, __ampm_fmt);
-	  return std::vformat_to(std::move(__out), __fmt,
+	  return std::vformat_to(std::move(___out), __fmt,
 				 std::make_format_args<_FormatContext>(__t));
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_R_T(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_R_T(const _Tp& __t, typename _FormatContext::iterator ___out,
 	       _FormatContext& __ctx, bool __secs) const
 	{
 	  // %R Equivalent to %H:%M
@@ -1055,25 +1055,25 @@ namespace __format
 	  __s[__s.size() - 2] = __sv[0];
 	  __s[__s.size() - 1] = __sv[1];
 	  __sv = __s;
-	  __out = __format::__write(std::move(__out), __sv);
+	  ___out = __format::__write(std::move(___out), __sv);
 	  if (__secs)
 	    {
-	      *__out++ = _S_colon;
-	      __out = _M_S(__hms, std::move(__out), __ctx);
+	      *___out++ = _S_colon;
+	      ___out = _M_S(__hms, std::move(___out), __ctx);
 	    }
-	  return __out;
+	  return ___out;
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_S(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_S(const _Tp& __t, typename _FormatContext::iterator ___out,
 	     _FormatContext& __ctx, bool __mod = false) const
 	{
 	  // %S  Seconds as a decimal number.
 	  // %OS (TODO) The locale's alternative representation.
 	  auto __hms = _S_hms(__t);
-	  __out = _S_dd_zero_fill(__hms.seconds().count(),
-				  std::move(__out), __ctx, __mod);
+	  ___out = _S_dd_zero_fill(__hms.seconds().count(),
+				  std::move(___out), __ctx, __mod);
 	  using rep = typename decltype(__hms)::precision::rep;
 	  if constexpr (__hms.fractional_width != 0)
 	    {
@@ -1081,7 +1081,7 @@ namespace __format
 	      auto __ss = __hms.subseconds();
 	      if constexpr (is_floating_point_v<rep>)
 		{
-		  __out = std::format_to(__loc, std::move(__out),
+		  ___out = std::format_to(__loc, std::move(___out),
 					 _GLIBCXX_WIDEN("{:.{}Lg}"),
 					 __ss.count(),
 					 __hms.fractional_width);
@@ -1090,7 +1090,7 @@ namespace __format
 		{
 		  const auto& __np
 		    = use_facet<numpunct<_CharT>>(__loc);
-		  __out = std::format_to(std::move(__out),
+		  ___out = std::format_to(std::move(___out),
 					 _GLIBCXX_WIDEN("{}{:0{}}"),
 					 __np.decimal_point(),
 					 __ss.count(),
@@ -1100,21 +1100,21 @@ namespace __format
 		{
 		  const auto& __np
 		    = use_facet<numpunct<_CharT>>(__loc);
-		  *__out++ = __np.decimal_point();
+		  *___out++ = __np.decimal_point();
 		  auto __str = std::format(_S_empty_spec, __ss.count());
-		  __out = std::format_to(_GLIBCXX_WIDEN("{:0>{}s}"),
+		  ___out = std::format_to(_GLIBCXX_WIDEN("{:0>{}s}"),
 							__str,
 							__hms.fractional_width);
 		}
 	    }
-	  return __out;
+	  return ___out;
 	}
 
       // %t handled in _M_format
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_u_w(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_u_w(const _Tp& __t, typename _FormatContext::iterator ___out,
 	       _FormatContext& __ctx, _CharT __conv, bool __mod = false) const
 	{
 	  // %u  ISO weekday as a decimal number (1-7), where Monday is 1.
@@ -1127,13 +1127,13 @@ namespace __format
 	  basic_string<_CharT> __s(1, _S_digit(__wdi));
 	  if (__mod)
 	    _S_altnum(_M_locale(__ctx), __s);
-	  return __format::__write(std::move(__out), __string_view(__s));
-	  return __out;
+	  return __format::__write(std::move(___out), __string_view(__s));
+	  return ___out;
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_U_V_W(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_U_V_W(const _Tp& __t, typename _FormatContext::iterator ___out,
 		 _FormatContext& __ctx, _CharT __conv, bool __mod = false) const
 	{
 	  // %U  Week number of the year as a decimal number, from first Sunday.
@@ -1170,12 +1170,12 @@ namespace __format
 	  basic_string<_CharT> __s;
 	  if (__mod)
 	    __sv = _S_altnum(_M_locale(__ctx), __s.assign(__sv));
-	  return __format::__write(std::move(__out), __sv);
+	  return __format::__write(std::move(___out), __sv);
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_x(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_x(const _Tp& __t, typename _FormatContext::iterator ___out,
 	     _FormatContext& __ctx, bool __mod = false) const
 	{
 	  // %x  Locale's date rep
@@ -1186,18 +1186,18 @@ namespace __format
 	  __tp._M_date_formats(__date_reps);
 	  const _CharT* __rep = __date_reps[__mod];
 	  if (!*__rep)
-	    return _M_D(__t, std::move(__out), __ctx);
+	    return _M_D(__t, std::move(___out), __ctx);
 
 	  basic_string<_CharT> __fmt(_S_empty_spec);
 	  __fmt.insert(1u, 1u, _S_colon);
 	  __fmt.insert(2u, __rep);
-	  return std::vformat_to(std::move(__out), __fmt,
+	  return std::vformat_to(std::move(___out), __fmt,
 				 std::make_format_args<_FormatContext>(__t));
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_X(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_X(const _Tp& __t, typename _FormatContext::iterator ___out,
 	     _FormatContext& __ctx, bool __mod = false) const
 	{
 	  // %X  Locale's time rep
@@ -1208,18 +1208,18 @@ namespace __format
 	  __tp._M_time_formats(__time_reps);
 	  const _CharT* __rep = __time_reps[__mod];
 	  if (!*__rep)
-	    return _M_R_T(__t, std::move(__out), __ctx, true);
+	    return _M_R_T(__t, std::move(___out), __ctx, true);
 
 	  basic_string<_CharT> __fmt(_S_empty_spec);
 	  __fmt.insert(1u, 1u, _S_colon);
 	  __fmt.insert(2u, __rep);
-	  return std::vformat_to(std::move(__out), __fmt,
+	  return std::vformat_to(std::move(___out), __fmt,
 				 std::make_format_args<_FormatContext>(__t));
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_z(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_z(const _Tp& __t, typename _FormatContext::iterator ___out,
 	     _FormatContext& __ctx, bool __mod = false) const
 	{
 	  using ::std::chrono::__detail::__utc_leap_second;
@@ -1232,7 +1232,7 @@ namespace __format
 	    {
 	      if constexpr (is_same_v<typename _Tp::clock,
 				      chrono::system_clock>)
-		return __format::__write(std::move(__out), __utc);
+		return __format::__write(std::move(___out), __utc);
 	    }
 	  else if constexpr (__is_specialization_of<_Tp, __local_time_fmt>)
 	    {
@@ -1250,18 +1250,18 @@ namespace __format
 		      __s += _S_two_digits(__hms.minutes().count());
 		      __sv = __s;
 		    }
-		  return __format::__write(std::move(__out), __sv);
+		  return __format::__write(std::move(___out), __sv);
 		}
 	    }
 	  else if constexpr (__is_specialization_of<_Tp, __utc_leap_second>)
-	    return __format::__write(std::move(__out), __utc);
+	    return __format::__write(std::move(___out), __utc);
 
 	  __no_timezone_available();
 	}
 
       template<typename _Tp, typename _FormatContext>
 	typename _FormatContext::iterator
-	_M_Z(const _Tp& __t, typename _FormatContext::iterator __out,
+	_M_Z(const _Tp& __t, typename _FormatContext::iterator ___out,
 	     _FormatContext& __ctx) const
 	{
 	  using ::std::chrono::__detail::__utc_leap_second;
@@ -1272,7 +1272,7 @@ namespace __format
 	    {
 	      if constexpr (is_same_v<typename _Tp::clock,
 				      chrono::system_clock>)
-		return __format::__write(std::move(__out), __utc);
+		return __format::__write(std::move(___out), __utc);
 	    }
 	  else if constexpr (__is_specialization_of<_Tp, __local_time_fmt>)
 	    {
@@ -1289,11 +1289,11 @@ namespace __format
 		      __ct.widen(__sv.data(), __sv.size(), __ws.data());
 		      __wsv = __ws;
 		    }
-		  return __format::__write(std::move(__out), __wsv);
+		  return __format::__write(std::move(___out), __wsv);
 		}
 	    }
 	  else if constexpr (__is_specialization_of<_Tp, __utc_leap_second>)
-	    return __format::__write(std::move(__out), __utc);
+	    return __format::__write(std::move(___out), __utc);
 
 	  __no_timezone_available();
 	}
@@ -1347,14 +1347,14 @@ namespace __format
       // Write two digits, zero-filled.
       template<typename _FormatContext>
 	typename _FormatContext::iterator
-	_S_dd_zero_fill(int __val, typename _FormatContext::iterator __out,
+	_S_dd_zero_fill(int __val, typename _FormatContext::iterator ___out,
 			_FormatContext& __ctx, bool __alt_num) const
 	{
 	  auto __sv = _S_two_digits(__val);
 	  basic_string<_CharT> __s;
 	  if (__alt_num)
 	    __sv = _S_altnum(_M_locale(__ctx), __s.assign(__sv));
-	  return __format::__write(std::move(__out), __sv);
+	  return __format::__write(std::move(___out), __sv);
 	}
 
       // Accessors for the components of chrono types:

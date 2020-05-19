@@ -1118,9 +1118,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	    {
 	      // Can't use memmove. Wrap the pointer so that __relocate_a_1
 	      // resolves to the non-trivial overload above.
-	      __gnu_cxx::__normal_iterator<_Tp*, void> __out(__result);
-	      __out = std::__relocate_a_1(__first, __last, __out, __alloc);
-	      return __out.base();
+	      __gnu_cxx::__normal_iterator<_Tp*, void> ___out(__result);
+	      ___out = std::__relocate_a_1(__first, __last, ___out, __alloc);
+	      return ___out.base();
 	    }
 #endif
 	  __builtin_memmove(__result, __first, __count * sizeof(_Tp));
