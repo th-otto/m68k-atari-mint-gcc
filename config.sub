@@ -1334,6 +1334,12 @@ case $os in
 	psos*)
 		os=psos
 		;;
+	mintelf)
+		os=mintelf
+		;;
+	mint | mint[0-9]*)
+		os=mint
+		;;
 	# Now accept the basic system types.
 	# The portable systems comes first.
 	# Each alternative MUST end in a * to match a version number.
@@ -1480,6 +1486,9 @@ case $os in
 		;;
 	ose*)
 		os=ose
+		;;
+	*mintelf)
+		os=mintelf
 		;;
 	*mint | mint[0-9]* | *MiNT | MiNT[0-9]*)
 		os=mint
