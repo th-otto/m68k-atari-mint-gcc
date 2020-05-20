@@ -197,9 +197,9 @@ void *CFI_address (const CFI_cdesc_t *dv, const CFI_index_t subscripts[])
 		       "lower_bound = %" PRIiPTR ", upper bound = %" PRIiPTR
 		       ", extent = %" PRIiPTR "\n",
 		       i, i, (int)subscripts[i],
-		       (ptrdiff_t)dv->dim[i].lower_bound,
-		       (ptrdiff_t)(dv->dim[i].extent - dv->dim[i].lower_bound),
-		       (ptrdiff_t)dv->dim[i].extent);
+		       (int)dv->dim[i].lower_bound,
+		       (int)(dv->dim[i].extent - dv->dim[i].lower_bound),
+		       (int)dv->dim[i].extent);
               return NULL;
             }
 
@@ -418,7 +418,7 @@ int CFI_establish (CFI_cdesc_t *dv, void *base_addr, CFI_attribute_t attribute,
 	    {
 	      fprintf (stderr, "CFI_establish: Extents must be nonnegative "
 		       "(extents[%d] = %" PRIiPTR ").\n",
-		       i, (ptrdiff_t)extents[i]);
+		       i, (int)extents[i]);
 	      return CFI_INVALID_EXTENT;
 	    }
 	  dv->dim[i].lower_bound = 0;
@@ -545,7 +545,7 @@ int CFI_section (CFI_cdesc_t *result, const CFI_cdesc_t *source,
 	  fprintf (stderr, "CFI_section: The element lengths of "
 		   "source (source->elem_len = %" PRIiPTR ") and result "
 		   "(result->elem_len = %" PRIiPTR ") must be equal.\n",
-		   (ptrdiff_t)source->elem_len, (ptrdiff_t)result->elem_len);
+		   (int)source->elem_len, (int)result->elem_len);
 	  return CFI_INVALID_ELEM_LEN;
 	}
 
@@ -629,8 +629,8 @@ int CFI_section (CFI_cdesc_t *result, const CFI_cdesc_t *source,
 	      fprintf (stderr, "CFI_section: If strides[%d] = 0, then "
 		       "lower_bounds[%d] = %" PRIiPTR " and "
 		       "upper_bounds[%d] = %" PRIiPTR " must be equal.\n",
-		       i, i, (ptrdiff_t)lower_bounds[i], i,
-		       (ptrdiff_t)upper_bounds[i]);
+		       i, i, (int)lower_bounds[i], i,
+		       (int)upper_bounds[i]);
 	      return CFI_ERROR_OUT_OF_BOUNDS;
 	    }
 	}
@@ -655,9 +655,9 @@ int CFI_section (CFI_cdesc_t *result, const CFI_cdesc_t *source,
 		     "+ source->dim[%d].extent - 1, "
 		     "%" PRIiPTR " <= %" PRIiPTR " <= %" PRIiPTR ").\n",
 		     i, i, i, i,
-		     (ptrdiff_t)source->dim[i].lower_bound,
-		     (ptrdiff_t)lower[i],
-		     (ptrdiff_t)ub);
+		     (int)source->dim[i].lower_bound,
+		     (int)lower[i],
+		     (int)ub);
 	    return CFI_ERROR_OUT_OF_BOUNDS;
 	  }
 
@@ -672,9 +672,9 @@ int CFI_section (CFI_cdesc_t *result, const CFI_cdesc_t *source,
 		     "+ source->dim[%d].extent - 1, "
 		     "%" PRIiPTR " !<= %" PRIiPTR " !<= %" PRIiPTR ").\n",
 		     i, i, i, i,
-		     (ptrdiff_t)source->dim[i].lower_bound,
-		     (ptrdiff_t)upper[i],
-		     (ptrdiff_t)ub);
+		     (int)source->dim[i].lower_bound,
+		     (int)upper[i],
+		     (int)ub);
 	    return CFI_ERROR_OUT_OF_BOUNDS;
 	  }
 
@@ -685,8 +685,8 @@ int CFI_section (CFI_cdesc_t *result, const CFI_cdesc_t *source,
 		     "lower[%d], %" PRIiPTR " < %" PRIiPTR "), then the "
 		     "stride for said dimension must be negative "
 		     "(stride[%d] < 0, %" PRIiPTR " < 0).\n",
-		     i, i, (ptrdiff_t)upper[i], (ptrdiff_t)lower[i],
-		     i, (ptrdiff_t)stride[i]);
+		     i, i, (int)upper[i], (int)lower[i],
+		     i, (int)stride[i]);
 	    return CFI_INVALID_STRIDE;
 	  }
       }
@@ -780,8 +780,8 @@ int CFI_select_part (CFI_cdesc_t *result, const CFI_cdesc_t *source,
 	  fprintf (stderr, "CFI_select_part: Displacement must be within the "
 		   "bounds of source (0 <= displacement <= source->elem_len "
 		   "- 1, 0 <= %" PRIiPTR " <= %" PRIiPTR ").\n",
-		   (ptrdiff_t)displacement,
-		   (ptrdiff_t)(source->elem_len - 1));
+		   (int)displacement,
+		   (int)(source->elem_len - 1));
 	  return CFI_ERROR_OUT_OF_BOUNDS;
 	}
 
@@ -795,9 +795,9 @@ int CFI_select_part (CFI_cdesc_t *result, const CFI_cdesc_t *source,
 		   "<= source->elem_len, "
 		   "%" PRIiPTR " + %" PRIiPTR " = %" PRIiPTR " <= %" PRIiPTR
 		   ").\n",
-		   (ptrdiff_t)displacement, (ptrdiff_t)result->elem_len,
-		   (ptrdiff_t)(displacement + result->elem_len),
-		   (ptrdiff_t)source->elem_len);
+		   (int)displacement, (int)result->elem_len,
+		   (int)(displacement + result->elem_len),
+		   (int)source->elem_len);
 	  return CFI_ERROR_OUT_OF_BOUNDS;
 	}
     }
@@ -870,8 +870,8 @@ int CFI_setpointer (CFI_cdesc_t *result, CFI_cdesc_t *source,
 		       "(result->elem_len = %" PRIiPTR ") and source "
 		       "(source->elem_len = %" PRIiPTR ") "
 		       " must be the same.\n",
-		       (ptrdiff_t)result->elem_len,
-		       (ptrdiff_t)source->elem_len);
+		       (int)result->elem_len,
+		       (int)source->elem_len);
 	      return CFI_INVALID_ELEM_LEN;
 	    }
 

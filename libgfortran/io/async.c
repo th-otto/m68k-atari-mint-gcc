@@ -503,6 +503,9 @@ init_async_unit (gfc_unit *u)
 void
 enqueue_transfer (async_unit *au, transfer_args *arg, enum aio_do type)
 {
+  (void)au;
+  (void)arg;
+  (void)type;
   return;
 }
 
@@ -511,6 +514,8 @@ enqueue_transfer (async_unit *au, transfer_args *arg, enum aio_do type)
 int
 enqueue_done_id (async_unit *au, enum aio_do type)
 {
+  (void)au;
+  (void)type;
   return 0;
 }
 
@@ -519,6 +524,8 @@ enqueue_done_id (async_unit *au, enum aio_do type)
 void
 enqueue_done (async_unit *au, enum aio_do type)
 {
+  (void)au;
+  (void)type;
   return;
 }
 
@@ -527,6 +534,7 @@ enqueue_done (async_unit *au, enum aio_do type)
 void
 enqueue_close (async_unit *au)
 {
+  (void)au;
   return;
 }
 
@@ -535,6 +543,9 @@ enqueue_close (async_unit *au)
 void
 enqueue_data_transfer_init (async_unit *au, st_parameter_dt *dt, int read_flag)
 {
+  (void)au;
+  (void)dt;
+  (void)read_flag;
   return;
 }
 
@@ -543,6 +554,8 @@ enqueue_data_transfer_init (async_unit *au, st_parameter_dt *dt, int read_flag)
 bool
 collect_async_errors (st_parameter_common *cmp, async_unit *au)
 {
+  (void)cmp;
+  (void)au;
   return false;
 }
 
@@ -551,6 +564,9 @@ collect_async_errors (st_parameter_common *cmp, async_unit *au)
 bool
 async_wait_id (st_parameter_common *cmp, async_unit *au, int i)
 {
+  (void)cmp;
+  (void)au;
+  (void)i;
   return false;
 }
 
@@ -559,6 +575,8 @@ async_wait_id (st_parameter_common *cmp, async_unit *au, int i)
 bool
 async_wait (st_parameter_common *cmp, async_unit *au)
 {
+  (void)cmp;
+  (void)au;
   return false;
 }
 
@@ -567,6 +585,7 @@ async_wait (st_parameter_common *cmp, async_unit *au)
 void
 async_close (async_unit *au)
 {
+  (void)au;
   return;
 }
 
