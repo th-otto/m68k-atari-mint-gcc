@@ -4816,6 +4816,7 @@ else
 	i?86-*-msdosdjgpp* | \
 	i?86-*-mingw32* | \
 	x86_64-*-mingw32* | \
+	*-*-msys* | \
 	*-*-beos* | \
         *-*-*vms*)
 		TARGET=twoprocess
@@ -5347,7 +5348,7 @@ else
    # Systems known to be in this category are Windows (all variants),
    # VMS, and Darwin.
    case "$host_os" in
-     *vms* | cygwin* | pe | mingw* | darwin* | ultrix* | hpux10* | hpux11.00)
+     *vms* | cygwin* | pe | mingw* | msys* | darwin* | ultrix* | hpux10* | hpux11.00)
         gcc_cv_func_mmap_dev_zero=no ;;
      *)
         gcc_cv_func_mmap_dev_zero=yes;;
@@ -5404,7 +5405,7 @@ else
    # above for use of /dev/zero.
    # Systems known to be in this category are Windows, VMS, and SCO Unix.
    case "$host_os" in
-     *vms* | cygwin* | pe | mingw* | sco* | udk* )
+     *vms* | cygwin* | pe | mingw* | msys* | sco* | udk* )
         gcc_cv_func_mmap_anon=no ;;
      *)
         gcc_cv_func_mmap_anon=yes;;

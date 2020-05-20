@@ -152,7 +152,7 @@ case "${host}" in
     # Darwin needs -single_module when linking libobjc
     extra_ldflags_libobjc='$(lt_host_flags) -Wl,-single_module'
     ;;
-  *-cygwin*|*-mingw*)
+  *-cygwin*|*-mingw*|*-*-msys*)
     # Tell libtool to build DLLs on Windows
     extra_ldflags_libobjc='$(lt_host_flags)'
     ;;
