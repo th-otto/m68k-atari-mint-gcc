@@ -14,7 +14,7 @@
 #include "root/ctfloat.h"
 #include "root/outbuffer.h"
 #include "root/filename.h"
-#include "compiler.h"
+#include "dcompiler.h"
 
 // Can't include arraytypes.h here, need to declare these directly.
 template <typename TYPE> struct Array;
