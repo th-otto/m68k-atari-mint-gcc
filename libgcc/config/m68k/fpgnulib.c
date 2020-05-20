@@ -525,14 +525,15 @@ __truncxfdf2 (long double ld)
   ldl.ld = ld;
   /*printf ("xfdf in: %s\n", dumpxf (ld));*/
 
+  exp = EXPX (ldl);
   dl.l.upper = SIGNX (ldl);
-  if ((ldl.l.upper & ~SIGNBIT) == 0 && !ldl.l.middle && !ldl.l.lower)
+  if (exp == 0 && (ldl.l.middle & MANTXMASK) == 0 && !ldl.l.lower)
     {
       dl.l.lower = 0;
       return dl.d;
     }
 
-  exp = EXPX (ldl) - EXCESSX + EXCESSD;
+  exp = exp - EXCESSX + EXCESSD;
   /* Check for underflow and denormals. */
   if (exp <= 0)
     {
