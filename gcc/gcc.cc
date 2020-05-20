@@ -48,6 +48,14 @@ compilation is specified by a string called a "spec".  */
 #include "common/common-target.h"
 #include "gcc-urlifier.h"
 
+#ifdef __MINGW32__
+#undef HOST_BIT_BUCKET
+#undef HOST_BIT_BUCKET2
+/* This is the name of the null device on windows.  */
+#define HOST_BIT_BUCKET "nul"
+#define HOST_BIT_BUCKET2 "/dev/null"
+#endif
+
 #ifndef MATH_LIBRARY
 #define MATH_LIBRARY "m"
 #endif
@@ -5038,7 +5046,8 @@ process_command (unsigned int decoded_options_count,
 
   if (output_file
       && strcmp (output_file, "-") != 0
-      && strcmp (output_file, HOST_BIT_BUCKET) != 0)
+      && strcmp (output_file, HOST_BIT_BUCKET) != 0
+      && strcmp (output_file, HOST_BIT_BUCKET2) != 0)
     {
       int i;
       for (i = 0; i < n_infiles; i++)

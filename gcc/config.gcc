@@ -2435,6 +2435,7 @@ m68k-*-mintelf*)
 	tm_d_file="${tm_d_file} dbxelf.h elfos.h m68k/mint.h m68k/mint-stdint.h"
 	tm_defines="${tm_defines} MOTOROLA=1"
 	tmake_file="m68k/t-floatlib m68k/t-mint"
+	xm_file=m68k/xm-mint.h
 	gas=yes
 	gnu_ld=yes
 	if test x${disable_initfini_array} != xyes; then
@@ -2448,6 +2449,7 @@ m68k-*-mint*)
 	tm_d_file="${tm_d_file} m68k/mint.h m68k/mint-stdint.h"
 	tm_defines="${tm_defines} MOTOROLA=1"
 	tmake_file="m68k/t-floatlib m68k/t-mint"
+	xm_file=m68k/xm-mint.h
 	gas=yes
 	gnu_ld=yes
 	;;
