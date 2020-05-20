@@ -1712,7 +1712,8 @@ run_gcc (unsigned argc, char *argv[])
   if (!dumppfx)
     {
       if (!linker_output
-	  || strcmp (linker_output, HOST_BIT_BUCKET) == 0)
+	  || strcmp (linker_output, HOST_BIT_BUCKET) == 0
+	  || strcmp (linker_output, HOST_BIT_BUCKET2) == 0)
 	dumppfx = "a.";
       else
 	{
