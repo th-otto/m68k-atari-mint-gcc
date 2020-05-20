@@ -81,6 +81,7 @@ unpack0_r8 (gfc_array_r8 *ret, const gfc_array_r8 *vector,
 
   /* Initialize to avoid -Wmaybe-uninitialized complaints.  */
   rstride[0] = 1;
+  mstride[0] = 0;
   if (ret->base_addr == NULL)
     {
       /* The front end has signalled that we need to populate the
