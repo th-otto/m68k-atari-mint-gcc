@@ -158,6 +158,8 @@ sinclude(`matmul_asm_'rtype_code`.m4')dnl
      itself.  */
 
 #define POW3(x) (((float) (x)) * ((float) (x)) * ((float) (x)))
+#undef min
+#undef max
 #define min(a,b) ((a) <= (b) ? (a) : (b))
 #define max(a,b) ((a) >= (b) ? (a) : (b))
 
