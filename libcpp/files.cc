@@ -250,7 +250,7 @@ static int stat_st_mode_symlink (char const* path, struct stat* buf)
 
 #else
 
-#define stat_st_mode_symlink (_name, _buf) stat ((_name), (_buf))
+#define stat_st_mode_symlink(_name, _buf) stat ((_name), (_buf))
 
 #endif
 
@@ -295,14 +295,13 @@ open_file (_cpp_file *file)
   */
   if (file->fd > 0)
     {
-      char filepath[MAX_PATH];
-      strncpy (filepath, file->path, sizeof(filepath) - 1);
-      char* dirsep = &filepath[0];
+      char *filepath = xstrdup(file->path);
+      char* dirsep = filepath;
       while ( (dirsep = strchr (dirsep, '\\')) != NULL)
         *dirsep = '/';
       if (strstr(file->path, "/../"))
 	{
-	  dirsep = &filepath[0];
+	  dirsep = filepath;
 	  char dirsepc;
 	  /* Check each directory in the chain. */
 	  while ( (dirsep = strpbrk (dirsep, "\\/")) != NULL)
@@ -311,7 +310,7 @@ open_file (_cpp_file *file)
 	      *dirsep = '\0';
 	      if (stat_st_mode_symlink (filepath, &file->st) == -1)
 	        {
-	          *dirsep = dirsepc;
+		  free(filepath);
 	          close (file->fd);
 	          file->fd = -1;
 	          return false;
@@ -319,6 +318,7 @@ open_file (_cpp_file *file)
 	      *dirsep++ = dirsepc;
 	    }
 	}
+	free(filepath);
     }
 #endif
 

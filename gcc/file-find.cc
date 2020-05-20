@@ -22,6 +22,20 @@ along with GCC; see the file COPYING3.  If not see
 #include "filenames.h"
 #include "file-find.h"
 
+/*
+ * these are from xm-mingw32.h, but this is only included
+ * for the target; we need those definitions here also
+ * when using MinGW as host for a cross-compiler
+ */
+#if defined(__MSDOS__) || defined(_WIN32) || defined(__OS2__) || defined (__CYGWIN__)
+#undef HOST_EXECUTABLE_SUFFIX
+#define HOST_EXECUTABLE_SUFFIX ".exe"
+#endif
+#if defined(__MSDOS__) || defined(_WIN32) || defined(__OS2__)
+#undef PATH_SEPARATOR
+#define PATH_SEPARATOR ';'
+#endif
+
 static bool debug = false;
 
 void

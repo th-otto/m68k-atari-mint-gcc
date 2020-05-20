@@ -48,12 +48,25 @@ compilation is specified by a string called a "spec".  */
 #include "common/common-target.h"
 #include "gcc-urlifier.h"
 
+/*
+ * these are from xm-mingw32.h, but this is only included
+ * for the target; we need those definitions here also
+ * when using MinGW as host for a cross-compiler
+ */
 #ifdef __MINGW32__
 #undef HOST_BIT_BUCKET
 #undef HOST_BIT_BUCKET2
+#undef HOST_EXECUTABLE_SUFFIX
 /* This is the name of the null device on windows.  */
 #define HOST_BIT_BUCKET "nul"
 #define HOST_BIT_BUCKET2 "/dev/null"
+#define HOST_EXECUTABLE_SUFFIX ".exe"
+#endif
+
+#if defined(__MSDOS__) || defined(_WIN32) || defined(__OS2__)
+#  define HOST_LACKS_INODE_NUMBERS 1
+#  undef PATH_SEPARATOR
+#  define PATH_SEPARATOR ';'
 #endif
 
 #ifndef MATH_LIBRARY
