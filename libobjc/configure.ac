@@ -190,7 +190,7 @@ case "${host}" in
       extra_ldflags_libobjc="${extra_ldflags_libobjc} -Wl,-rpath,@loader_path"
     fi
     ;;
-  *-cygwin*|*-mingw*)
+  *-cygwin*|*-mingw*|*-*-msys*)
     # Tell libtool to build DLLs on Windows
     extra_ldflags_libobjc='$(lt_host_flags)'
     ;;

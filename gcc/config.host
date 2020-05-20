@@ -230,7 +230,7 @@ case ${host} in
     host_exeext=.exe
     host_lto_plugin_soname=cyglto_plugin.dll
     ;;
-  i[34567]86-*-mingw32* | x86_64-*-mingw*)
+  i[34567]86-*-mingw32* | x86_64-*-mingw* | i[34567]86-*-msys* | x86_64-*-msys*)
     host_xm_file=i386/xm-mingw32.h
     host_xmake_file="${host_xmake_file} ${host_xmake_mingw} i386/x-mingw32"
     host_extra_gcc_objs="${host_extra_gcc_objs} ${host_extra_gcc_objs_mingw} driver-mingw32.o"

@@ -158,6 +158,16 @@ int do_collecting = 0;
 #define DO_COLLECT_EXPORT_LIST 0
 #endif
 
+/*
+ * these are from xm-mingw32.h, but this is only included
+ * for the target; we need those definitions here also
+ * when using MinGW as host for a cross-compiler
+ */
+#ifdef __MINGW32__
+#undef HOST_EXECUTABLE_SUFFIX
+#define HOST_EXECUTABLE_SUFFIX ".exe"
+#endif
+
 /* Nonzero if we should suppress the automatic demangling of identifiers
    in linker error messages.  Set from COLLECT_NO_DEMANGLE.  */
 int no_demangle;
