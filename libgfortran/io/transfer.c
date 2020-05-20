@@ -2674,7 +2674,7 @@ us_read (st_parameter_dt *dtp, int continued)
   else
     n = compile_options.record_marker;
 
-  nr = sread (dtp->u.p.current_unit->s, &i, n);
+  nr = sread (dtp->u.p.current_unit->s, &i8, n);
   if (unlikely (nr < 0))
     {
       generate_error (&dtp->common, LIBERROR_BAD_US, NULL);
@@ -2697,12 +2697,11 @@ us_read (st_parameter_dt *dtp, int continued)
       switch (nr)
 	{
 	case sizeof(GFC_INTEGER_4):
-	  memcpy (&i4, &i, sizeof (i4));
+	  memcpy (&i4, &i8, sizeof (i4));
 	  i = i4;
 	  break;
 
 	case sizeof(GFC_INTEGER_8):
-	  memcpy (&i8, &i, sizeof (i8));
 	  i = i8;
 	  break;
 
@@ -2718,14 +2717,14 @@ us_read (st_parameter_dt *dtp, int continued)
       switch (nr)
 	{
 	case sizeof(GFC_INTEGER_4):
-	  memcpy (&u32, &i, sizeof (u32));
+	  memcpy (&u32, &i8, sizeof (u32));
 	  u32 = __builtin_bswap32 (u32);
 	  memcpy (&i4, &u32, sizeof (i4));
 	  i = i4;
 	  break;
 
 	case sizeof(GFC_INTEGER_8):
-	  memcpy (&u64, &i, sizeof (u64));
+	  memcpy (&u64, &i8, sizeof (u64));
 	  u64 = __builtin_bswap64 (u64);
 	  memcpy (&i8, &u64, sizeof (i8));
 	  i = i8;
@@ -2760,7 +2759,7 @@ static void
 us_write (st_parameter_dt *dtp, int continued)
 {
   ssize_t nbytes;
-  gfc_offset dummy;
+  uint64_t dummy;
 
   dummy = 0;
 
