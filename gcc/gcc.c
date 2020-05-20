@@ -44,6 +44,14 @@ compilation is specified by a string called a "spec".  */
 #include "filenames.h"
 #include "spellcheck.h"
 
+#ifdef __MINGW32__
+#undef HOST_BIT_BUCKET
+#undef HOST_BIT_BUCKET2
+/* This is the name of the null device on windows.  */
+#define HOST_BIT_BUCKET "nul"
+#define HOST_BIT_BUCKET2 "/dev/null"
+#endif
+
 
 
 /* Manage the manipulation of env vars.
@@ -4617,7 +4625,8 @@ process_command (unsigned int decoded_options_count,
 
   if (output_file
       && strcmp (output_file, "-") != 0
-      && strcmp (output_file, HOST_BIT_BUCKET) != 0)
+      && strcmp (output_file, HOST_BIT_BUCKET) != 0
+      && strcmp (output_file, HOST_BIT_BUCKET2) != 0)
     {
       int i;
       for (i = 0; i < n_infiles; i++)

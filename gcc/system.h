@@ -701,6 +701,9 @@ extern int vsnprintf (char *, size_t, const char *, va_list);
 #ifndef HOST_BIT_BUCKET
 #define HOST_BIT_BUCKET "/dev/null"
 #endif
+#ifndef HOST_BIT_BUCKET2
+#define HOST_BIT_BUCKET2 ""
+#endif
 
 #ifndef offsetof
 #define offsetof(TYPE, MEMBER)	((size_t) &((TYPE *) 0)->MEMBER)
