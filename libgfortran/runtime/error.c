@@ -24,8 +24,8 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 
 #include "libgfortran.h"
-#include "io.h"
-#include "async.h"
+#include "io/io.h"
+#include "io/async.h"
 
 #include <assert.h>
 #include <string.h>
