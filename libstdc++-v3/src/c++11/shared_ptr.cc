@@ -35,7 +35,11 @@ namespace __gnu_internal _GLIBCXX_VISIBILITY(hidden)
   get_mutex(unsigned char i)
   {
     // increase alignment to put each lock on a separate cache line
-    struct alignas(64) M : __gnu_cxx::__mutex { };
+    struct
+#ifndef __mc68000__
+    alignas(64)
+#endif
+    M : __gnu_cxx::__mutex { };
     static M m[mask + 1];
     return m[i];
   }
