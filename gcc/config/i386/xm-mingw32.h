@@ -37,3 +37,20 @@ along with GCC; see the file COPYING3.  If not see
    "long long" values.  Instead, we use "I64".  */
 #define HOST_LONG_LONG_FORMAT "I64"
 #endif
+
+#ifndef STANDARD_STARTFILE_PREFIX_1
+#ifdef __MINGW64__
+#define STANDARD_STARTFILE_PREFIX_1 "C:/msys64/mingw64/x86_64-w64-mingw64/lib/"
+#else
+#define STANDARD_STARTFILE_PREFIX_1 "C:/msys64/mingw32/i686-w64-mingw32/lib/"
+#endif
+#endif
+
+/* For native mingw-version we need to take care that NATIVE_SYSTEM_HEADER_DIR
+   macro contains POSIX-style path.  See bug 52947.  */
+#undef NATIVE_SYSTEM_HEADER_DIR
+#ifdef __MINGW64__
+#define NATIVE_SYSTEM_HEADER_DIR "C:/msys64/mingw64/x86_64-w64-mingw64/include"
+#else
+#define NATIVE_SYSTEM_HEADER_DIR "C:/msys64/mingw32/i686-w64-mingw32/include"
+#endif
