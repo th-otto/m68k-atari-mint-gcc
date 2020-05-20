@@ -94,6 +94,9 @@ execute_command_line (const char *command, bool wait, int *exitstat,
       set_cmdstat (cmdstat, EXEC_NOERROR);
 
 #if defined(HAVE_SIGACTION) && defined(HAVE_WAITPID)
+#ifndef SA_RESTART
+#  define SA_RESTART 0
+#endif
       static bool sig_init_saved;
       bool sig_init = __atomic_load_n (&sig_init_saved, __ATOMIC_RELAXED);
       if (!sig_init)
