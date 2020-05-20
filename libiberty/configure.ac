@@ -473,7 +473,7 @@ if test -n "${with_target_subdir}"; then
   # Mingw provides and which ones we will be expected to provide.
 
   case "${host}" in
-  *-*-mingw*)
+  *-*-mingw* | *-*-msys*)
     AC_LIBOBJ([asprintf])
     AC_LIBOBJ([basename])
     AC_LIBOBJ([bcmp])
@@ -552,7 +552,7 @@ AC_SUBST(CHECK)
 AC_SUBST(target_header_dir)
 
 case "${host}" in
-  *-*-cygwin* | *-*-mingw* | *-*-mint*)
+  *-*-cygwin* | *-*-mingw* | *-*-mint* | *-*-msys*)
     AC_DEFINE(HAVE_SYS_ERRLIST)
     AC_DEFINE(HAVE_SYS_NERR)
     ;;
@@ -610,7 +610,7 @@ if test -z "${setobjs}"; then
     ac_cv_func_getpagesize=yes
     ;;
 
-  *-*-mingw32*)
+  *-*-mingw32* | *-*-msys*)
     # Under mingw32, sys_nerr and sys_errlist exist, but they are
     # macros, so the test below won't find them.
     libiberty_cv_var_sys_nerr=yes
@@ -697,7 +697,7 @@ fi
 
 # Figure out which version of pexecute to use.
 case "${host}" in
-     *-*-mingw* | *-*-winnt*)	pexecute=pex-win32  ;;
+     *-*-mingw* | *-*-winnt* | *-*-msys*)	pexecute=pex-win32  ;;
      *-*-msdosdjgpp*)		pexecute=pex-djgpp  ;;
      *-*-msdos*)		pexecute=pex-msdos  ;;
      *)				pexecute=pex-unix   ;;

@@ -144,6 +144,16 @@
 #include "version.h"
 #endif
 
+/*
+ * these are from xm-mingw32.h, but this is only included
+ * for the target; we need those definitions here also
+ * when using MinGW as host for a cross-compiler
+ */
+#ifdef __MINGW32__
+#undef HOST_EXECUTABLE_SUFFIX
+#define HOST_EXECUTABLE_SUFFIX ".exe"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -229,6 +239,8 @@ UINT __gnat_current_ccs_encoding;
 #include <signal.h>
 #undef DIR_SEPARATOR
 #define DIR_SEPARATOR '\\'
+#undef PATH_SEPARATOR
+#define PATH_SEPARATOR ';'
 
 #else
 #include <utime.h>
