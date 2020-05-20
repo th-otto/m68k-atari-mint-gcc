@@ -19,7 +19,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "system.h"
 #include "coretypes.h"
 
-#include "dmd/compiler.h"
+#include "dmd/dcompiler.h"
 #include "dmd/expression.h"
 #include "dmd/identifier.h"
 #include "dmd/module.h"
