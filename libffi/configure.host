@@ -65,7 +65,7 @@ case "${host}" in
 	;;
 
   i?86-win32* | i?86-*-cygwin* | i?86-*-mingw* | i?86-*-os2* | i?86-*-interix* \
-  | x86_64-*-cygwin* | x86_64-*-mingw*)
+  | x86_64-*-cygwin* | x86_64-*-mingw* | *-*-msys*)
 	TARGETDIR=x86
 	if test $ac_cv_sizeof_size_t = 4; then
 	  TARGET=X86_WIN32
