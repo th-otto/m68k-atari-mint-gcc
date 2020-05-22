@@ -1,3 +1,51 @@
+2020-05-07  Release Manager
+
+	* GCC 10.1.0 released.
+
+2020-05-06  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* doc/install.texi: Replace Sun with Solaris as appropriate.
+	(Tools/packages necessary for building GCC, Perl version between
+	5.6.1 and 5.6.24): Remove Solaris 8 reference.
+	(Installing GCC: Binaries, Solaris 2 (SPARC, Intel)): Remove
+	TGCware reference.
+	(Specific, i?86-*-solaris2*): Update version references for
+	Solaris 11.3 and later.  Remove gas 2.26 caveat.
+	(Specific, *-*-solaris2*): Update version references for
+	Solaris 11.3 and later.  Remove boehm-gc reference.
+	Document GMP, MPFR caveats on Solaris 11.3.
+	(Specific, sparc-sun-solaris2*): Update Solaris 9 references.
+	(Specific, sparc64-*-solaris2*): Likewise.
+	Document --build requirement.
+
+2020-05-05  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	* configure.ac <i[34567]86-*-*>: Add --32 to tls_as_opt on Solaris.
+	* configure: Regenerate.
+
+2020-05-04  Richard Sandiford  <richard.sandiford@arm.com>
+
+	PR middle-end/94941
+	* internal-fn.c (expand_load_lanes_optab_fn): Emit a move if the
+	chosen lhs is different from the gcall lhs.
+	(expand_mask_load_optab_fn): Likewise.
+	(expand_gather_load_optab_fn): Likewise.
+
+2020-05-04  Marek Polacek  <polacek@redhat.com>
+
+	Revert:
+	2020-04-30  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/94775
+	* tree.c (check_base_type): Return true only if TYPE_USER_ALIGN match.
+	(check_aligned_type): Check if TYPE_USER_ALIGN match.
+
+2020-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	* config/tilegx/tilegx.md
+	(insn_stnt<I124MODE:n>_add<I48MODE:bitsuffix>): Use <I124MODE:n>
+	rather than just <n>.
+
 2020-04-30  Alexandre Oliva <oliva@adacore.com>
 
 	* doc/sourcebuild.texi (Effective-Target Keywords): Document
