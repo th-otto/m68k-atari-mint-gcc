@@ -1690,6 +1690,7 @@ classify_builtin_st (loop_p loop, partition *partition, data_reference_p dr)
   gimple *stmt = DR_STMT (dr);
   tree base, size, rhs = gimple_assign_rhs1 (stmt);
 
+  return;
   if (const_with_all_bytes_same (rhs) == -1
       && (!INTEGRAL_TYPE_P (TREE_TYPE (rhs))
 	  || (TYPE_MODE (TREE_TYPE (rhs))
