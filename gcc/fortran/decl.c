@@ -728,7 +728,7 @@ gfc_match_data (void)
 	  gfc_constructor *c;
 	  c = gfc_constructor_first (new_data->value->expr->value.constructor);
 	  for (; c; c = gfc_constructor_next (c))
-	    if (c->expr->ts.type == BT_BOZ)
+	    if (c->expr && c->expr->ts.type == BT_BOZ)
 	      {
 		gfc_error ("BOZ literal constant at %L cannot appear in a "
 			   "structure constructor", &c->expr->where);
@@ -1076,6 +1076,11 @@ char_len_param_value (gfc_expr **expr, bool *deferred)
 
   if (!gfc_expr_check_typed (*expr, gfc_current_ns, false))
     return MATCH_ERROR;
+
+  /* If gfortran gets an EXPR_OP, try to simplifiy it.  This catches things
+     like CHARACTER(([1])).   */
+  if ((*expr)->expr_type == EXPR_OP)
+    gfc_simplify_expr (*expr, 1);
 
   if ((*expr)->expr_type == EXPR_FUNCTION)
     {
@@ -4074,7 +4079,8 @@ match_byte_typespec (gfc_typespec *ts)
 match
 gfc_match_decl_type_spec (gfc_typespec *ts, int implicit_flag)
 {
-  char name[GFC_MAX_SYMBOL_LEN + 1];
+  /* Provide sufficient space to hold "pdtsymbol".  */
+  char *name = XALLOCAVEC (char, GFC_MAX_SYMBOL_LEN + 1);
   gfc_symbol *sym, *dt_sym;
   match m;
   char c;
@@ -4107,7 +4113,7 @@ gfc_match_decl_type_spec (gfc_typespec *ts, int implicit_flag)
       gfc_gobble_whitespace ();
       if (gfc_peek_ascii_char () == '*')
 	{
-	  if ((m = gfc_match ("*)")) != MATCH_YES)
+	  if ((m = gfc_match ("* ) ")) != MATCH_YES)
 	    return m;
 	  if (gfc_comp_struct (gfc_current_state ()))
 	    {
@@ -4264,7 +4270,13 @@ gfc_match_decl_type_spec (gfc_typespec *ts, int implicit_flag)
 	    return m;
 	  gcc_assert (!sym->attr.pdt_template && sym->attr.pdt_type);
 	  ts->u.derived = sym;
-	  strcpy (name, gfc_dt_lower_string (sym->name));
+	  const char* lower = gfc_dt_lower_string (sym->name);
+	  size_t len = strlen (lower);
+	  /* Reallocate with sufficient size.  */
+	  if (len > GFC_MAX_SYMBOL_LEN)
+	    name = XALLOCAVEC (char, len + 1);
+	  memcpy (name, lower, len);
+	  name[len] = '\0';
 	}
 
       if (sym && sym->attr.flavor == FL_STRUCT)
@@ -9048,7 +9060,7 @@ access_attr_decl (gfc_statement st)
 	  else
 	    {
 	      gfc_error ("Access specification of the .%s. operator at %C "
-			 "has already been specified", sym->name);
+			 "has already been specified", uop->name);
 	      goto done;
 	    }
 

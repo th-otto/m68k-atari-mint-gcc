@@ -1075,6 +1075,19 @@ associate_classtype_constraints (tree type)
 	 original declaration.  */
       if (tree orig_ci = get_constraints (decl))
         {
+	  if (int extra_levels = (TMPL_PARMS_DEPTH (current_template_parms)
+				  - TMPL_ARGS_DEPTH (TYPE_TI_ARGS (type))))
+	    {
+	      /* If there is a discrepancy between the current template depth
+		 and the template depth of the original declaration, then we
+		 must be redeclaring a class template as part of a friend
+		 declaration within another class template.  Before matching
+		 constraints, we need to reduce the template parameter level
+		 within the current constraints via substitution.  */
+	      tree outer_gtargs = template_parms_to_args (current_template_parms);
+	      TREE_VEC_LENGTH (outer_gtargs) = extra_levels;
+	      ci = tsubst_constraint_info (ci, outer_gtargs, tf_none, NULL_TREE);
+	    }
           if (!equivalent_constraints (ci, orig_ci))
             {
 	      error ("%qT does not match original declaration", type);
@@ -2173,9 +2186,7 @@ tsubst_requires_expr (tree t, tree args,
   if (reqs == error_mark_node)
     return boolean_false_node;
 
-  /* In certain cases, produce a new requires-expression.
-     Otherwise the value of the expression is true.  */
-  if (processing_template_decl && uses_template_parms (args))
+  if (processing_template_decl)
     return finish_requires_expr (cp_expr_location (t), parms, reqs);
 
   return boolean_true_node;
@@ -2492,11 +2503,12 @@ satisfy_disjunction (tree t, tree args, subst_info info)
 tree
 satisfaction_value (tree t)
 {
-  if (t == error_mark_node)
+  if (t == error_mark_node || t == boolean_true_node || t == boolean_false_node)
     return t;
-  if (t == boolean_true_node || t == integer_one_node)
+  gcc_assert (TREE_CODE (t) == INTEGER_CST);
+  if (integer_onep (t))
     return boolean_true_node;
-  if (t == boolean_false_node || t == integer_zero_node)
+  if (integer_zerop (t))
     return boolean_false_node;
 
   /* Anything else should be invalid.  */

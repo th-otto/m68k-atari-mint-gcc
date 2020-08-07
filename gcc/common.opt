@@ -2210,7 +2210,7 @@ Enum(profile_update) String(prefer-atomic) Value(PROFILE_UPDATE_PREFER_ATOMIC)
 
 fprofile-prefix-path=
 Common Joined RejectNegative Var(profile_prefix_path)
-Remove prefix from absolute path before manging name for -fprofile-generate= and -fprofile-use=.
+Remove prefix from absolute path before mangling name for -fprofile-generate= and -fprofile-use=.
 
 fprofile-generate
 Common
@@ -2850,6 +2850,10 @@ Perform loop unrolling when iteration count is known.
 funroll-all-loops
 Common Report Var(flag_unroll_all_loops) Optimization
 Perform loop unrolling for all loops.
+
+funroll-completely-grow-size
+Undocumented Var(flag_cunroll_grow_size) Init(2) Optimization
+; Internal undocumented flag, allow size growth during complete unrolling
 
 ; Nonzero means that loop optimizer may assume that the induction variables
 ; that control loops do not overflow and that the loops with nontrivial

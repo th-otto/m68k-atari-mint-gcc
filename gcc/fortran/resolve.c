@@ -1753,8 +1753,10 @@ gfc_resolve_intrinsic (gfc_symbol *sym, locus *loc)
   gfc_intrinsic_sym* isym = NULL;
   const char* symstd;
 
-  if (sym->formal)
+  if (sym->resolve_symbol_called >= 2)
     return true;
+
+  sym->resolve_symbol_called = 2;
 
   /* Already resolved.  */
   if (sym->from_intmod && sym->ts.type != BT_UNKNOWN)
@@ -9046,7 +9048,7 @@ resolve_assoc_var (gfc_symbol* sym, bool resolve_target)
 	  as = NULL;
 	  sym->ts = *ts;
 	  sym->ts.type = BT_CLASS;
-	  attr = CLASS_DATA (sym)->attr;
+	  attr = CLASS_DATA (sym) ? CLASS_DATA (sym)->attr : sym->attr;
 	  attr.class_ok = 0;
 	  attr.associate_var = 1;
 	  attr.dimension = attr.codimension = 0;
@@ -9636,7 +9638,7 @@ resolve_select_rank (gfc_code *code, gfc_namespace *old_ns)
   gfc_namespace *ns;
   gfc_code *body, *new_st, *tail;
   gfc_case *c;
-  char tname[GFC_MAX_SYMBOL_LEN];
+  char tname[GFC_MAX_SYMBOL_LEN + 7];
   char name[2 * GFC_MAX_SYMBOL_LEN];
   gfc_symtree *st;
   gfc_expr *selector_expr = NULL;
@@ -11799,10 +11801,18 @@ start:
 	case EXEC_GOTO:
 	  if (code->expr1 != NULL)
 	    {
-	      if (code->expr1->ts.type != BT_INTEGER)
-		gfc_error ("ASSIGNED GOTO statement at %L requires an "
-			   "INTEGER variable", &code->expr1->where);
-	      else if (code->expr1->symtree->n.sym->attr.assign != 1)
+	      if (code->expr1->expr_type != EXPR_VARIABLE
+		  || code->expr1->ts.type != BT_INTEGER
+		  || (code->expr1->ref
+		      && code->expr1->ref->type == REF_ARRAY)
+		  || code->expr1->symtree == NULL
+		  || (code->expr1->symtree->n.sym
+		      && (code->expr1->symtree->n.sym->attr.flavor
+			  == FL_PARAMETER)))
+		gfc_error ("ASSIGNED GOTO statement at %L requires a "
+			   "scalar INTEGER variable", &code->expr1->where);
+	      else if (code->expr1->symtree->n.sym
+		       && code->expr1->symtree->n.sym->attr.assign != 1)
 		gfc_error ("Variable %qs has not been assigned a target "
 			   "label at %L", code->expr1->symtree->n.sym->name,
 			   &code->expr1->where);
@@ -12356,7 +12366,7 @@ resolve_charlen (gfc_charlen *cl)
 	}
 
       /* cl->length has been resolved.  It should have an integer type.  */
-      if (cl->length->ts.type != BT_INTEGER)
+      if (cl->length->ts.type != BT_INTEGER || cl->length->rank != 0)
 	{
 	  gfc_error ("Scalar INTEGER expression expected at %L",
 		     &cl->length->where);
@@ -12997,6 +13007,7 @@ resolve_fl_procedure (gfc_symbol *sym, int mp_flag)
 	{
 	  if (arg->sym
 	      && arg->sym->ts.type == BT_DERIVED
+	      && arg->sym->ts.u.derived
 	      && !arg->sym->ts.u.derived->attr.use_assoc
 	      && !gfc_check_symbol_access (arg->sym->ts.u.derived)
 	      && !gfc_notify_std (GFC_STD_F2003, "%qs is of a PRIVATE type "
@@ -13123,8 +13134,10 @@ resolve_fl_procedure (gfc_symbol *sym, int mp_flag)
     {
       if (sym->attr.proc_pointer)
 	{
+	  const char* name = (sym->attr.result ? sym->ns->proc_name->name
+					       : sym->name);
 	  gfc_error ("Procedure pointer %qs at %L shall not be elemental",
-		     sym->name, &sym->declared_at);
+		     name, &sym->declared_at);
 	  return false;
 	}
       if (sym->attr.dummy)
@@ -13211,7 +13224,7 @@ resolve_fl_procedure (gfc_symbol *sym, int mp_flag)
       if (sym->attr.subroutine && sym->attr.result)
 	{
 	  gfc_error ("PROCEDURE attribute conflicts with RESULT attribute "
-		     "in %qs at %L", sym->name, &sym->declared_at);
+		     "in %qs at %L", sym->ns->proc_name->name, &sym->declared_at);
 	  return false;
 	}
       if (sym->attr.external && sym->attr.function && !sym->attr.module_procedure
@@ -13909,7 +13922,7 @@ resolve_typebound_procedure (gfc_symtree* stree)
     {
       /* If proc has not been resolved at this point, proc->name may
 	 actually be a USE associated entity. See PR fortran/89647. */
-      if (!proc->resolved
+      if (!proc->resolve_symbol_called
 	  && proc->attr.function == 0 && proc->attr.subroutine == 0)
 	{
 	  gfc_symbol *tmp;
@@ -15154,9 +15167,9 @@ resolve_symbol (gfc_symbol *sym)
   gfc_array_spec *as;
   bool saved_specification_expr;
 
-  if (sym->resolved)
+  if (sym->resolve_symbol_called >= 1)
     return;
-  sym->resolved = 1;
+  sym->resolve_symbol_called = 1;
 
   /* No symbol will ever have union type; only components can be unions.
      Union type declaration symbols have type BT_UNKNOWN but flavor FL_UNION
@@ -15168,6 +15181,7 @@ resolve_symbol (gfc_symbol *sym)
   if (flag_coarray == GFC_FCOARRAY_LIB && sym->ts.type == BT_CLASS
       && sym->ts.u.derived && CLASS_DATA (sym)
       && CLASS_DATA (sym)->attr.codimension
+      && CLASS_DATA (sym)->ts.u.derived
       && (CLASS_DATA (sym)->ts.u.derived->attr.alloc_comp
 	  || CLASS_DATA (sym)->ts.u.derived->attr.pointer_comp))
     {

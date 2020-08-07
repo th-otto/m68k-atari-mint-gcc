@@ -476,22 +476,38 @@ gfc_class_initializer (gfc_typespec *ts, gfc_expr *init_expr)
    and module name. This is used to construct unique names for the class
    containers and vtab symbols.  */
 
-static void
-get_unique_type_string (char *string, gfc_symbol *derived)
+static char *
+get_unique_type_string (gfc_symbol *derived)
 {
-  char dt_name[GFC_MAX_SYMBOL_LEN+1];
+  const char *dt_name;
+  char *string;
+  size_t len;
   if (derived->attr.unlimited_polymorphic)
-    strcpy (dt_name, "STAR");
+    dt_name = "STAR";
   else
-    strcpy (dt_name, gfc_dt_upper_string (derived->name));
+    dt_name = gfc_dt_upper_string (derived->name);
+  len = strlen (dt_name) + 2;
   if (derived->attr.unlimited_polymorphic)
-    sprintf (string, "_%s", dt_name);
+    {
+      string = XNEWVEC (char, len);
+      sprintf (string, "_%s", dt_name);
+    }
   else if (derived->module)
-    sprintf (string, "%s_%s", derived->module, dt_name);
+    {
+      string = XNEWVEC (char, strlen (derived->module) + len);
+      sprintf (string, "%s_%s", derived->module, dt_name);
+    }
   else if (derived->ns->proc_name)
-    sprintf (string, "%s_%s", derived->ns->proc_name->name, dt_name);
+    {
+      string = XNEWVEC (char, strlen (derived->ns->proc_name->name) + len);
+      sprintf (string, "%s_%s", derived->ns->proc_name->name, dt_name);
+    }
   else
-    sprintf (string, "_%s", dt_name);
+    {
+      string = XNEWVEC (char, len);
+      sprintf (string, "_%s", dt_name);
+    }
+  return string;
 }
 
 
@@ -501,8 +517,9 @@ get_unique_type_string (char *string, gfc_symbol *derived)
 static void
 get_unique_hashed_string (char *string, gfc_symbol *derived)
 {
-  char tmp[2*GFC_MAX_SYMBOL_LEN+2];
-  get_unique_type_string (&tmp[0], derived);
+  /* Provide sufficient space to hold "symbol.symbol_symbol".  */
+  char *tmp;
+  tmp = get_unique_type_string (derived);
   /* If string is too long, use hash value in hex representation (allow for
      extra decoration, cf. gfc_build_class_symbol & gfc_find_derived_vtab).
      We need space to for 15 characters "__class_" + symbol name + "_%d_%da",
@@ -514,6 +531,7 @@ get_unique_hashed_string (char *string, gfc_symbol *derived)
     }
   else
     strcpy (string, tmp);
+  free (tmp);
 }
 
 
@@ -523,15 +541,17 @@ unsigned int
 gfc_hash_value (gfc_symbol *sym)
 {
   unsigned int hash = 0;
-  char c[2*(GFC_MAX_SYMBOL_LEN+1)];
+  /* Provide sufficient space to hold "symbol.symbol_symbol".  */
+  char *c;
   int i, len;
 
-  get_unique_type_string (&c[0], sym);
+  c = get_unique_type_string (sym);
   len = strlen (c);
 
   for (i = 0; i < len; i++)
     hash = (hash << 6) + (hash << 16) - hash + c[i];
 
+  free (c);
   /* Return the hash but take the modulus for the sake of module read,
      even though this slightly increases the chance of collision.  */
   return (hash % 100000000);
@@ -544,7 +564,7 @@ unsigned int
 gfc_intrinsic_hash_value (gfc_typespec *ts)
 {
   unsigned int hash = 0;
-  const char *c = gfc_typename (ts);
+  const char *c = gfc_typename (ts, true);
   int i, len;
 
   len = strlen (c);
@@ -907,12 +927,18 @@ finalize_component (gfc_expr *expr, gfc_symbol *derived, gfc_component *comp,
 {
   gfc_expr *e;
   gfc_ref *ref;
+  gfc_was_finalized *f;
 
   if (!comp_is_finalizable (comp))
     return;
 
-  if (comp->finalized)
-    return;
+  /* If this expression with this component has been finalized
+     already in this namespace, there is nothing to do.  */
+  for (f = sub_ns->was_finalized; f; f = f->next)
+    {
+      if (f->e == expr && f->c == comp)
+	return;
+    }
 
   e = gfc_copy_expr (expr);
   if (!e->ref)
@@ -1002,6 +1028,7 @@ finalize_component (gfc_expr *expr, gfc_symbol *derived, gfc_component *comp,
 	}
       else
 	(*code) = cond;
+
     }
   else if (comp->ts.type == BT_DERIVED
 	    && comp->ts.u.derived->f2k_derived
@@ -1041,7 +1068,13 @@ finalize_component (gfc_expr *expr, gfc_symbol *derived, gfc_component *comp,
 			    sub_ns);
       gfc_free_expr (e);
     }
-  comp->finalized = true;
+
+  /* Record that this was finalized already in this namespace.  */
+  f = sub_ns->was_finalized;
+  sub_ns->was_finalized = XCNEW (gfc_was_finalized);
+  sub_ns->was_finalized->e = expr;
+  sub_ns->was_finalized->c = comp;
+  sub_ns->was_finalized->next = f;
 }
 
 
@@ -2242,6 +2275,9 @@ gfc_find_derived_vtab (gfc_symbol *derived)
     derived = gfc_get_derived_super_type (derived);
 
   if (!derived)
+    return NULL;
+
+  if (!derived->name)
     return NULL;
 
   /* Find the gsymbol for the module of use associated derived types.  */

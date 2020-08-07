@@ -535,9 +535,9 @@ static const struct cpu_regmove_cost thunderx2t99_regmove_cost =
 {
   1, /* GP2GP  */
   /* Avoid the use of int<->fp moves for spilling.  */
-  8, /* GP2FP  */
-  8, /* FP2GP  */
-  4  /* FP2FP  */
+  5, /* GP2FP  */
+  6, /* FP2GP  */
+  3, /* FP2FP  */
 };
 
 static const struct cpu_regmove_cost thunderx3t110_regmove_cost =
@@ -704,15 +704,15 @@ static const struct cpu_vector_cost thunderx2t99_vector_cost =
   6, /* scalar_fp_stmt_cost  */
   4, /* scalar_load_cost  */
   1, /* scalar_store_cost  */
-  5, /* vec_int_stmt_cost  */
-  6, /* vec_fp_stmt_cost  */
+  4, /* vec_int_stmt_cost  */
+  5, /* vec_fp_stmt_cost  */
   10, /* vec_permute_cost  */
   6, /* vec_to_scalar_cost  */
   5, /* scalar_to_vec_cost  */
-  8, /* vec_align_load_cost  */
-  8, /* vec_unalign_load_cost  */
-  4, /* vec_unalign_store_cost  */
-  4, /* vec_store_cost  */
+  4, /* vec_align_load_cost  */
+  4, /* vec_unalign_load_cost  */
+  1, /* vec_unalign_store_cost  */
+  1, /* vec_store_cost  */
   2, /* cond_taken_branch_cost  */
   1  /* cond_not_taken_branch_cost  */
 };
@@ -1429,6 +1429,7 @@ static const struct attribute_spec aarch64_attribute_table[] =
   { "arm_sve_vector_bits", 1, 1, false, true,  false, true,
 			  aarch64_sve::handle_arm_sve_vector_bits_attribute,
 			  NULL },
+  { "Advanced SIMD type", 0, 0, false, true,  false, true,  NULL, NULL },
   { "SVE type",		  3, 3, false, true,  false, true,  NULL, NULL },
   { "SVE sizeless type",  0, 0, false, true,  false, true,  NULL, NULL },
   { NULL,                 0, 0, false, false, false, false, NULL, NULL }
@@ -6946,6 +6947,17 @@ aarch64_return_address_signing_enabled (void)
   /* This function should only be called after frame laid out.   */
   gcc_assert (cfun->machine->frame.laid_out);
 
+  /* Turn return address signing off in any function that uses
+     __builtin_eh_return.  The address passed to __builtin_eh_return
+     is not signed so either it has to be signed (with original sp)
+     or the code path that uses it has to avoid authenticating it.
+     Currently eh return introduces a return to anywhere gadget, no
+     matter what we do here since it uses ret with user provided
+     address. An ideal fix for that is to use indirect branch which
+     can be protected with BTI j (to some extent).  */
+  if (crtl->calls_eh_return)
+    return false;
+
   /* If signing scope is AARCH64_FUNCTION_NON_LEAF, we only sign a leaf function
      if its LR is pushed onto stack.  */
   return (aarch64_ra_sign_scope == AARCH64_FUNCTION_ALL
@@ -8180,7 +8192,7 @@ aarch64_expand_epilogue (bool for_sibcall)
   if (callee_adjust != 0)
     aarch64_pop_regs (reg1, reg2, callee_adjust, &cfi_ops);
 
-  if (callee_adjust != 0 || maybe_gt (initial_adjust, 65536))
+  if (cfi_ops && (callee_adjust != 0 || maybe_gt (initial_adjust, 65536)))
     {
       /* Emit delayed restores and set the CFA to be SP + initial_adjust.  */
       insn = get_last_insn ();
@@ -10807,6 +10819,24 @@ aarch64_initial_elimination_offset (unsigned from, unsigned to)
   return cfun->machine->frame.frame_size;
 }
 
+
+/* Get return address without mangling.  */
+
+rtx
+aarch64_return_addr_rtx (void)
+{
+  rtx val = get_hard_reg_initial_val (Pmode, LR_REGNUM);
+  /* Note: aarch64_return_address_signing_enabled only
+     works after cfun->machine->frame.laid_out is set,
+     so here we don't know if the return address will
+     be signed or not.  */
+  rtx lr = gen_rtx_REG (Pmode, LR_REGNUM);
+  emit_move_insn (lr, val);
+  emit_insn (GEN_FCN (CODE_FOR_xpaclri) ());
+  return lr;
+}
+
+
 /* Implement RETURN_ADDR_RTX.  We do not support moving back to a
    previous frame.  */
 
@@ -10815,7 +10845,7 @@ aarch64_return_addr (int count, rtx frame ATTRIBUTE_UNUSED)
 {
   if (count != 0)
     return const0_rtx;
-  return get_hard_reg_initial_val (Pmode, LR_REGNUM);
+  return aarch64_return_addr_rtx ();
 }
 
 
@@ -15258,6 +15288,8 @@ static const struct aarch64_attribute_info aarch64_attributes[] =
      aarch64_handle_attr_branch_protection, OPT_mbranch_protection_ },
   { "sign-return-address", aarch64_attr_enum, false, NULL,
      OPT_msign_return_address_ },
+  { "outline-atomics", aarch64_attr_bool, true, NULL,
+     OPT_moutline_atomics},
   { NULL, aarch64_attr_custom, false, NULL, OPT____ }
 };
 
@@ -20183,7 +20215,8 @@ aarch64_evpc_rev_local (struct expand_vec_perm_d *d)
 
   if (d->vec_flags == VEC_SVE_PRED
       || !d->one_vector_p
-      || !d->perm[0].is_constant (&diff))
+      || !d->perm[0].is_constant (&diff)
+      || !diff)
     return false;
 
   size = (diff + 1) * GET_MODE_UNIT_SIZE (d->vmode);

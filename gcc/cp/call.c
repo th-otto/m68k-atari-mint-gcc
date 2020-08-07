@@ -171,6 +171,8 @@ static tree build_over_call (struct z_candidate *, int, tsubst_flags_t);
 		     /*c_cast_p=*/false, (COMPLAIN))
 static tree convert_like_real (conversion *, tree, tree, int, bool,
 			       bool, tsubst_flags_t);
+static tree convert_like_real_1 (conversion *, tree, tree, int, bool,
+				 bool, tsubst_flags_t);
 static void op_error (const op_location_t &, enum tree_code, enum tree_code,
 		      tree, tree, tree, bool);
 static struct z_candidate *build_user_type_conversion_1 (tree, tree, int,
@@ -5841,7 +5843,7 @@ add_candidates (tree fns, tree first_arg, const vec<tree, va_gc> *args,
 	}
 
       /* Don't bother reversing an operator with two identical parameters.  */
-      else if (args->length () == 2 && (flags & LOOKUP_REVERSED))
+      else if (vec_safe_length (args) == 2 && (flags & LOOKUP_REVERSED))
 	{
 	  tree parmlist = TYPE_ARG_TYPES (TREE_TYPE (fn));
 	  if (same_type_p (TREE_VALUE (parmlist),
@@ -6307,7 +6309,7 @@ build_new_op_1 (const op_location_t &loc, enum tree_code code, int flags,
 	      result = build_over_call (cand, LOOKUP_NORMAL, ocomplain);
 	    }
 
-	  if (trivial_fn_p (cand->fn))
+	  if (trivial_fn_p (cand->fn) || DECL_IMMEDIATE_FUNCTION_P (cand->fn))
 	    /* There won't be a CALL_EXPR.  */;
 	  else if (result && result != error_mark_node)
 	    {
@@ -6391,6 +6393,7 @@ build_new_op_1 (const op_location_t &loc, enum tree_code code, int flags,
 		    tree rhs = integer_zero_node;
 		    if (cand->reversed ())
 		      std::swap (lhs, rhs);
+		    warning_sentinel ws (warn_zero_as_null_pointer_constant);
 		    result = build_new_op (loc, code,
 					   LOOKUP_NORMAL|LOOKUP_REWRITTEN,
 					   lhs, rhs, NULL_TREE,
@@ -7282,6 +7285,39 @@ maybe_warn_array_conv (location_t loc, conversion *c, tree expr)
 	     "are only available with %<-std=c++2a%> or %<-std=gnu++2a%>");
 }
 
+/* Wrapper for convert_like_real_1 that handles creating IMPLICIT_CONV_EXPR.  */
+
+static tree
+convert_like_real (conversion *convs, tree expr, tree fn, int argnum,
+		   bool issue_conversion_warnings,
+		   bool c_cast_p, tsubst_flags_t complain)
+{
+  /* Creating &TARGET_EXPR<> in a template breaks when substituting,
+     and creating a CALL_EXPR in a template breaks in finish_call_expr
+     so use an IMPLICIT_CONV_EXPR for this conversion.  We would have
+     created such codes e.g. when calling a user-defined conversion
+     function.  */
+  tree conv_expr = NULL_TREE;
+  if (processing_template_decl
+      && convs->kind != ck_identity
+      && (CLASS_TYPE_P (convs->type) || CLASS_TYPE_P (TREE_TYPE (expr))))
+    {
+      conv_expr = build1 (IMPLICIT_CONV_EXPR, convs->type, expr);
+      if (convs->kind != ck_ref_bind)
+	conv_expr = convert_from_reference (conv_expr);
+      if (!convs->bad_p)
+	return conv_expr;
+      /* Do the normal processing to give the bad_p errors.  But we still
+	 need to return the IMPLICIT_CONV_EXPR, unless we're returning
+	 error_mark_node.  */
+    }
+  expr = convert_like_real_1 (convs, expr, fn, argnum,
+			      issue_conversion_warnings, c_cast_p, complain);
+  if (expr == error_mark_node)
+    return error_mark_node;
+  return conv_expr ? conv_expr : expr;
+}
+
 /* Perform the conversions in CONVS on the expression EXPR.  FN and
    ARGNUM are used for diagnostics.  ARGNUM is zero based, -1
    indicates the `this' argument of a method.  INNER is nonzero when
@@ -7293,9 +7329,9 @@ maybe_warn_array_conv (location_t loc, conversion *c, tree expr)
    conversions to inaccessible bases are permitted.  */
 
 static tree
-convert_like_real (conversion *convs, tree expr, tree fn, int argnum,
-		   bool issue_conversion_warnings,
-		   bool c_cast_p, tsubst_flags_t complain)
+convert_like_real_1 (conversion *convs, tree expr, tree fn, int argnum,
+		     bool issue_conversion_warnings,
+		     bool c_cast_p, tsubst_flags_t complain)
 {
   tree totype = convs->type;
   diagnostic_t diag_kind;
@@ -7395,19 +7431,6 @@ convert_like_real (conversion *convs, tree expr, tree fn, int argnum,
 
   if (issue_conversion_warnings && (complain & tf_warning))
     conversion_null_warnings (totype, expr, fn, argnum);
-
-  /* Creating &TARGET_EXPR<> in a template breaks when substituting,
-     and creating a CALL_EXPR in a template breaks in finish_call_expr
-     so use an IMPLICIT_CONV_EXPR for this conversion.  We would have
-     created such codes e.g. when calling a user-defined conversion
-     function.  */
-  if (processing_template_decl
-      && convs->kind != ck_identity
-      && (CLASS_TYPE_P (totype) || CLASS_TYPE_P (TREE_TYPE (expr))))
-    {
-      expr = build1 (IMPLICIT_CONV_EXPR, totype, expr);
-      return convs->kind == ck_ref_bind ? expr : convert_from_reference (expr);
-    }
 
   switch (convs->kind)
     {
@@ -8684,18 +8707,24 @@ build_over_call (struct z_candidate *cand, int flags, tsubst_flags_t complain)
 	    return error_mark_node;
 	}
 
-      /* Optimize away vtable lookup if we know that this
-	 function can't be overridden.  We need to check if
-	 the context and the type where we found fn are the same,
-	 actually FN might be defined in a different class
-	 type because of a using-declaration. In this case, we
-	 do not want to perform a non-virtual call.  Note that
-	 resolves_to_fixed_type_p checks CLASSTYPE_FINAL too.  */
+      /* See if the function member or the whole class type is declared
+	 final and the call can be devirtualized.  */
       if (DECL_FINAL_P (fn)
-	  || (resolves_to_fixed_type_p (arg, 0)
-	      && same_type_ignoring_top_level_qualifiers_p
-	      (DECL_CONTEXT (fn), BINFO_TYPE (cand->conversion_path)))) 
+	  || CLASSTYPE_FINAL (TYPE_METHOD_BASETYPE (TREE_TYPE (fn))))
 	flags |= LOOKUP_NONVIRTUAL;
+
+      /* If we know the dynamic type of the object, look up the final overrider
+	 in the BINFO.  */
+      if (DECL_VINDEX (fn) && (flags & LOOKUP_NONVIRTUAL) == 0
+	  && resolves_to_fixed_type_p (arg))
+	{
+	  tree binfo = cand->conversion_path;
+	  if (BINFO_TYPE (binfo) != DECL_CONTEXT (fn))
+	    binfo = lookup_base (binfo, DECL_CONTEXT (fn), ba_unique,
+				 NULL, complain);
+	  fn = lookup_vfn_in_binfo (DECL_VINDEX (fn), binfo);
+	  flags |= LOOKUP_NONVIRTUAL;
+	}
 
       /* [class.mfct.nonstatic]: If a nonstatic member function of a class
 	 X is called for an object that is not of type X, or of a type
@@ -10240,7 +10269,7 @@ build_new_method_call_1 (tree instance, tree fns, vec<tree, va_gc> **args,
 	  && !(flags & LOOKUP_ONLYCONVERTING)
 	  && cxx_dialect >= cxx2a
 	  && CP_AGGREGATE_TYPE_P (basetype)
-	  && !user_args->is_empty ())
+	  && !vec_safe_is_empty (user_args))
 	{
 	  /* Create a CONSTRUCTOR from ARGS, e.g. {1, 2} from <1, 2>.  */
 	  tree list = build_tree_list_vec (user_args);
@@ -11437,12 +11466,13 @@ joust (struct z_candidate *cand1, struct z_candidate *cand2, bool warn,
 	return winner;
     }
 
-  /* Concepts: ... or, if not that, F1 is more constrained than F2.
+  /* Concepts: F1 and F2 are non-template functions with the same
+     parameter-type-lists, and F1 is more constrained than F2 according to the
+     partial ordering of constraints described in 13.5.4.  */
 
-     FIXME: For function templates with no winner, this subsumption may
-     be computed a separate time.  This needs to be validated, and if
-     so, the redundant check removed.  */
-  if (flag_concepts && DECL_P (cand1->fn) && DECL_P (cand2->fn))
+  if (flag_concepts && DECL_P (cand1->fn) && DECL_P (cand2->fn)
+      && !cand1->template_decl && !cand2->template_decl
+      && cand_parms_match (cand1, cand2))
     {
       winner = more_constrained (cand1->fn, cand2->fn);
       if (winner)

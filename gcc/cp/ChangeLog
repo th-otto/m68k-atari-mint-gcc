@@ -1,3 +1,522 @@
+2020-07-23  Release Manager
+
+	* GCC 10.2.0 released.
+
+2020-07-15  Richard Sandiford  <richard.sandiford@arm.com>
+
+	PR target/95726
+	* typeck.c (structural_comptypes): When comparing template
+	specializations, differentiate between vectors that have and
+	do not have an "Advanced SIMD type" attribute.
+
+2020-07-14  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2020-07-14  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/95789
+	PR c++/96104
+	PR c++/96179
+	* call.c (convert_like_real_1): Renamed from convert_like_real.
+	(convert_like_real): New wrapper for convert_like_real_1.
+
+2020-07-13  Julian Brown  <julian@codesourcery.com>
+
+	Backported from master:
+	2020-07-09  Julian Brown  <julian@codesourcery.com>
+		    Thomas Schwinge  <thomas@codesourcery.com>
+
+	PR middle-end/95270
+	* semantics.c (finish_omp_clauses): Likewise.
+
+2020-07-13  Martin Sebor  <msebor@redhat.com>
+
+	PR c++/96063
+	* parser.c (class_decl_loc_t::diag_mismatched_tags): Print notes only
+	if warning_at returns nonzero.
+
+2020-07-13  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2020-07-13  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/96077
+	* parser.c (cp_parser_enum_specifier): Commit to tentative parse
+	after we've seen an opening brace.
+
+2020-07-10  Jason Merrill  <jason@redhat.com>
+
+	PR c++/96105
+	PR c++/96052
+	PR c++/95976
+	* class.c (check_field_decls): An array of empty classes is not an
+	empty data member.
+	(layout_empty_base_or_field): Handle explicit alignment.
+	Fix union handling.
+
+2020-07-01  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2020-06-30  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* coroutines.cc (expand_one_await_expression): Remove
+	code dealing with initial suspend.
+	(build_actor_fn): Remove code special-casing initial
+	and final suspend. Handle the final suspend and marking
+	of the coroutine as done.
+	(coro_rewrite_function_body): New.
+	(bind_expr_find_in_subtree): Remove.
+	(coro_body_contains_bind_expr_p): Remove.
+	(morph_fn_to_coro): Split the rewrite of the original
+	function into coro_rewrite_function_body and call it.
+
+2020-07-01  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2020-06-30  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* coroutines.cc (morph_fn_to_coro): Remove trailing
+	space in a diagnostic.
+
+2020-06-30  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2020-06-28  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/95711
+	* coroutines.cc (register_local_var_uses): Skip past
+	namespace decls.
+
+2020-06-30  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2020-06-27  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/95736
+	* coroutines.cc (get_awaitable_var): New helper.
+	(build_co_await): Check more carefully before
+	copying an awaitable.
+	(expand_one_await_expression): No initializer
+	is required when the awaitable is not a temp.
+	(register_awaits): Remove handling that is now
+	completed when the await expression is built.
+
+2020-06-30  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2020-06-27  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* coroutines.cc (morph_fn_to_coro): Diagnose unavailable
+	get_return_object_on_allocation_failure.
+
+2020-06-29  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/95519
+	* coroutines.cc (struct coroutine_info):Add a field
+	to hold computed p.return_void expressions.
+	(coro_build_promise_expression): New.
+	(get_coroutine_return_void_expr): New.
+	(finish_co_yield_expr): Build the promise expression
+	using coro_build_promise_expression.
+	(finish_co_return_stmt): Likewise.
+	(build_init_or_final_await): Likewise.
+	(morph_fn_to_coro): Likewise, for several cases.
+
+2020-06-29  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2020-06-26  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* coroutines.cc (morph_fn_to_coro): Handle error
+	returns in building g-r-o-o-a-f expressions.
+
+2020-06-28  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2020-06-24  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/95518
+	PR c++/95813
+	* coroutines.cc (act_des_fn): Copy function
+	attributes onto the outlined coroutine helpers.
+
+2020-06-25  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2020-06-23  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/95477
+	* coroutines.cc (morph_fn_to_coro): Apply a cleanup to
+	the get return object when the DTOR is non-trivial.
+
+2020-06-24  Jason Merrill  <jason@redhat.com>
+
+	Backported from master:
+	2020-06-24  Jason Merrill  <jason@redhat.com>
+
+	PR c++/95719
+	* call.c (build_over_call): Look up the overrider in base_binfo.
+	* class.c (lookup_vfn_in_binfo): Look through BINFO_PRIMARY_P.
+
+2020-06-22  Jason Merrill  <jason@redhat.com>
+
+	* call.c (joust): Only compare constraints for non-template
+	candidates with matching parameters.
+	* pt.c (tsubst_pack_expansion): Fix getting a type parameter
+	pack.
+	(more_specialized_fn): Only compare constraints for candidates with
+	matching parameters.
+
+2020-06-22  Jason Merrill  <jason@redhat.com>
+
+	* cp-tree.h (copy_fndecl_with_name): Declare.
+	* class.c (copy_fndecl_with_name): Copy from build_clone.
+	(add_implicitly_declared_members): Add op== to TYPE_FIELDS.
+	* method.c (implicitly_declare_fn): Use copy_fndecl_with_name.
+	* decl.c (grokfndecl): Add initialized parm.
+	(grokdeclarator): Pass it down.
+
+2020-06-21  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2020-06-20  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/95505
+	* coroutines.cc (morph_fn_to_coro): Update handling of
+	get-return-object-on-allocation-fail and diagnose missing
+	std::nothrow.
+
+2020-06-19  Jason Merrill  <jason@redhat.com>
+
+	* method.c (early_check_defaulted_comparison): Allow defaulting
+	comparison outside class.  Complain if non-member operator isn't a
+	friend.
+
+2020-06-19  Jason Merrill  <jason@redhat.com>
+
+	* method.c (early_check_defaulted_comparison): Check for &&.
+	(build_comparison_op): Allow empty union.  Diagnose non-category
+	type.
+	(common_comparison_type): Remove handling for non-category type.
+
+2020-06-19  Jason Merrill  <jason@redhat.com>
+
+	* call.c (build_new_op_1): Don't look for a CALL_EXPR when
+	calling a consteval function.
+
+2020-06-17  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/95508
+	* constexpr.c (maybe_fold_non_dependent_expr): New.
+	* cp-tree.h (maybe_fold_non_dependent_expr): Declare.
+	* typeck.c (cp_build_array_ref): Call maybe_fold_non_dependent_expr
+	instead of maybe_constant_value.
+
+2020-06-14  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* coroutines.cc (instantiate_coro_traits): Pass a reference
+	to lambda closure objects to traits instantiation.
+	(morph_fn_to_coro): Likewise for promise parameter
+	preview and allocator lookup.
+
+2020-06-14  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/95328
+	* decl.c (cp_finish_decomp): Call complete_type before checking
+	COMPLETE_TYPE_P.
+
+2020-06-14  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/95197
+	* cp-gimplify.c: Include omp-general.h.
+	(cp_genericize_r) <case OMP_DISTRIBUTE>: For class iteration
+	variables in composite distribute parallel for, instantiate copy
+	ctor of their types.
+
+2020-06-13  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/95440
+	* call.c (add_candidates): Use vec_safe_length() for
+	testing the arguments list.
+	(build_new_method_call_1): Use vec_safe_is_empty() when
+	checking for an empty args list.
+
+2020-06-13  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/93467
+	* constraint.cc (associate_classtype_constraints): If there is a
+	discrepancy between the current template depth and the template
+	depth of the original declaration, then adjust the template
+	parameter depth within the current constraints appropriately.
+	* pt.c (tsubst_friend_class): Substitute into and set the
+	constraints on the injected declaration.
+
+2020-06-12  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/95350
+	* coroutines.cc (struct param_info): Remove rv_ref field.
+	(build_actor_fn): Remove specifial rvalue ref handling.
+	(morph_fn_to_coro): Likewise.
+
+2020-06-11  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/95560
+	* name-lookup.c (check_local_shadow): Check if types are
+	non-null before calling same_type_p.
+
+2020-06-11  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/95066
+	* decl.c (duplicate_decls): Set DECL_HAS_DEPENDENT_EXPLICIT_SPEC_P.
+
+2020-06-11  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/94937
+	* cvt.c (cp_get_fndecl_from_callee): Return NULL_TREE if the function
+	type is not INDIRECT_TYPE_P.
+	* decl.c (omp_declare_variant_finalize_one): Call
+	cp_get_callee_fndecl_nofold instead of looking for the function decl
+	manually.
+
+2020-06-11  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/95344
+	* cp-gimplify.c (cp_fold) <case MODIFY_EXPR>: Don't set
+	TREE_THIS_VOLATILE here.
+	(cp_fold): Set it here along with TREE_NO_WARNING.
+
+2020-06-11  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/94955
+	* typeck.c (cp_build_binary_op): Use fold_for_warn instead of
+	cp_fold_rvalue.
+
+2020-06-11  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/90915
+	* parser.c (cp_parser_has_attribute_expression): Sorry on a
+	type-dependent argument.
+
+2020-06-11  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/95137
+	* coroutines.cc (expand_one_await_expression): Build separate
+	DTOR trees for the awaitable object on the destroy and resume
+	paths.
+
+2020-06-10  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/95346
+	* coroutines.cc (morph_fn_to_coro): Ensure that the get-
+	return-object is constructed correctly; When it is not the
+	final return value, pass it to the CTOR of the return type
+	as an rvalue, per the standard comment.
+
+2020-06-10  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/95562
+	* parser.c (cp_parser_direct_declarator): Clear
+	CP_PARSER_FLAGS_DELAY_NOEXCEPT if the declarator kind is not
+	cdk_id.
+
+2020-06-09  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/95345
+	* coroutines.cc (finish_co_await_expr): Revise to allow for
+	parameter packs.
+	(finish_co_yield_expr): Likewise.
+
+2020-06-07  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/95050
+	* coroutines.cc (build_co_await): Wrap the co_await expression
+	in a TARGET_EXPR, where needed.
+	(finish_co_yield_expr): Likewise.
+
+2020-06-06  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/94817
+	PR c++/94829
+	PR c++/95087
+	* coroutines.cc (morph_fn_to_coro): Set unformed outline
+	functions to error_mark_node.  For early error returns suppress
+	warnings about missing ramp return values.  Fix reinstatement
+	of the function body on pre-existing initial error.  If we see
+	an early fatal error, drop the erroneous function body.
+	* decl.c (finish_function): Use the normal error path for fails
+	in the ramp function, do not try to compile the helpers if the
+	transform fails.
+
+2020-06-04  Jason Merrill  <jason@redhat.com>
+
+	PR c++/93310
+	* constexpr.c (cxx_eval_constant_expression) [OBJ_TYPE_REF]:
+	Evaluate OBJ_TYPE_REF_EXPR.
+
+2020-06-04  Jason Merrill  <jason@redhat.com>
+
+	PR c++/95158
+	* class.c (lookup_vfn_in_binfo): New.
+	* call.c (build_over_call): Use it.
+	* cp-tree.h (resolves_to_fixed_type_p): Add default argument.
+	(lookup_vfn_in_binfo): Declare.
+
+2020-06-04  Patrick Palka  <ppalka@redhat.com>
+
+	* pt.c (process_partial_specialization): Pass the full set of
+	generic template arguments to strictly_subsumes.
+
+2020-06-04  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/92103
+	* pt.c (most_specialized_partial_spec): Reorganize the loop over
+	DECL_TEMPLATE_SPECIALIZATIONS.  Check constraints_satisfied_p on
+	the original template declaration, not on the tsubsted one.
+
+2020-06-02  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/92633
+	PR c++/92838
+	* pt.c (tsubst_function_decl): Don't do set_constraints when
+	regenerating a lambda.
+	(tsubst_lambda_expr): Substitute into the lambda's constraints
+	and do set_constraints here.
+
+2020-06-02  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/95020
+	* constraint.cc (tsubst_requires_expr): Produce a new
+	requires-expression when processing_template_decl, even if
+	template arguments are not dependent.
+
+2020-05-30  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/95386
+	* constraint.cc (satisfaction_value): Relax to accept any
+	INTEGER_CST that satisfies integer_zerop or integer_onep.
+
+2020-05-30  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/92652
+	PR c++/93698
+	PR c++/94128
+	* parser.c (cp_parser_requires_clause_expression): Temporarily
+	increment processing_template_decl only if it is 0.
+	(cp_parser_constraint_expression): Likewise.
+	(cp_parser_requires_expression): Likewise.
+
+2020-05-30  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/95241
+	* constexpr.c (get_or_insert_ctor_field): Add limited support
+	for RANGE_EXPR index lookups.
+
+2020-05-30  Patrick Palka  <ppalka@redhat.com>
+	    Jason Merrill  <jason@redhat.com>
+
+	PR c++/95181
+	* class.c (add_method): Let special member function templates
+	coexist if they are not equivalently constrained, or in a class
+	template.
+
+2020-05-30  Jason Merrill  <jason@redhat.com>
+
+	PR c++/95371
+	* pt.c (process_template_parm): Set DECL_TEMPLATE_INFO
+	on the DECL_TEMPLATE_RESULT.
+
+2020-05-27  Jason Merrill  <jason@redhat.com>
+
+	PR c++/95319
+	* decl.c (reshape_init_array_1): Don't reuse in overload context.
+
+2020-05-27  Jason Merrill  <jason@redhat.com>
+
+	* call.c (build_new_op_1): Suppress
+	warn_zero_as_null_pointer_constant across comparison of <=> result
+	to 0.
+
+2020-05-27  Jason Merrill  <jason@redhat.com>
+
+	PR c++/95222
+	* decl.c (grokdeclarator): Don't shift attributes in TYPENAME
+	context.
+
+2020-05-25  Jason Merrill  <jason@redhat.com>
+
+	PR c++/90212
+	* constexpr.c (potential_constant_expression_1): In a lambda
+	function, consider a captured variable directly.
+
+2020-05-25  Jason Merrill  <jason@redhat.com>
+
+	PR c++/90479
+	* init.c (get_nsdmi): Don't push_to_top_level for a local class.
+
+2020-05-25  Jason Merrill  <jason@redhat.com>
+
+	PR c++/91529
+	* decl.c (cp_finish_decl): Also clear TREE_READONLY if
+	-fmerge-all-constants.
+
+2020-05-25  Jason Merrill  <jason@redhat.com>
+
+	PR c++/93822
+	* pt.c (tsubst_decl): Make sure DECL_VALUE_EXPR continues to have
+	the same type as the variable.
+
+2020-05-24  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from mainline
+	2020-05-16  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* coroutines.cc (finish_co_return_stmt): Implement rules
+	from [class.copy.elision] /3.
+
+2020-05-10  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from mainline
+	2020-05-08  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/95003
+	* coroutines.cc (build_actor_fn): Ensure that bind scopes
+	are marked as having side-effects where necessary.
+	(replace_statement_captures): Likewise.
+	(morph_fn_to_coro): Likewise.
+
+2020-05-08  Marek Polacek  <polacek@redhat.com>
+
+	Backported from mainline
+	2020-05-01  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/94885
+	* typeck2.c (process_init_constructor_record): Return PICFLAG_ERRONEOUS
+	if an initializer element was erroneous.
+
+2020-05-07  Marek Polacek  <polacek@redhat.com>
+	
+	Backported from mainline
+	2020-05-06  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/94938
+	* pt.c (tsubst_copy_and_build): Call type_dependent_expression_p_push
+	instead of uses_template_parms.  Move the warning_sentinels after the
+	RECURs.
+
+2020-05-07  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from mainline
+	2020-05-06  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/94951
+	* typeck.c (cp_strict_aliasing_warning): New function.
+	(cp_build_indirect_ref_1, build_reinterpret_cast_1): Use
+	it instead of strict_aliasing_warning.
+
+	PR c++/94907
+	* method.c (defaulted_late_check): Don't call synthesize_method
+	on constexpr sfk_comparison if it has been called on it already.
+
 2020-05-07  Release Manager
 
 	* GCC 10.1.0 released.

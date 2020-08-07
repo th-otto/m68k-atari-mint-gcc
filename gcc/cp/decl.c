@@ -2035,6 +2035,8 @@ duplicate_decls (tree newdecl, tree olddecl, bool newdecl_is_friend)
       DECL_FINAL_P (newdecl) |= DECL_FINAL_P (olddecl);
       DECL_OVERRIDE_P (newdecl) |= DECL_OVERRIDE_P (olddecl);
       DECL_THIS_STATIC (newdecl) |= DECL_THIS_STATIC (olddecl);
+      DECL_HAS_DEPENDENT_EXPLICIT_SPEC_P (newdecl)
+	|= DECL_HAS_DEPENDENT_EXPLICIT_SPEC_P (olddecl);
       if (DECL_OVERLOADED_OPERATOR_P (olddecl))
 	DECL_OVERLOADED_OPERATOR_CODE_RAW (newdecl)
 	  = DECL_OVERLOADED_OPERATOR_CODE_RAW (olddecl);
@@ -6024,8 +6026,10 @@ reshape_init_array_1 (tree elt_type, tree max_index, reshape_iter *d,
 
   /* The initializer for an array is always a CONSTRUCTOR.  If this is the
      outermost CONSTRUCTOR and the element type is non-aggregate, we don't need
-     to build a new one.  */
+     to build a new one.  But don't reuse if not complaining; if this is
+     tentative, we might also reshape to another type (95319).  */
   bool reuse = (first_initializer_p
+		&& (complain & tf_error)
 		&& !CP_AGGREGATE_TYPE_P (elt_type)
 		&& !TREE_SIDE_EFFECTS (first_initializer_p));
   if (reuse)
@@ -7297,17 +7301,7 @@ omp_declare_variant_finalize_one (tree decl, tree attr)
   if (variant == error_mark_node && !processing_template_decl)
     return true;
 
-  variant = cp_get_callee (variant);
-  if (variant)
-    {
-      if (TREE_CODE (variant) == FUNCTION_DECL)
-	;
-      else if (TREE_TYPE (variant) && INDIRECT_TYPE_P (TREE_TYPE (variant)))
-	variant = cp_get_fndecl_from_callee (variant, false);
-      else
-	variant = NULL_TREE;
-    }
-
+  variant = cp_get_callee_fndecl_nofold (variant);
   input_location = save_loc;
 
   if (variant)
@@ -7833,7 +7827,10 @@ cp_finish_decl (tree decl, tree init, bool init_const_expr_p,
 	    maybe_commonize_var (decl);
 	}
 
-      if (var_definition_p && TREE_STATIC (decl))
+      if (var_definition_p
+	  /* With -fmerge-all-constants, gimplify_init_constructor
+	     might add TREE_STATIC to the variable.  */
+	  && (TREE_STATIC (decl) || flag_merge_constants >= 2))
 	{
 	  /* If a TREE_READONLY variable needs initialization
 	     at runtime, it is no longer readonly and we need to
@@ -8394,6 +8391,8 @@ cp_finish_decomp (tree decl, tree first, unsigned int count)
       error_at (loc, "cannot decompose lambda closure type %qT", type);
       goto error_out;
     }
+  else if (processing_template_decl && complete_type (type) == error_mark_node)
+    goto error_out;
   else if (processing_template_decl && !COMPLETE_TYPE_P (type))
     pedwarn (loc, 0, "structured binding refers to incomplete class type %qT",
 	     type);
@@ -9339,6 +9338,7 @@ grokfndecl (tree ctype,
 	    special_function_kind sfk,
 	    bool funcdef_flag,
 	    bool late_return_type_p,
+	    int initialized,
 	    int template_count,
 	    tree in_namespace,
 	    tree* attrlist,
@@ -9382,7 +9382,7 @@ grokfndecl (tree ctype,
       /* C++20 CA378: Remove non-templated constrained functions.  */
       if (ci && !flag_concepts_ts
 	  && (!processing_template_decl
-	      || (friendp && !memtmpl && !funcdef_flag)))
+	      || (friendp && !memtmpl && !initialized && !funcdef_flag)))
 	{
 	  error_at (location, "constraints on a non-templated function");
 	  ci = NULL_TREE;
@@ -11938,7 +11938,7 @@ grokdeclarator (const cp_declarator *declarator,
 	  if (declarator->kind == cdk_array)
 	    attr_flags |= (int) ATTR_FLAG_ARRAY_NEXT;
 	  tree late_attrs = NULL_TREE;
-	  if (decl_context != PARM)
+	  if (decl_context != PARM && decl_context != TYPENAME)
 	    /* Assume that any attributes that get applied late to
 	       templates will DTRT when applied to the declaration
 	       as a whole.  */
@@ -13268,6 +13268,7 @@ grokdeclarator (const cp_declarator *declarator,
 				       | (8 * consteval_p),
 			       initialized == SD_DELETED, sfk,
 			       funcdef_flag, late_return_type_p,
+			       initialized,
 			       template_count, in_namespace,
 			       attrlist, id_loc);
             decl = set_virt_specifiers (decl, virt_specifiers);
@@ -13577,6 +13578,7 @@ grokdeclarator (const cp_declarator *declarator,
                            sfk,
                            funcdef_flag,
 			   late_return_type_p,
+			   initialized,
 			   template_count, in_namespace, attrlist,
 			   id_loc);
 	if (decl == NULL_TREE)
@@ -16883,6 +16885,7 @@ finish_function (bool inline_p)
   bool coro_p = flag_coroutines
 		&& !processing_template_decl
 		&& DECL_COROUTINE_P (fndecl);
+  bool coro_emit_helpers = false;
 
   /* When we get some parse errors, we can end up without a
      current_function_decl, so cope.  */
@@ -16911,18 +16914,16 @@ finish_function (bool inline_p)
 
   if (coro_p)
     {
-      if (!morph_fn_to_coro (fndecl, &resumer, &destroyer))
-	{
-	  DECL_SAVED_TREE (fndecl) = pop_stmt_list (DECL_SAVED_TREE (fndecl));
-	  poplevel (1, 0, 1);
-	  DECL_SAVED_TREE (fndecl) = error_mark_node;
-	  return fndecl;
-	}
+      /* Only try to emit the coroutine outlined helper functions if the
+	 transforms succeeded.  Otherwise, treat errors in the same way as
+	 a regular function.  */
+      coro_emit_helpers = morph_fn_to_coro (fndecl, &resumer, &destroyer);
 
       /* We should handle coroutine IFNs in middle end lowering.  */
       cfun->coroutine_component = true;
 
-      if (use_eh_spec_block (fndecl))
+      /* Do not try to process the ramp's EH unless outlining succeeded.  */
+      if (coro_emit_helpers && use_eh_spec_block (fndecl))
 	finish_eh_spec_block (TYPE_RAISES_EXCEPTIONS
 			      (TREE_TYPE (fndecl)),
 			      current_eh_spec_block);
@@ -17171,8 +17172,9 @@ finish_function (bool inline_p)
       && !DECL_OMP_DECLARE_REDUCTION_P (fndecl))
     cp_genericize (fndecl);
 
-  /* Emit the resumer and destroyer functions now.  */
-  if (coro_p)
+  /* Emit the resumer and destroyer functions now, providing that we have
+     not encountered some fatal error.  */
+  if (coro_emit_helpers)
     {
       emit_coro_helper (resumer);
       emit_coro_helper (destroyer);

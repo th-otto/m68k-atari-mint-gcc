@@ -1198,7 +1198,7 @@ See RS/6000 and PowerPC Options.
 -mgnu-attribute  -mno-gnu-attribute @gol
 -mstack-protector-guard=@var{guard} -mstack-protector-guard-reg=@var{reg} @gol
 -mstack-protector-guard-offset=@var{offset} -mprefixed -mno-prefixed @gol
--mpcrel -mno-pcrel}
+-mpcrel -mno-pcrel -mmma -mno-mmma}
 
 @emph{RX Options}
 @gccoptlist{-m64bit-doubles  -m32bit-doubles  -fpu  -nofpu@gol
@@ -10254,7 +10254,7 @@ When enabled, interprocedural constant propagation performs function cloning
 when externally visible function can be called with constant arguments.
 Because this optimization can create multiple copies of functions,
 it may significantly increase code size
-(see @option{--param ipcp-unit-growth=@var{value}}).
+(see @option{--param ipa-cp-unit-growth=@var{value}}).
 This flag is enabled by default at @option{-O3}.
 It is also enabled by @option{-fprofile-use} and @option{-fauto-profile}.
 
@@ -11204,6 +11204,14 @@ conflicting translation units.  Specifically
 precedence; and for example @option{-ffp-contract=off} takes precedence
 over @option{-ffp-contract=fast}.  You can override them at link time.
 
+Diagnostic options such as @option{-Wstringop-overflow} are passed
+through to the link stage and their setting matches that of the
+compile-step at function granularity.  Note that this matters only
+for diagnostics emitted during optimization.  Note that code
+transforms such as inlining can lead to warnings being enabled
+or disabled for regions if code not consistent with the setting
+at compile time.
+
 When you need to pass options to the assembler via @option{-Wa} or
 @option{-Xassembler} make sure to either compile such translation
 units with @option{-fno-lto} or consistently use the same assembler
@@ -11399,7 +11407,7 @@ default, GCC emits an error message when an inconsistent profile is detected.
 This option is enabled by @option{-fauto-profile}.
 
 @item -fprofile-partial-training
-@opindex fprofile-use
+@opindex fprofile-partial-training
 With @code{-fprofile-use} all portions of programs not executed during train
 run are optimized agressively for size rather than speed.  In some cases it is
 not practical to train all possible hot paths in the program. (For
@@ -12135,7 +12143,7 @@ For example, parameter value 20 limits unit growth to 1.2 times the original
 size. Cold functions (either marked cold via an attribute or by profile
 feedback) are not accounted into the unit size.
 
-@item ipcp-unit-growth
+@item ipa-cp-unit-growth
 Specifies maximal overall growth of the compilation unit caused by
 interprocedural constant propagation.  For example, parameter value 10 limits
 unit growth to 1.1 times the original size.
@@ -13141,9 +13149,6 @@ will not try to thread through its block.
 Maximum number of nested calls to search for control dependencies
 during uninitialized variable analysis.
 
-@item max-once-peeled-insns
-The maximum number of insns of a peeled loop that rolls only once.
-
 @item sra-max-scalarization-size-Osize
 Maximum size, in storage units, of an aggregate
 which should be considered for scalarization when compiling for size.
@@ -13173,6 +13178,37 @@ a property of a variable such as its value.  This limits the number
 of iterations or recursive calls GCC performs when optimizing certain
 statements or when determining their validity prior to issuing
 diagnostics.
+
+@item store-merging-max-size
+Maximum size of a single store merging region in bytes.
+
+@item hash-table-verification-limit
+The number of elements for which hash table verification is done
+for each searched element.
+
+@item max-find-base-term-values
+Maximum number of VALUEs handled during a single find_base_term call.
+
+@item analyzer-max-enodes-per-program-point
+The maximum number of exploded nodes per program point within
+the analyzer, before terminating analysis of that point.
+
+@item analyzer-min-snodes-for-call-summary
+The minimum number of supernodes within a function for the
+analyzer to consider summarizing its effects at call sites.
+
+@item analyzer-max-recursion-depth
+The maximum number of times a callsite can appear in a call stack
+within the analyzer, before terminating analysis of a call that would
+recurse deeper.
+
+@item gimple-fe-computed-hot-bb-threshold
+The number of executions of a basic block which is considered hot.
+The parameter is used only in GIMPLE FE.
+
+@item analyzer-bb-explosion-factor
+The maximum number of 'after supernode' exploded nodes within the analyzer
+per supernode, before terminating analysis.
 
 @end table
 
@@ -13393,6 +13429,7 @@ location.  If you combine the option with multiple source files,
 the @file{.gcno} file will be overwritten.
 
 @item -fprofile-prefix-path=@var{path}
+@opindex fprofile-prefix-path
 
 This option can be used in combination with
 @option{profile-generate=}@var{profile_dir} and
@@ -16941,7 +16978,7 @@ performance of the code.  Permissible values for this option are:
 @samp{octeontx2f95mm}
 @samp{thunderx}, @samp{thunderxt88},
 @samp{thunderxt88p1}, @samp{thunderxt81}, @samp{tsv110},
-@samp{thunderxt83}, @samp{thunderx2t99}, @samp{thunderx3t110},
+@samp{thunderxt83}, @samp{thunderx2t99}, @samp{thunderx3t110}, @samp{zeus},
 @samp{cortex-a57.cortex-a53}, @samp{cortex-a72.cortex-a53},
 @samp{cortex-a73.cortex-a35}, @samp{cortex-a73.cortex-a53},
 @samp{cortex-a75.cortex-a55}, @samp{cortex-a76.cortex-a55}
@@ -25585,7 +25622,8 @@ following options:
 -mpowerpc-gpopt  -mpowerpc-gfxopt @gol
 -mmulhw  -mdlmzb  -mmfpgpr  -mvsx @gol
 -mcrypto  -mhtm  -mpower8-fusion  -mpower8-vector @gol
--mquad-memory  -mquad-memory-atomic  -mfloat128  -mfloat128-hardware}
+-mquad-memory  -mquad-memory-atomic  -mfloat128 @gol
+-mfloat128-hardware -mprefixed -mpcrel -mmma}
 
 The particular options set for any particular CPU varies between
 compiler versions, depending on what setting seems to produce optimal
@@ -26581,6 +26619,13 @@ addressing (@option{-mprefixed}) options are enabled.
 @opindex mno-prefixed
 Generate (do not generate) addressing modes using prefixed load and
 store instructions when the option @option{-mcpu=future} is used.
+
+@item -mmma
+@itemx -mno-mma
+@opindex mmma
+@opindex mno-mma
+Generate (do not generate) the MMA instructions when the option
+@option{-mcpu=future} is used.
 @end table
 
 @node RX Options

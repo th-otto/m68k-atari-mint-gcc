@@ -6401,7 +6401,7 @@ extern tree outermost_open_class		(void);
 extern tree current_nonlambda_class_type	(void);
 extern tree finish_struct			(tree, tree);
 extern void finish_struct_1			(tree);
-extern int resolves_to_fixed_type_p		(tree, int *);
+extern int resolves_to_fixed_type_p		(tree, int * = NULL);
 extern void init_class_processing		(void);
 extern int is_empty_class			(tree);
 extern bool is_really_empty_class		(tree, bool);
@@ -6415,6 +6415,7 @@ extern void pop_lang_context			(void);
 extern tree instantiate_type			(tree, tree, tsubst_flags_t);
 extern void build_self_reference		(void);
 extern int same_signature_p			(const_tree, const_tree);
+extern tree lookup_vfn_in_binfo			(tree, tree);
 extern void maybe_add_class_template_decl_list	(tree, tree, int);
 extern void unreverse_member_declarations	(tree);
 extern void invalidate_class_lookup_cache	(void);
@@ -6457,6 +6458,7 @@ extern void check_abi_tags			(tree);
 extern tree missing_abi_tags			(tree);
 extern void fixup_type_variants			(tree);
 extern void fixup_attribute_variants		(tree);
+extern tree copy_fndecl_with_name		(tree, tree);
 extern void clone_function_decl			(tree, bool);
 extern void adjust_clone_args			(tree);
 extern void deduce_noexcept_on_destructor       (tree);
@@ -7954,6 +7956,8 @@ extern tree maybe_constant_init			(tree, tree = NULL_TREE, bool = false);
 extern tree fold_non_dependent_expr		(tree,
 						 tsubst_flags_t = tf_warning_or_error,
 						 bool = false, tree = NULL_TREE);
+extern tree maybe_fold_non_dependent_expr	(tree,
+						 tsubst_flags_t = tf_warning_or_error);
 extern tree fold_non_dependent_init		(tree,
 						 tsubst_flags_t = tf_warning_or_error,
 						 bool = false);

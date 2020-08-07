@@ -2733,8 +2733,8 @@ add_functions (void)
 
   make_generic ("null", GFC_ISYM_NULL, GFC_STD_F95);
 
-  add_sym_2 ("num_images", GFC_ISYM_NUM_IMAGES, CLASS_INQUIRY, ACTUAL_NO,
-	     BT_INTEGER, di, GFC_STD_F2008,
+  add_sym_2 ("num_images", GFC_ISYM_NUM_IMAGES, CLASS_TRANSFORMATIONAL,
+	     ACTUAL_NO, BT_INTEGER, di, GFC_STD_F2008,
 	     gfc_check_num_images, gfc_simplify_num_images, NULL,
 	     dist, BT_INTEGER, di, OPTIONAL,
 	     failed, BT_LOGICAL, dl, OPTIONAL);
@@ -3174,7 +3174,7 @@ add_functions (void)
   make_generic ("tanh", GFC_ISYM_TANH, GFC_STD_F77);
 
   add_sym_1 ("team_number", GFC_ISYM_TEAM_NUMBER, CLASS_TRANSFORMATIONAL,
-	     ACTUAL_YES, BT_INTEGER, di, GFC_STD_F2018,
+	     ACTUAL_NO, BT_INTEGER, di, GFC_STD_F2018,
 	     gfc_check_team_number, NULL, gfc_resolve_team_number,
 	     team, BT_DERIVED, di, OPTIONAL);
 
@@ -4439,6 +4439,18 @@ check_arglist (gfc_actual_arglist **ap, gfc_intrinsic_sym *sym,
 		       gfc_current_intrinsic_arg[i]->name,
 		       gfc_typename (actual->expr),
 		       gfc_dummy_typename (&formal->ts));
+	  return false;
+	}
+
+      /* F2018, p. 328: An argument to an intrinsic procedure other than
+	 ASSOCIATED, NULL, or PRESENT shall be a data object.  An EXPR_NULL
+	 is not a data object.  */
+      if (actual->expr->expr_type == EXPR_NULL
+	  && (!(sym->id == GFC_ISYM_ASSOCIATED
+		|| sym->id == GFC_ISYM_NULL
+		|| sym->id == GFC_ISYM_PRESENT)))
+	{
+	  gfc_invalid_null_arg (actual->expr);
 	  return false;
 	}
 

@@ -2401,6 +2401,10 @@ simplify_vector_constructor (gimple_stmt_iterator *gsi)
 	      && (dblvectype
 		  = build_vector_type (TREE_TYPE (TREE_TYPE (orig[0])),
 				       nelts * 2))
+	      /* Only use it for vector modes or for vector booleans
+		 represented as scalar bitmasks.  See PR95528.  */
+	      && (VECTOR_MODE_P (TYPE_MODE (dblvectype))
+		  || VECTOR_BOOLEAN_TYPE_P (dblvectype))
 	      && (optab = optab_for_tree_code (FLOAT_TYPE_P (TREE_TYPE (type))
 					       ? VEC_UNPACK_FLOAT_LO_EXPR
 					       : VEC_UNPACK_LO_EXPR,
@@ -2442,6 +2446,10 @@ simplify_vector_constructor (gimple_stmt_iterator *gsi)
 		   && (halfvectype
 		         = build_vector_type (TREE_TYPE (TREE_TYPE (orig[0])),
 					      nelts / 2))
+		   /* Only use it for vector modes or for vector booleans
+		      represented as scalar bitmasks.  See PR95528.  */
+		   && (VECTOR_MODE_P (TYPE_MODE (halfvectype))
+		       || VECTOR_BOOLEAN_TYPE_P (halfvectype))
 		   && (optab = optab_for_tree_code (VEC_PACK_TRUNC_EXPR,
 						    halfvectype,
 						    optab_default))
@@ -2763,18 +2771,18 @@ pass_forwprop::execute (function *fun)
 
 	  /* If this statement sets an SSA_NAME to an address,
 	     try to propagate the address into the uses of the SSA_NAME.  */
-	  if (code == ADDR_EXPR
-	      /* Handle pointer conversions on invariant addresses
-		 as well, as this is valid gimple.  */
-	      || (CONVERT_EXPR_CODE_P (code)
-		  && TREE_CODE (rhs) == ADDR_EXPR
-		  && POINTER_TYPE_P (TREE_TYPE (lhs))))
+	  if ((code == ADDR_EXPR
+	       /* Handle pointer conversions on invariant addresses
+		  as well, as this is valid gimple.  */
+	       || (CONVERT_EXPR_CODE_P (code)
+		   && TREE_CODE (rhs) == ADDR_EXPR
+		   && POINTER_TYPE_P (TREE_TYPE (lhs))))
+	      && TREE_CODE (TREE_OPERAND (rhs, 0)) != TARGET_MEM_REF)
 	    {
 	      tree base = get_base_address (TREE_OPERAND (rhs, 0));
 	      if ((!base
 		   || !DECL_P (base)
 		   || decl_address_invariant_p (base))
-		  && TREE_CODE (base) != TARGET_MEM_REF
 		  && !stmt_references_abnormal_ssa_name (stmt)
 		  && forward_propagate_addr_expr (lhs, rhs, true))
 		{

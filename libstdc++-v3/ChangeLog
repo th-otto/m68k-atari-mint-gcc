@@ -1,3 +1,297 @@
+2020-07-23  Release Manager
+
+	* GCC 10.2.0 released.
+
+2020-07-09  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2020-06-08  Jonathan Wakely  <jwakely@redhat.com>
+
+	* include/bits/unique_ptr.h (operator<<): Define for C++20.
+	* testsuite/20_util/unique_ptr/io/lwg2948.cc: New test.
+	* testsuite/20_util/default_delete/48631_neg.cc: Adjust dg-error
+	line number.
+	* testsuite/20_util/default_delete/void_neg.cc: Likewise.
+
+2020-07-09  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2020-05-27  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/95322
+	* include/std/ranges (transform_view::_Sentinel): Allow hidden
+	friends to work with _Iterator<true> and _Iterator<false>.
+	(join_view::_Sentinel): Likewise.
+	* testsuite/std/ranges/adaptors/95322.cc: New test.
+
+2020-07-09  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2020-05-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/94936
+	* src/c++17/memory_resource.cc (synchronized_pool_resource::_TPools):
+	Add comment about single-threaded behaviour.
+	(synchronized_pool_resource::_TPools::move_nonempty_chunks()): Hoist
+	class member access out of loop.
+	(synchronized_pool_resource::synchronized_pool_resource())
+	(synchronized_pool_resource::~synchronized_pool_resource())
+	(synchronized_pool_resource::release()): Check __gthread_active_p
+	before creating and/or deleting the thread-specific data key.
+	(synchronized_pool_resource::_M_thread_specific_pools()): Adjust
+	assertions.
+	(synchronized_pool_resource::do_allocate(size_t, size_t)): Add fast
+	path for single-threaded case.
+	(synchronized_pool_resource::do_deallocate(void*, size_t, size_t)):
+	Likewise. Return if unable to find a pool that owns the allocation.
+	* testsuite/20_util/synchronized_pool_resource/allocate_single.cc:
+	New test.
+	* testsuite/20_util/synchronized_pool_resource/cons_single.cc: New
+	test.
+	* testsuite/20_util/synchronized_pool_resource/release_single.cc: New
+	test.
+
+2020-07-09  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2020-05-19  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/94087
+	* src/c++11/random.cc (__x86_rdseed): Allow fallback function to be
+	passed in.
+	(__x86_rdseed_rdrand): New function that uses rdseed with rdrand
+	fallback.
+	(random_device::_M_init): Use __x86_rdseed_rdrand when both
+	instructions are available.
+	* testsuite/26_numerics/random/random_device/94087.cc: New test.
+
+2020-07-02  Ville Voutilainen  <ville.voutilainen@gmail.com>
+
+	Backported from master:
+	2020-07-02  Ville Voutilainen  <ville.voutilainen@gmail.com>
+
+	PR libstdc++/91807
+	* include/std/variant
+	(_Copy_assign_base::operator=(const _Copy_assign_base&):
+	Do the move-assignment from a temporary so that the temporary
+	is constructed with an explicit index.
+	* testsuite/20_util/variant/91807.cc: New.
+
+2020-07-02  Jonathan Wakely  <jwakely.gcc@gmail.com>
+
+	Backported from master:
+	2020-07-02  Jonathan Wakely  <jwakely.gcc@gmail.com>
+
+	PR libstdc++/91153
+	PR target/93224
+	* testsuite/29_atomics/atomic_float/1.cc: Use different values
+	for tests.
+	* testsuite/29_atomics/atomic_ref/float.cc: Likewise.
+
+2020-07-01  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2020-06-16  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/95282
+	* include/bits/atomic_base.h (__atomic_impl::load): Add
+	const-qualifier to parameter so that _Tp is deduced as the
+	non-const type, and use _Val to get the unqualified type.
+	(__atomic_impl::exchange): Use the _Val alias to remove
+	volatile from the reinterpret_cast result type.
+	* testsuite/29_atomics/atomic_float/95282.cc: New test.
+
+2020-07-01  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2020-07-01  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/94627
+	* include/bits/regex.h (operator==, operator!=): Remove noexcept
+	equality comparisons for match_results.
+	* testsuite/28_regex/match_results/94627.cc: New test.
+
+2020-06-29  Ville Voutilainen  <ville.voutilainen@gmail.com>
+
+	Backported from master:
+	2020-06-28  Ville Voutilainen  <ville.voutilainen@gmail.com>
+
+	PR libstdc++/95915
+	* include/std/variant (_Uninitialized):
+	Adjust the condition and the comment.
+	* testsuite/20_util/variant/95915.cc: New.
+	* testsuite/20_util/variant/compile.cc: Add new test.
+
+2020-06-24  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2020-06-24  Jonathan Wakely  <jwakely@redhat.com>
+
+	* include/std/charconv (__from_chars_binary): Ignore leading zeros.
+	* testsuite/20_util/from_chars/1.cc: Check "0x1" for all bases,
+	not just 10 and 16.
+	* testsuite/20_util/from_chars/3.cc: New test.
+
+2020-06-24  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2020-06-24  Jonathan Wakely  <jwakely@redhat.com>
+
+	* include/bits/stl_algobase.h (__find_if): Add FALLTHRU markers.
+	* include/std/charconv (__detail::__to_chars): Avoid
+	-Wsign-compare warning.
+
+2020-06-24  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2020-06-24  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/95851
+	* include/std/charconv (__to_chars_i): Check for zero-sized
+	buffer unconditionally.
+	* testsuite/20_util/to_chars/95851.cc: New test.
+
+2020-06-22  Jason Merrill  <jason@redhat.com>
+
+	* testsuite/24_iterators/move_iterator/rel_ops_c++20.cc:
+	Remove greedy_ops tests.
+	* testsuite/24_iterators/reverse_iterator/rel_ops_c++20.cc:
+	Remove greedy_ops tests.
+
+2020-06-11  Patrick Palka  <ppalka@redhat.com>
+
+	PR libstdc++/95578
+	* include/bits/ranges_algo.h (__lexicographical_compare_fn):
+	Also check that the iterator and sentinel have the same type before
+	applying the unwrapping optimization for __normal_iterator.
+	Split the check into two, one for the first iterator/sentinel
+	pair and another for second iterator/sentinel pair.  Remove uses
+	of __niter_base, and remove uses of std::move on a
+	__normal_iterator.
+	* include/bits/ranges_algobase.h (__equal_fn): Likewise.
+	(__copy_or_move): Likewise.  Perform similar adjustments for
+	the reverse_iterator and move_iterator optimizations.  Inline
+	the checks into the if-constexprs, and use using-declarations to
+	make them less visually noisy.  Remove uses of __niter_wrap.
+	(__copy_or_move_backward): Likewise.
+	* testsuite/25_algorithms/copy/95578.cc: New test.
+	* testsuite/25_algorithms/copy_backward/95578.cc: New test.
+	* testsuite/25_algorithms/equal/95578.cc: New test.
+	* testsuite/25_algorithms/lexicographical_compare/95578.cc: New test.
+	* testsuite/25_algorithms/move/95578.cc: New test.
+	* testsuite/25_algorithms/move_backward/95578.cc: New test.
+
+2020-05-28  Patrick Palka  <ppalka@redhat.com>
+
+	PR libstdc++/95322
+	* include/bits/stl_iterator.h (__detail::_Common_iter_proxy):
+	Remove and instead define it ...
+	(common_iterator::_Proxy): ... here.
+	(common_iterator::operator->): Use it.
+	* testsuite/24_iterators/common_iterator/2.cc: New test.
+	* testsuite/std/ranges/adaptors/95322.cc: New test.
+
+2020-05-26  Alexandre Oliva  <oliva@adacore.com>
+
+	PR libstdc++/77691
+	* include/experimental/memory_resource
+	(__resource_adaptor_imp::do_allocate): Handle max_align_t on
+	x86-vxworks as on x86-solaris.
+	(__resource_adaptor_imp::do_deallocate): Likewise.
+	* testsuite/experimental/memory_resource/new_delete_resource.cc:
+	Drop xfail.
+	(BAD_MAX_ALIGN_T): Define on x86-vxworks as on x86-solaris.
+	(test03): Drop max-align test for char-aligned alloc.
+
+2020-05-23  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backport from mainline
+	2020-05-23  Jonathan Wakely  <jwakely@redhat.com>
+
+	* include/bits/fs_path.h (__detail::_S_range_begin)
+	(__detail::_S_range_end): Remove unintentional static specifiers.
+	* include/experimental/bits/fs_path.h (__detail::_S_range_begin)
+	(__detail::_S_range_end): Likewise.
+
+2020-05-23  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backport from mainline
+	2020-05-23  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/95289
+	* include/debug/helper_functions.h (__get_distance): Only declare
+	as a constexpr function for C++14 and up.
+	* testsuite/25_algorithms/copy/debug/95289.cc: New test.
+
+2020-05-21  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backport from mainline
+	2020-05-21  Jonathan Wakely  <jwakely@redhat.com>
+
+	* include/experimental/executor (use_future_t::use_future_t()): Fix
+	incorrect noexcept-specifier.
+	* include/experimental/internet (basic_resolver_results): Adjust
+	whitespace.
+	* include/experimental/socket (__basic_socket_impl::release): Add
+	member function.
+	(basic_socket(io_context&, const endpoint_type&)): Fix argument to
+	target constructor.
+	(basic_socket::release(), basic_socket::release(error_code&)): Add
+	missing member functions.
+	(basic_socket::is_open()): Add nodiscard attribute.
+	(basic_socket::close(error_code&)): Pass argument to base function.
+	(basic_socket_acceptor::release())
+	(basic_socket_acceptor::release(error_code&)): Add missing member
+	functions.
+	(basic_socket_acceptor::is_open()): Add nodiscard attribute.
+	(basic_socket_streambuf::error()): Add noexcept.
+	(basic_socket_iostream::error()): Likewise.
+	* testsuite/experimental/net/socket/basic_socket.cc: New test.
+
+2020-05-21  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backport from mainline
+	2020-05-21  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/93983
+	* include/bits/iterator_concepts.h (__detail::__cpp17_iterator):
+	Reorder constraints to avoid recursion when constructors use
+	iterator_traits (LWG 3420).
+	* testsuite/24_iterators/customization_points/lwg3420.cc: New test.
+
+2020-05-12  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backport from mainline
+	2020-05-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/94906
+	* src/c++17/memory_resource.cc
+	(monotonic_buffer_resource::_Chunk::release): Use size_t for shift
+	operands.
+
+	Backport from mainline
+	2020-05-03  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/94933
+	* include/bits/stl_algobase.h (__fill_a1): Make overload for byte types
+	usable in constant expressions.
+	* testsuite/25_algorithms/fill_n/constexpr.cc: Test with bytes and
+	non-scalars.
+
+2020-05-07  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backport from mainline
+	2020-05-01  Jonathan Wakely  <jwakely@redhat.com>
+		    Patrick Palka  <ppalka@redhat.com>
+
+	PR libstdc++/92894
+	* include/bits/iterator_concepts.h (ranges::__cust_imove::_IMove):
+	Add trait to determine return type and an alias for it.
+	(ranges::__cust_imove::_IMove::operator()): Use __result instead of
+	deduced return type.
+	* testsuite/24_iterators/customization_points/92894.cc: New test.
+	* testsuite/24_iterators/indirect_callable/92894.cc: New test.
+
 2020-05-07  Release Manager
 
 	* GCC 10.1.0 released.
