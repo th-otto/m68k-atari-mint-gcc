@@ -1596,7 +1596,7 @@ linker that are fixed by using the GNU versions of these tools.
 Embedded PowerPC system in little endian mode for use in running under
 the PSIM simulator.
 
-@itemx powerpcle-*-eabi
+@item powerpcle-*-eabi
 Embedded PowerPC system in little endian mode.
 
 You can specify a default version for the @samp{-mcpu=}@var{cpu_type}
