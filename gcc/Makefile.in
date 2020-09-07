@@ -484,9 +484,12 @@ UNPROTOIZE_INSTALL_NAME = `t='$(program_transform_name)'; echo unprotoize | sed 
 GCOV_INSTALL_NAME = `t='$(program_transform_name)'; echo gcov | sed -e $$t`
 
 # Actual name to use when installing a cross-compiler.
+CCCP_CROSS_NAME = `t='$(program_transform_cross_name)'; echo cccp | sed -e $$t`
+CPP_CROSS_NAME = `t='$(program_transform_cross_name)'; echo cpp | sed -e $$t`
 GCC_CROSS_NAME = `t='$(program_transform_cross_name)'; echo gcc | sed -e $$t`
 PROTOIZE_CROSS_NAME = `t='$(program_transform_cross_name)'; echo protoize | sed -e $$t`
 UNPROTOIZE_CROSS_NAME = `t='$(program_transform_cross_name)'; echo unprotoize | sed -e $$t`
+GCOV_CROSS_NAME = `t='$(program_transform_cross_name)'; echo gcov | sed -e $$t`
 
 # Choose the real default target.
 ALL=all.internal
@@ -2473,11 +2476,11 @@ install-cross-rest: install-float-h-cross
 
 # Handle cpp installation.
 install-cpp: cpp$(exeext)
-	-rm -f $(bindir)/$(CPP_INSTALL_NAME)$(exeext)
-	$(INSTALL_PROGRAM) -m 755 cpp$(exeext) $(bindir)/$(CPP_INSTALL_NAME)$(exeext)
+	-rm -f $(bindir)/$(CPP_CROSS_NAME)$(exeext)
+	$(INSTALL_PROGRAM) -m 755 cpp$(exeext) $(bindir)/$(CPP_CROSS_NAME)$(exeext)
 	if [ x$(cpp_install_dir) != x ]; then \
-	  rm -f $(prefix)/$(cpp_install_dir)/$(CPP_INSTALL_NAME)$(exeext); \
-	  $(INSTALL_PROGRAM) -m 755 cpp$(exeext) $(prefix)/$(cpp_install_dir)/$(CPP_INSTALL_NAME)$(exeext); \
+	  rm -f $(prefix)/$(cpp_install_dir)/$(CPP_CROSS_NAME)$(exeext); \
+	  $(INSTALL_PROGRAM) -m 755 cpp$(exeext) $(prefix)/$(cpp_install_dir)/$(CPP_CROSS_NAME)$(exeext); \
 	else true; fi
 
 uninstall-cpp:
@@ -2574,7 +2577,7 @@ install-common: native installdirs $(EXTRA_PARTS) lang.install-common
 	-if [ -f gcov$(exeext) ]; \
 	then \
 	    rm -f $(bindir)/gcov$(exeext); \
-	    $(INSTALL_PROGRAM) gcov$(exeext) $(bindir)/$(GCOV_INSTALL_NAME)$(exeext); \
+	    $(INSTALL_PROGRAM) gcov$(exeext) $(bindir)/$(GCOV_CROSS_NAME)$(exeext); \
 	fi
 
 # Install the driver program as $(target_alias)-gcc
@@ -2623,9 +2626,9 @@ install-man: installdirs $(srcdir)/gcc.1 $(srcdir)/cccp.1 lang.install-man
 	  $(INSTALL_DATA) $(srcdir)/gcc.1 $(man1dir)/$(GCC_INSTALL_NAME)$(manext); \
 	  chmod a-x $(man1dir)/$(GCC_INSTALL_NAME)$(manext); \
 	fi
-	-rm -f $(man1dir)/cccp$(manext)
-	-$(INSTALL_DATA) $(srcdir)/cccp.1 $(man1dir)/cccp$(manext)
-	-chmod a-x $(man1dir)/cccp$(manext)
+	-rm -f $(man1dir)/$(CCCP_CROSS_NAME)$(manext)
+	-$(INSTALL_DATA) $(srcdir)/cccp.1 $(man1dir)/$(CCCP_CROSS_NAME)$(manext)
+	-chmod a-x $(man1dir)/$(CCCP_CROSS_NAME)$(manext)
 
 # Install the library.
 install-libgcc: libgcc.a installdirs
@@ -2731,7 +2734,7 @@ uninstall: intl.uninstall lang.uninstall $(UNINSTALL_CPP)
 	-rm -rf $(bindir)/$(PROTOIZE_CROSS_NAME)$(exeext)
 	-rm -rf $(bindir)/$(UNPROTOIZE_INSTALL_NAME)$(exeext)
 	-rm -rf $(bindir)/$(UNPROTOIZE_CROSS_NAME)$(exeext)
-	-rm -rf $(bindir)/$(GCOV_INSTALL_NAME)$(exeext)
+	-rm -rf $(bindir)/$(GCOV_CROSS_NAME)$(exeext)
 	-rm -rf $(man1dir)/$(GCC_INSTALL_NAME)$(manext)
 	-rm -rf $(man1dir)/$(GCC_CROSS_NAME)$(manext)
 	-rm -rf $(man1dir)/cccp$(manext)
