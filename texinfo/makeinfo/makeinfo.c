@@ -1683,7 +1683,7 @@ canon_white (string)
     {
       if (!cr_or_whitespace (string[x]))
         {
-          strcpy (string, string + x);
+          memmove (string, string + x, strlen(string + x) + 1);
           break;
         }
     }
@@ -9072,7 +9072,7 @@ cm_macro ()
           (line[16] == 0 || whitespace (line[16])))
         {
           for (i = 16; whitespace (line[i]); i++);
-          strcpy (line, line + i);
+          memmove (line, line + i, strlen(line + i) + 1);
           flags |= ME_RECURSE;
           if (!*line)
             {
@@ -9086,7 +9086,7 @@ cm_macro ()
           (line[10] == 0 || whitespace (line[10])))
         {
           for (i = 10; whitespace (line[i]); i++);
-          strcpy (line, line + i);
+          memmove (line, line + i, strlen(line + 1) + 1);
 
           if (arglist && arglist[0] && !arglist[1])
             {
