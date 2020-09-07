@@ -99,7 +99,7 @@ empty_parms ()
 /* All identifiers that are declared typedefs in the current block.
    In some contexts, they are treated just like IDENTIFIER,
    but they can also serve as typespecs in declarations.  */
-%token TYPENAME
+%token TYPENAME_ID
 %token SELFNAME
 
 /* A template function.  */
@@ -157,7 +157,7 @@ empty_parms ()
 %nonassoc IF
 %nonassoc ELSE
 
-%left IDENTIFIER PFUNCNAME TYPENAME SELFNAME PTYPENAME SCSPEC TYPESPEC CV_QUALIFIER ENUM AGGR ELLIPSIS TYPEOF SIGOF OPERATOR NSNAME TYPENAME_KEYWORD
+%left IDENTIFIER PFUNCNAME TYPENAME_ID SELFNAME PTYPENAME SCSPEC TYPESPEC CV_QUALIFIER ENUM AGGR ELLIPSIS TYPEOF SIGOF OPERATOR NSNAME TYPENAME_KEYWORD
 
 %left '{' ',' ';'
 
@@ -187,7 +187,7 @@ empty_parms ()
 
 %type <code> unop
 
-%type <ttype> identifier IDENTIFIER TYPENAME CONSTANT expr nonnull_exprlist
+%type <ttype> identifier IDENTIFIER TYPENAME_ID CONSTANT expr nonnull_exprlist
 %type <ttype> PFUNCNAME maybe_identifier
 %type <ttype> paren_expr_or_null nontrivial_exprlist SELFNAME
 %type <ttype> expr_no_commas cast_expr unary_expr primary string STRING
@@ -653,7 +653,7 @@ fndef:
 
 constructor_declarator:
 	  nested_name_specifier SELFNAME '(' 
-                { $$ = begin_constructor_declarator ($1, $2); }
+                { $<ttype>$ = begin_constructor_declarator ($1, $2); }
 	  parmlist ')' cv_qualifiers exception_specification_opt
 		{ $$ = make_call_declarator ($<ttype>4, $5, $7, $8); }
 	| nested_name_specifier SELFNAME LEFT_RIGHT cv_qualifiers exception_specification_opt
@@ -661,7 +661,7 @@ constructor_declarator:
 		  $$ = make_call_declarator ($$, empty_parms (), $4, $5);
 		}
 	| global_scope nested_name_specifier SELFNAME '(' 
-                { $$ = begin_constructor_declarator ($2, $3); }
+                { $<ttype>$ = begin_constructor_declarator ($2, $3); }
 	 parmlist ')' cv_qualifiers exception_specification_opt
 		{ $$ = make_call_declarator ($<ttype>5, $6, $8, $9); }
 	| global_scope nested_name_specifier SELFNAME LEFT_RIGHT cv_qualifiers exception_specification_opt
@@ -669,7 +669,7 @@ constructor_declarator:
 		  $$ = make_call_declarator ($$, empty_parms (), $5, $6);
 		}
 	| nested_name_specifier self_template_type '(' 
-                { $$ = begin_constructor_declarator ($1, $2); }
+                { $<ttype>$ = begin_constructor_declarator ($1, $2); }
 	  parmlist ')' cv_qualifiers exception_specification_opt
 		{ $$ = make_call_declarator ($<ttype>4, $5, $7, $8); }
 	| nested_name_specifier self_template_type LEFT_RIGHT cv_qualifiers exception_specification_opt
@@ -677,7 +677,7 @@ constructor_declarator:
 		  $$ = make_call_declarator ($$, empty_parms (), $4, $5);
 		}
 	| global_scope nested_name_specifier self_template_type '(' 
-                { $$ = begin_constructor_declarator ($2, $3); }
+                { $<ttype>$ = begin_constructor_declarator ($2, $3); }
 	 parmlist ')' cv_qualifiers exception_specification_opt
 		{ $$ = make_call_declarator ($<ttype>5, $6, $8, $9); }
 	| global_scope nested_name_specifier self_template_type LEFT_RIGHT cv_qualifiers exception_specification_opt
@@ -846,7 +846,7 @@ member_init:
 
 identifier:
 	  IDENTIFIER
-	| TYPENAME
+	| TYPENAME_ID
 	| SELFNAME
 	| PTYPENAME
 	| NSNAME
@@ -902,7 +902,7 @@ begin_explicit_instantiation:
 end_explicit_instantiation: 
       { end_explicit_instantiation(); }
 
-/* The TYPENAME expansions are to deal with use of a template class name as
+/* The TYPENAME_ID expansions are to deal with use of a template class name as
   a template within the class itself, where the template decl is hidden by
   a type decl.  Got all that?  */
 
@@ -910,7 +910,7 @@ template_type:
 	  PTYPENAME '<' template_arg_list_opt template_close_bracket
 	    .finish_template_type
                 { $$ = $5; }
-	| TYPENAME  '<' template_arg_list_opt template_close_bracket
+	| TYPENAME_ID  '<' template_arg_list_opt template_close_bracket
 	    .finish_template_type
                 { $$ = $5; }
 	| self_template_type
@@ -1350,7 +1350,7 @@ object_template_id:
 
 unqualified_id:
 	  notype_unqualified_id
-	| TYPENAME
+	| TYPENAME_ID
 	| SELFNAME
 	;
 
@@ -2621,7 +2621,7 @@ after_type_component_declarator0:
 		  $<ttype>0 = current_declspecs;
 		  $$ = grokfield ($$, current_declspecs, $4, $2,
 				  build_tree_list ($3, prefix_attributes)); }
-	| TYPENAME ':' expr_no_commas maybe_attribute
+	| TYPENAME_ID ':' expr_no_commas maybe_attribute
 		{ split_specs_attrs ($<ttype>0, &current_declspecs,
 				     &prefix_attributes);
 		  $<ttype>0 = current_declspecs;
@@ -2660,7 +2660,7 @@ after_type_component_declarator:
 	  after_type_declarator maybeasm maybe_attribute maybe_init
 		{ $$ = grokfield ($$, current_declspecs, $4, $2,
 				  build_tree_list ($3, prefix_attributes)); }
-	| TYPENAME ':' expr_no_commas maybe_attribute
+	| TYPENAME_ID ':' expr_no_commas maybe_attribute
 		{ $$ = grokbitfield ($$, current_declspecs, $3);
 		  cplus_decl_attributes ($$, $4, prefix_attributes); }
 	;
@@ -2931,7 +2931,7 @@ functional_cast:
 		{ $$ = reparse_absdcl_as_expr ($1.t, $2); }
 	;
 type_name:
-	  TYPENAME
+	  TYPENAME_ID
 	| SELFNAME
 	| template_type  %prec EMPTY
 	;
@@ -2947,7 +2947,7 @@ nested_name_specifier:
 /* Why the @#$%^& do type_name and notype_identifier need to be expanded
    inline here?!?  (jason) */
 nested_name_specifier_1:
-	  TYPENAME SCOPE
+	  TYPENAME_ID SCOPE
 		{
 		  if (TREE_CODE ($1) == IDENTIFIER_NODE)
 		    {
@@ -3037,7 +3037,7 @@ typename_sub1:
 	;
 
 typename_sub2:
-	  TYPENAME SCOPE
+	  TYPENAME_ID SCOPE
 		{
 		  if (TREE_CODE ($1) != IDENTIFIER_NODE)
 		    $1 = lastiddecl;
@@ -3461,7 +3461,7 @@ label_colon:
 		}
 	| PTYPENAME ':'
 		{ goto do_label; }
-	| TYPENAME ':'
+	| TYPENAME_ID ':'
 		{ goto do_label; }
 	| SELFNAME ':'
 		{ goto do_label; }

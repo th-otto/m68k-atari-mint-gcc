@@ -53,6 +53,10 @@ Boston, MA 02111-1307, USA.  */
 extern struct obstack permanent_obstack;
 extern struct obstack *current_obstack, *saveable_obstack;
 
+#ifndef YYEMPTY
+#define YYEMPTY         (-2)
+#endif
+
 extern void yyprint PROTO((FILE *, int, YYSTYPE));
 
 static tree get_time_identifier PROTO((const char *));
@@ -151,7 +155,7 @@ YYLTYPE yylloc;			/*  location data for the lookahead	*/
 
 
 /* the declaration found for the last IDENTIFIER token read in.
-   yylex must look this up to detect typedefs, which get token type TYPENAME,
+   yylex must look this up to detect typedefs, which get token type TYPENAME_ID,
    so it is left around in case the identifier is not a typedef but is
    used in a context which makes it a reference to a variable.  */
 tree lastiddecl;
@@ -906,7 +910,7 @@ yyprint (file, yychar, yylval)
   switch (yychar)
     {
     case IDENTIFIER:
-    case TYPENAME:
+    case TYPENAME_ID:
     case TYPESPEC:
     case PTYPENAME:
     case IDENTIFIER_DEFN:
@@ -2049,7 +2053,7 @@ check_for_missing_semicolon (type)
   if ((yychar > 255
        && yychar != SCSPEC
        && yychar != IDENTIFIER
-       && yychar != TYPENAME
+       && yychar != TYPENAME_ID
        && yychar != CV_QUALIFIER
        && yychar != SELFNAME)
       || end_of_file)
@@ -2791,7 +2795,7 @@ identifier_type (decl)
   if (t && t == decl)
     return SELFNAME;
 
-  return TYPENAME;
+  return TYPENAME_ID;
 }
 
 void
@@ -5001,7 +5005,7 @@ handle_generic_pragma (token)
       switch (token)
 	{
 	case IDENTIFIER:
-	case TYPENAME:
+	case TYPENAME_ID:
         case STRING:
         case CONSTANT:
 	  handle_pragma_token (token_buffer, yylval.ttype);

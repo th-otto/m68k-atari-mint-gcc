@@ -28,7 +28,7 @@ Boston, MA 02111-1307, USA.  */
 /* To whomever it may concern: I have heard that such a thing was once
    written by AT&T, but I have never seen it.  */
 
-%expect 66
+/* was %expect 66; newer bison expect 72 */
 
 %{
 #include "config.h"
@@ -100,7 +100,7 @@ char *language_string = "GNU Obj-C";
 /* the reserved words */
 /* SCO include files test "ASM", so use something else. */
 %token SIZEOF ENUM STRUCT UNION IF ELSE WHILE DO FOR SWITCH CASE DEFAULT
-%token BREAK CONTINUE RETURN GOTO ASM_KEYWORD TYPEOF ALIGNOF
+%token BREAK CONTINUE RETURN_KEYWORD GOTO ASM_KEYWORD TYPEOF ALIGNOF
 %token ATTRIBUTE EXTENSION LABEL
 %token REALPART IMAGPART
 
@@ -1414,7 +1414,7 @@ enum_head:
 
 structsp:
 	  struct_head identifier '{'
-		{ $$ = start_struct (RECORD_TYPE, $2);
+		{ $<ttype>$ = start_struct (RECORD_TYPE, $2);
 		  /* Start scope of tag before parsing components.  */
 		}
 	  component_decl_list '}' maybe_attribute 
@@ -1426,7 +1426,7 @@ structsp:
 	| struct_head identifier
 		{ $$ = xref_tag (RECORD_TYPE, $2); }
 	| union_head identifier '{'
-		{ $$ = start_struct (UNION_TYPE, $2); }
+		{ $<ttype>$ = start_struct (UNION_TYPE, $2); }
 	  component_decl_list '}' maybe_attribute
 		{ $$ = finish_struct ($<ttype>4, $5, chainon ($1, $7)); }
 	| union_head '{' component_decl_list '}' maybe_attribute
@@ -1437,13 +1437,13 @@ structsp:
 		{ $$ = xref_tag (UNION_TYPE, $2); }
 	| enum_head identifier '{'
 		{ $<itype>3 = suspend_momentary ();
-		  $$ = start_enum ($2); }
+		  $<ttype>$ = start_enum ($2); }
 	  enumlist maybecomma_warn '}' maybe_attribute
 		{ $$= finish_enum ($<ttype>4, nreverse ($5), chainon ($1, $8));
 		  resume_momentary ($<itype>3); }
 	| enum_head '{'
 		{ $<itype>2 = suspend_momentary ();
-		  $$ = start_enum (NULL_TREE); }
+		  $<ttype>$ = start_enum (NULL_TREE); }
 	  enumlist maybecomma_warn '}' maybe_attribute
 		{ $$= finish_enum ($<ttype>3, nreverse ($4), chainon ($1, $7));
 		  resume_momentary ($<itype>2); }
@@ -1941,11 +1941,11 @@ stmt:
 		  emit_line_note ($<filename>-1, $<lineno>0);
 		  if (! expand_continue_loop (NULL_PTR))
 		    error ("continue statement not within a loop"); }
-	| RETURN ';'
+	| RETURN_KEYWORD ';'
 		{ stmt_count++;
 		  emit_line_note ($<filename>-1, $<lineno>0);
 		  c_expand_return (NULL_TREE); }
-	| RETURN expr ';'
+	| RETURN_KEYWORD expr ';'
 		{ stmt_count++;
 		  emit_line_note ($<filename>-1, $<lineno>0);
 		  c_expand_return ($2); }
@@ -2866,7 +2866,7 @@ reservedwords:
 	| DEFAULT { $$ = get_identifier (token_buffer); }
 	| BREAK { $$ = get_identifier (token_buffer); }
 	| CONTINUE { $$ = get_identifier (token_buffer); }
-	| RETURN  { $$ = get_identifier (token_buffer); }
+	| RETURN_KEYWORD  { $$ = get_identifier (token_buffer); }
 	| GOTO { $$ = get_identifier (token_buffer); }
 	| ASM_KEYWORD { $$ = get_identifier (token_buffer); }
         | SIZEOF { $$ = get_identifier (token_buffer); }

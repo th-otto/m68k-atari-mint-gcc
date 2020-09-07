@@ -62,6 +62,7 @@ extern void yyprint			PROTO((FILE *, int, YYSTYPE));
 tree ridpointers[(int) RID_MAX];
 
 /* Cause the `yydebug' variable to be defined.  */
+#undef YYDEBUG
 #define YYDEBUG 1
 
 #if USE_CPPLIB

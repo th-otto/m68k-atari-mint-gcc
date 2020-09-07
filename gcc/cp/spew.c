@@ -60,7 +60,7 @@ static int debug_yychar PROTO((int));
 
 /* From lex.c: */
 /* the declaration found for the last IDENTIFIER token read in.
-   yylex must look this up to detect typedefs, which get token type TYPENAME,
+   yylex must look this up to detect typedefs, which get token type TYPENAME_ID,
    so it is left around in case the identifier is not a typedef but is
    used in a context which makes it a reference to a variable.  */
 extern tree lastiddecl;		/* let our brains leak out here too */
@@ -323,7 +323,7 @@ yylex ()
 	  tmp_token.yychar = identifier_type (trrr);
 	  switch (tmp_token.yychar)
 	    {
-	    case TYPENAME:
+	    case TYPENAME_ID:
 	    case SELFNAME:
 	    case NSNAME:
 	    case PTYPENAME:
@@ -349,7 +349,7 @@ yylex ()
       got_scope = NULL_TREE;
       /* and fall through to...  */
     case IDENTIFIER_DEFN:
-    case TYPENAME:
+    case TYPENAME_ID:
     case TYPENAME_DEFN:
     case PTYPENAME:
     case PTYPENAME_DEFN:
@@ -418,7 +418,7 @@ yylex ()
 }
 
 /* token[0] == AGGR (struct/union/enum)
-   Thus, token[1] is either a TYPENAME or a TYPENAME_DEFN.
+   Thus, token[1] is either a TYPENAME_ID or a TYPENAME_DEFN.
    If token[2] == '{' or ':' then it's TYPENAME_DEFN.
    It's also a definition if it's a forward declaration (as in 'struct Foo;')
    which we can tell if token[2] == ';' *and* token[-1] != FRIEND or NEW.  */
@@ -430,7 +430,7 @@ do_aggr ()
   
   scan_tokens (2);
   yc1 = nth_token (1)->yychar;
-  if (yc1 != TYPENAME && yc1 != IDENTIFIER && yc1 != PTYPENAME)
+  if (yc1 != TYPENAME_ID && yc1 != IDENTIFIER && yc1 != PTYPENAME)
     return 0;
   yc2 = nth_token (2)->yychar;
   if (yc2 == ';')
@@ -451,7 +451,7 @@ do_aggr ()
 
   switch (yc1)
     {
-    case TYPENAME:
+    case TYPENAME_ID:
       nth_token (1)->yychar = TYPENAME_DEFN;
       break;
     case PTYPENAME:
