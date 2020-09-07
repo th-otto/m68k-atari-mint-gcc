@@ -22,6 +22,8 @@ Boston, MA 02111-1307, USA.  */
 
 #include "ansidecl.h"
 
+#include <stdlib.h>
+
 /* These routines allocate space for an object.  The assumption is
    that the object will want to allocate space as it goes along, but
    will never want to free any particular block.  There is a function

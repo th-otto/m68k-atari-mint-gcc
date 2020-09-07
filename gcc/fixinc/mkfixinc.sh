@@ -87,6 +87,7 @@ case $machine in
 	i[34567]86-*-pe | i[34567]86-*-cygwin* | \
 	i[34567]86-*-mingw32* | \
 	mips-sgi-irix5cross64 | \
+	m68k-*-mint* | \
 	powerpc-*-eabiaix* | \
 	powerpc-*-eabisim* | \
 	powerpc-*-eabi*    | \

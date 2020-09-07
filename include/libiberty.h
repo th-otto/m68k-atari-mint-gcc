@@ -16,6 +16,9 @@ extern "C" {
 
 #include "ansidecl.h"
 
+#include <string.h>
+#include <stdlib.h>
+
 /* Build an argument vector from a string.  Allocates memory using
    malloc.  Use freeargv to free the vector.  */
 
