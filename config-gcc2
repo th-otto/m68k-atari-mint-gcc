@@ -1,0 +1,143 @@
+prefix=${prefix-/opt/gcc2}
+GCC=${GCC-gcc}
+GXX=${GXX-g++}
+target=m68k-atari-mint
+sys_root=/usr/${target}/sys-root
+
+unset CDPATH
+unset LANG LANGUAGE LC_ALL LC_CTYPE LC_TIME LC_NUMERIC LC_COLLATE LC_MONETARY LC_MESSAGES
+
+mkdir -p "${prefix}" || exit 1
+test -w "${prefix}" || {
+  echo "${prefix} is not writable" >&2
+  exit 1
+}
+
+if test ! -f "${sys_root}/usr/include/compiler.h"; then
+	echo "mintlib headers must be installed in ${sys_root}/usr/include" >&2
+	exit 1
+fi
+if test ! -f "${prefix}/bin/${target}-as"; then
+	echo "binutils must be installed in ${prefix}/bin" >&2
+	exit 1
+fi
+
+
+mkdir -p build
+cd build || exit 1
+
+rm -rf Makefile config.cache config.status etc gcc libiberty m68k-atari-mint m68k-atari-mint texinfo
+
+host=`uname -s`
+case "$host" in
+	MINGW64*)
+		host=mingw64
+		MINGW_PREFIX=/mingw64
+		BUILD=x86_64-w64-mingw32
+		;;
+	MINGW32*)
+		host=mingw32
+		MINGW_PREFIX=/mingw32
+		BUILD=i686-pc-mingw32
+		;;
+	MINGW*)
+		if echo "" | ${GCC} -dM -E - 2>/dev/null | grep -q i386; then
+			host=mingw32
+			BUILD=i686-pc-mingw32
+		else
+			host=mingw64
+			BUILD=x86_64-w64-mingw32
+		fi
+		MINGW_PREFIX=/$host
+		;;
+	MSYS*)
+		if echo "" | ${GCC} -dM -E - 2>/dev/null | grep -q i386; then
+			host=mingw32
+			BUILD=i686-pc-mingw32
+		else
+			host=mingw64
+			BUILD=x86_64-w64-mingw32
+		fi
+		MINGW_PREFIX=/$host
+		;;
+	CYGWIN*)
+		if echo "" | ${GCC} -dM -E - 2>/dev/null | grep -q i386; then
+			host=cygwin32
+			BUILD=i686-pc-cygwin
+		else
+			host=cygwin64
+			BUILD=x64_64-pc-cygwin
+		fi
+		;;
+	Darwin*)
+		host=macos
+		STRIP=strip
+		TAR_OPTS=
+		BUILD=x86_64-apple-darwin
+		;;
+	Linux*)
+		host=linux64
+		BUILD=x86_64-pc-linux
+		if echo "" | ${GCC} -dM -E - 2>/dev/null | grep -q i386; then
+			host=linux32
+		fi
+		;;
+	*)
+		echo "Build on $host not supported!" >&2
+		exit 1
+		;;
+esac
+
+export PATH="${prefix}/bin:$PATH"
+case $host in
+macos*)
+	CC=clang
+	CXX=clang++
+	;;
+*)
+	CC=${GCC}
+	CXX=${GXX}
+	;;
+esac
+	
+
+# On 64-bit architecture GNU Assembler crashes writing out an object, due to
+# (probably) miscalculated structure sizes.  There could be some other bugs
+# lurking there in 64-bit mode, but I have little incentive chasing them.
+# Just compile everything in 32-bit mode and forget about the issues.
+case `uname -m` in
+  x86_64)
+    ARCH=" -m32"
+    BUILD=i686-${BUILD#*-}
+    ;;
+esac
+CC="$CC$ARCH"
+CXX="$CXX$ARCH"
+
+rm -f ${prefix}/${target}/sys-include ${prefix}/${target}/sys-root
+
+CC="$CC" \
+CXX="$CXX" \
+CFLAGS="$CFLAGS" CXXFLAGS="$CXXFLAGS" \
+../configure \
+  --host=$BUILD \
+  --build=$BUILD \
+  --target=${target} \
+  --prefix=${prefix} \
+  --infodir=${prefix}/share/info \
+  --mandir=${prefix}/share/man \
+  --enable-languages=c,c++ \
+  --with-headers=${sys_root}/usr/include \
+  || exit 1
+
+ln -sf ${sys_root} ${prefix}/${target}/sys-root
+
+make all-gcc || exit 1
+make install-gcc || exit 1
+
+rm -rf ${prefix}/${target}/sys-include
+ln -s sys-root/usr/include ${prefix}/${target}/sys-include
+
+make
+
+make install

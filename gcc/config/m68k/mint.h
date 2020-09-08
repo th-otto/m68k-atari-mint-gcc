@@ -61,7 +61,7 @@ Boston, MA 02111-1307, USA.  */
   "%{m68302} %{mno-68302} " \
   "%{m68332} %{mno-68332}"
 
-#define ASM_SPEC COMMON_ASM_SPEC " %{!m680*:%{!mc680*:-m68000}}"
+#define ASM_SPEC COMMON_ASM_SPEC " %{!m680*:%{!mc680*:%{!m5200:-m68000}}}%{m5200:-mcpu=5475}"
 
 #undef SUBTARGET_SWITCHES
 #define SUBTARGET_SWITCHES			\
@@ -80,8 +80,9 @@ Boston, MA 02111-1307, USA.  */
   "%{m68060:-D__M68020__ -D__mc68020__ %{!ansi:-Dmc68020} %{!mno-68881:-D__M68881__}} " \
   "%{m68020-40:-D__M68020__ -D__mc68020__ %{!ansi:-Dmc68020} %{!mno-68881:-D__M68881__}} " \
   "%{m68020-60:-D__M68020__ -D__mc68020__ %{!ansi:-Dmc68020} %{!mno-68881:-D__M68881__}} " \
-  "%{!m680*:%{!mc680*:-D__M68000__ -D__mc68000__ %{!ansi:-Dmc68000}}} " \
+  "%{!m680*:%{!mc680*:%{!m5200:-D__M68000__ -D__mc68000__ %{!ansi:-Dmc68000}}}} " \
   "%{m68881:-D__M68881__} " \
+  "%{m5200:-D__mcf5200__ -D__mcf5200 -D__mcoldfire__ -D__mcoldfire %{!ansi:-Dmcoldfire}} " \
   COMMON_CPP_SPEC
 
 /* Names to predefine in the preprocessor for this target machine
@@ -89,22 +90,15 @@ Boston, MA 02111-1307, USA.  */
 #define CPP_PREDEFINES \
   "-D__MINT__ -Datarist -Acpu(m68k) -Amachine(atari) -Asystem(mint)"
 
-#define __LIBC_MULTILIB \
-  "%{m68020-*:020}"\
-  "%{m68881:%{!m68020-*:020}}"\
-  "%{m68040:%{!m68020-*:%{!m68881:020}}}"\
-  "%{m68060:%{!m68020-*:%{!m68881:%{!m68040:020}}}}"
-
 #undef EXTRA_SPECS
 #define EXTRA_SPECS                                                 \
   {"sys_root", TOOLDIR_BASE_PREFIX "m68k-atari-mint/sys-root"},    \
 
 #define STARTFILE_SPEC	"%(sys_root)/usr/lib/%{pg:g}crt0.o%s"
-/* #define LIB_SPEC	"-lc%{g:_g}%{pg:_p}%{mshort:16}"__LIBC_MULTILIB */
-#define LIB_SPEC	"-L%(sys_root)/usr/lib -lc"__LIBC_MULTILIB
+#define LIB_SPEC	"-lc"
 #define LIBGCC_SPEC	"-lgcc"
 #define LINK_SPEC	""
-/* #define LINKER_NAME	"ld" */
+#define LINKER_NAME	"collect2 %{v:-v}"
 /* #define MATH_LIBRARY	"-lm" */
 
 #define MULTILIB_DEFAULTS { "m68000" }
