@@ -76,6 +76,7 @@ along with GCC; see the file COPYING3.  If not see
 
 #define STARTFILE_SPEC	"%{pg|p|profile:gcrt0.o%s;:crt0.o%s}"
 #define LIB_SPEC	"-lc"
+#define LINKER_NAME	"collect2 %{v:-v}"
 
 /* Every structure or union's size must be a multiple of 2 bytes.  */
 #define STRUCTURE_SIZE_BOUNDARY 16
