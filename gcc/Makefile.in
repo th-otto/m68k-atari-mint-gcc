@@ -618,6 +618,9 @@ man7ext = .7
 objext = .o
 exeext = @host_exeext@
 build_exeext = @build_exeext@
+EVAL_MINGW := case `uname -s` in MINGW*) echo yes;; *) echo no;; esac
+MINGW := $(shell $(EVAL_MINGW))
+mingw_srcdir := $(shell if test "${MINGW}" = yes; then cmd //c echo ${srcdir}; else echo ${srcdir}; fi)
 
 # Directory in which to put man pages.
 mandir = @mandir@
@@ -915,7 +918,7 @@ GIMPLE_H = gimple.h gimple.def gsstruct.def pointer-set.h $(VEC_H) \
 	tree-ssa-alias.h vecir.h
 GCOV_IO_H = gcov-io.h gcov-iov.h auto-host.h
 COVERAGE_H = coverage.h $(GCOV_IO_H)
-DEMANGLE_H = $(srcdir)/../include/demangle.h
+DEMANGLE_H = $(mingw_srcdir)/../include/demangle.h
 RECOG_H = recog.h
 ALIAS_H = alias.h coretypes.h
 EMIT_RTL_H = emit-rtl.h
@@ -948,25 +951,25 @@ GGC_H = ggc.h gtype-desc.h statistics.h
 GGC_INTERNAL_H = ggc-internal.h $(GGC_H)
 TIMEVAR_H = timevar.h timevar.def
 INSN_ATTR_H = insn-attr.h $(INSN_ADDR_H)
-INSN_ADDR_H = $(srcdir)/insn-addr.h vecprim.h
+INSN_ADDR_H = $(mingw_srcdir)/insn-addr.h vecprim.h
 C_COMMON_H = c-family/c-common.h c-family/c-common.def \
 	$(SPLAY_TREE_H) $(CPPLIB_H) $(GGC_H) $(DIAGNOSTIC_CORE_H)
 C_PRAGMA_H = c-family/c-pragma.h $(CPPLIB_H)
 C_TREE_H = c-tree.h $(C_COMMON_H) $(DIAGNOSTIC_H)
-SYSTEM_H = system.h hwint.h $(srcdir)/../include/libiberty.h \
-	$(srcdir)/../include/safe-ctype.h $(srcdir)/../include/filenames.h
+SYSTEM_H = system.h hwint.h $(mingw_srcdir)/../include/libiberty.h \
+	$(mingw_srcdir)/../include/safe-ctype.h $(mingw_srcdir)/../include/filenames.h
 PREDICT_H = predict.h predict.def
-CPPLIB_H = $(srcdir)/../libcpp/include/line-map.h \
-	$(srcdir)/../libcpp/include/cpplib.h
-INPUT_H = $(srcdir)/../libcpp/include/line-map.h input.h
+CPPLIB_H = $(mingw_srcdir)/../libcpp/include/line-map.h \
+	$(mingw_srcdir)/../libcpp/include/cpplib.h
+INPUT_H = $(mingw_srcdir)/../libcpp/include/line-map.h input.h
 OPTS_H = $(INPUT_H) $(VEC_H) opts.h
 DECNUM_H = $(DECNUM)/decContext.h $(DECNUM)/decDPD.h $(DECNUM)/decNumber.h \
 	$(DECNUMFMT)/decimal32.h $(DECNUMFMT)/decimal64.h \
 	$(DECNUMFMT)/decimal128.h $(DECNUMFMT)/decimal128Local.h
-MKDEPS_H = $(srcdir)/../libcpp/include/mkdeps.h
-SYMTAB_H = $(srcdir)/../libcpp/include/symtab.h $(OBSTACK_H)
-CPP_ID_DATA_H = $(CPPLIB_H) $(srcdir)/../libcpp/include/cpp-id-data.h
-CPP_INTERNAL_H = $(srcdir)/../libcpp/internal.h $(CPP_ID_DATA_H)
+MKDEPS_H = $(mingw_srcdir)/../libcpp/include/mkdeps.h
+SYMTAB_H = $(mingw_srcdir)/../libcpp/include/symtab.h $(OBSTACK_H)
+CPP_ID_DATA_H = $(CPPLIB_H) $(mingw_srcdir)/../libcpp/include/cpp-id-data.h
+CPP_INTERNAL_H = $(mingw_srcdir)/../libcpp/internal.h $(CPP_ID_DATA_H)
 TREE_PASS_H = tree-pass.h $(TIMEVAR_H)
 TREE_DUMP_H = tree-dump.h $(SPLAY_TREE_H) $(TREE_PASS_H)
 TREE_FLOW_H = tree-flow.h tree-flow-inline.h tree-ssa-operands.h \
@@ -3794,7 +3797,7 @@ GENGTYPE_FLAGS=
 
 gtyp-input.list: s-gtyp-input ; @true
 s-gtyp-input: Makefile
-	@: $(call write_entries_to_file,$(GTFILES),tmp-gi.list)
+	@: $(call write_entries_to_file,$(patsubst $(srcdir)/%, $(mingw_srcdir)/%, $(GTFILES)),tmp-gi.list)
 	$(SHELL) $(srcdir)/../move-if-change tmp-gi.list gtyp-input.list
 	$(STAMP) s-gtyp-input
 
@@ -3802,7 +3805,7 @@ s-gtype: build/gengtype$(build_exeext) $(filter-out [%], $(GTFILES)) \
 	 gtyp-input.list
 # First, parse all files and save a state file.
 	$(RUN_GEN) build/gengtype$(build_exeext) $(GENGTYPE_FLAGS) \
-                    -S $(srcdir) -I gtyp-input.list -w gtype.state
+                    -S $(mingw_srcdir) -I gtyp-input.list -w gtype.state
 # Second, read the state file and generate all files.  This ensure that
 # gtype.state is correctly read:
 	$(RUN_GEN) build/gengtype$(build_exeext) $(GENGTYPE_FLAGS) \
