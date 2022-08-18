@@ -87,30 +87,13 @@ value_range::set (tree min, tree max, value_range_kind kind)
       return;
     }
 
-  if (kind == VR_RANGE)
+  if (kind != VR_VARYING
+      && (POLY_INT_CST_P (min) || POLY_INT_CST_P (max)))
     {
-      /* Convert POLY_INT_CST bounds into worst-case INTEGER_CST bounds.  */
-      if (POLY_INT_CST_P (min))
-	{
-	  tree type_min = vrp_val_min (TREE_TYPE (min));
-	  widest_int lb
-	    = constant_lower_bound_with_limit (wi::to_poly_widest (min),
-					       wi::to_widest (type_min));
-	  min = wide_int_to_tree (TREE_TYPE (min), lb);
-	}
-      if (POLY_INT_CST_P (max))
-	{
-	  tree type_max = vrp_val_max (TREE_TYPE (max));
-	  widest_int ub
-	    = constant_upper_bound_with_limit (wi::to_poly_widest (max),
-					       wi::to_widest (type_max));
-	  max = wide_int_to_tree (TREE_TYPE (max), ub);
-	}
-    }
-  else if (kind != VR_VARYING)
-    {
-      if (POLY_INT_CST_P (min) || POLY_INT_CST_P (max))
-	kind = VR_VARYING;
+      tree typ = TREE_TYPE (min);
+      gcc_checking_assert (useless_type_conversion_p (typ, TREE_TYPE (max)));
+      set_varying (typ);
+      return;
     }
 
   if (kind == VR_VARYING)
@@ -852,7 +835,8 @@ intersect_ranges (enum value_range_kind *vr0type,
     }
   else if ((operand_less_p (vr1min, *vr0max) == 1
 	    || operand_equal_p (vr1min, *vr0max, 0))
-	   && operand_less_p (*vr0min, vr1min) == 1)
+	   && operand_less_p (*vr0min, vr1min) == 1
+	   && operand_less_p (*vr0max, vr1max) == 1)
     {
       /* [  (  ]  ) or [  ](  ) */
       if (*vr0type == VR_ANTI_RANGE
@@ -886,7 +870,8 @@ intersect_ranges (enum value_range_kind *vr0type,
     }
   else if ((operand_less_p (*vr0min, vr1max) == 1
 	    || operand_equal_p (*vr0min, vr1max, 0))
-	   && operand_less_p (vr1min, *vr0min) == 1)
+	   && operand_less_p (vr1min, *vr0min) == 1
+	   && operand_less_p (vr1max, *vr0max) == 1)
     {
       /* (  [  )  ] or (  )[  ] */
       if (*vr0type == VR_ANTI_RANGE

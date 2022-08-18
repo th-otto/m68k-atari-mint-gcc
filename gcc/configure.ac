@@ -1382,8 +1382,13 @@ LDFLAGS="$LDFLAGS $ZSTD_LDFLAGS"
 
 AC_MSG_CHECKING(for zstd.h)
 AC_CACHE_VAL(gcc_cv_header_zstd_h,
+# We require version 1.3.0 or later.  This is the first version that has
+# ZSTD_getFrameContentSize.
 [AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
-[[#include <zstd.h>]])],
+[[#include <zstd.h>
+#if ZSTD_VERSION_NUMBER < 10300
+#error "need zstd 1.3.0 or better"
+#endif]])],
   [gcc_cv_header_zstd_h=yes],
   [gcc_cv_header_zstd_h=no])])
 AC_MSG_RESULT($gcc_cv_header_zstd_h)
@@ -5873,6 +5878,9 @@ case "$target:$tm_file" in
       ;;
      *-*-linux*)
      emul_name="-melf64ppc"
+      ;;
+     *le-*-freebsd*)
+     emul_name="-melf64lppc_fbsd"
       ;;
      *-*-freebsd*)
      emul_name="-melf64ppc_fbsd"

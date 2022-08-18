@@ -3406,6 +3406,7 @@ bool find_forall_index (gfc_expr *, gfc_symbol *, int);
 bool gfc_resolve_index (gfc_expr *, int);
 bool gfc_resolve_dim_arg (gfc_expr *);
 bool gfc_is_formal_arg (void);
+bool gfc_resolve_substring (gfc_ref *, bool *);
 void gfc_resolve_substring_charlen (gfc_expr *);
 match gfc_iso_c_sub_interface(gfc_code *, gfc_symbol *);
 gfc_expr *gfc_expr_to_initialize (gfc_expr *);
@@ -3623,6 +3624,7 @@ int gfc_expr_walker (gfc_expr **, walk_expr_fn_t, void *);
 int gfc_code_walker (gfc_code **, walk_code_fn_t, walk_expr_fn_t, void *);
 bool gfc_has_dimen_vector_ref (gfc_expr *e);
 void gfc_check_externals (gfc_namespace *);
+bool gfc_fix_implicit_pure (gfc_namespace *);
 
 /* simplify.c */
 

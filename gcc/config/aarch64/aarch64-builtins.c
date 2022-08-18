@@ -1223,8 +1223,9 @@ aarch64_init_memtag_builtins (void)
     = aarch64_general_add_builtin ("__builtin_aarch64_memtag_"#N, \
 				   T, AARCH64_MEMTAG_BUILTIN_##F); \
   aarch64_memtag_builtin_data[AARCH64_MEMTAG_BUILTIN_##F - \
-			      AARCH64_MEMTAG_BUILTIN_START - 1] = \
-				{T, CODE_FOR_##I};
+			      AARCH64_MEMTAG_BUILTIN_START - 1].ftype = T; \
+  aarch64_memtag_builtin_data[AARCH64_MEMTAG_BUILTIN_##F - \
+			      AARCH64_MEMTAG_BUILTIN_START - 1].icode = CODE_FOR_##I;
 
   fntype = build_function_type_list (ptr_type_node, ptr_type_node,
 				     uint64_type_node, NULL);
@@ -1804,7 +1805,7 @@ aarch64_expand_rng_builtin (tree exp, rtx target, int fcode, int ignore)
     return target;
 
   rtx cc_reg = gen_rtx_REG (CC_Zmode, CC_REGNUM);
-  rtx cmp_rtx = gen_rtx_fmt_ee (NE, SImode, cc_reg, const0_rtx);
+  rtx cmp_rtx = gen_rtx_fmt_ee (EQ, SImode, cc_reg, const0_rtx);
   emit_insn (gen_aarch64_cstoresi (target, cmp_rtx, cc_reg));
   return target;
 }
@@ -1976,14 +1977,14 @@ aarch64_general_expand_builtin (unsigned int fcode, tree exp, rtx target,
       return target;
 
     case AARCH64_JSCVT:
-      arg0 = CALL_EXPR_ARG (exp, 0);
-      op0 = force_reg (DFmode, expand_normal (arg0));
-      if (!target)
-	target = gen_reg_rtx (SImode);
-      else
-	target = force_reg (SImode, target);
-      emit_insn (GEN_FCN (CODE_FOR_aarch64_fjcvtzs) (target, op0));
-      return target;
+      {
+	expand_operand ops[2];
+	create_output_operand (&ops[0], target, SImode);
+	op0 = expand_normal (CALL_EXPR_ARG (exp, 0));
+	create_input_operand (&ops[1], op0, DFmode);
+	expand_insn (CODE_FOR_aarch64_fjcvtzs, 2, ops);
+	return ops[0].value;
+      }
 
     case AARCH64_SIMD_BUILTIN_FCMLA_LANEQ0_V2SF:
     case AARCH64_SIMD_BUILTIN_FCMLA_LANEQ90_V2SF:

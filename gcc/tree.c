@@ -2204,29 +2204,29 @@ build_real_from_int_cst (tree type, const_tree i)
   return v;
 }
 
-/* Return a newly constructed STRING_CST node whose value is
-   the LEN characters at STR.
+/* Return a newly constructed STRING_CST node whose value is the LEN
+   characters at STR when STR is nonnull, or all zeros otherwise.
    Note that for a C string literal, LEN should include the trailing NUL.
    The TREE_TYPE is not initialized.  */
 
 tree
-build_string (int len, const char *str)
+build_string (unsigned len, const char *str /*= NULL */)
 {
-  tree s;
-  size_t length;
-
   /* Do not waste bytes provided by padding of struct tree_string.  */
-  length = len + offsetof (struct tree_string, str) + 1;
+  unsigned size = len + offsetof (struct tree_string, str) + 1;
 
-  record_node_allocation_statistics (STRING_CST, length);
+  record_node_allocation_statistics (STRING_CST, size);
 
-  s = (tree) ggc_internal_alloc (length);
+  tree s = (tree) ggc_internal_alloc (size);
 
   memset (s, 0, sizeof (struct tree_typed));
   TREE_SET_CODE (s, STRING_CST);
   TREE_CONSTANT (s) = 1;
   TREE_STRING_LENGTH (s) = len;
-  memcpy (s->string.str, str, len);
+  if (str)
+    memcpy (s->string.str, str, len);
+  else
+    memset (s->string.str, 0, len);
   s->string.str[len] = '\0';
 
   return s;
@@ -5606,15 +5606,14 @@ free_lang_data_in_type (tree type, class free_lang_data_d *fld)
 	  /* Type values are used only for C++ ODR checking.  Drop them
 	     for all type variants and non-ODR types.
 	     For ODR types the data is freed in free_odr_warning_data.  */
-	  if (TYPE_MAIN_VARIANT (type) != type
-	      || !type_with_linkage_p (type))
+	  if (!TYPE_VALUES (type))
+	    ;
+	  else if (TYPE_MAIN_VARIANT (type) != type
+		   || !type_with_linkage_p (type)
+		   || type_in_anonymous_namespace_p (type))
 	    TYPE_VALUES (type) = NULL;
 	  else
-	  /* Simplify representation by recording only values rather
-	     than const decls.  */
-	    for (tree e = TYPE_VALUES (type); e; e = TREE_CHAIN (e))
-	      if (TREE_CODE (TREE_VALUE (e)) == CONST_DECL)
-		TREE_VALUE (e) = DECL_INITIAL (TREE_VALUE (e));
+	    register_odr_enum (type);
 	}
       free_lang_data_in_one_sizepos (&TYPE_MIN_VALUE (type));
       free_lang_data_in_one_sizepos (&TYPE_MAX_VALUE (type));
@@ -8894,7 +8893,7 @@ get_narrower (tree op, int *unsignedp_ptr)
 	v.safe_push (op);
       FOR_EACH_VEC_ELT_REVERSE (v, i, op)
 	ret = build2_loc (EXPR_LOCATION (op), COMPOUND_EXPR,
-			  TREE_TYPE (win), TREE_OPERAND (op, 0),
+			  TREE_TYPE (ret), TREE_OPERAND (op, 0),
 			  ret);
       return ret;
     }
@@ -11614,12 +11613,12 @@ build_alloca_call_expr (tree size, unsigned int align, HOST_WIDE_INT max_size)
 
 /* Create a new constant string literal of type ELTYPE[SIZE] (or LEN
    if SIZE == -1) and return a tree node representing char* pointer to
-   it as an ADDR_EXPR (ARRAY_REF (ELTYPE, ...)).  The STRING_CST value
-   is the LEN bytes at STR (the representation of the string, which may
-   be wide).  */
+   it as an ADDR_EXPR (ARRAY_REF (ELTYPE, ...)).  When STR is nonnull
+   the STRING_CST value is the LEN bytes at STR (the representation
+   of the string, which may be wide).  Otherwise it's all zeros.  */
 
 tree
-build_string_literal (int len, const char *str,
+build_string_literal (unsigned len, const char *str /* = NULL */,
 		      tree eltype /* = char_type_node */,
 		      unsigned HOST_WIDE_INT size /* = -1 */)
 {
@@ -12033,7 +12032,6 @@ walk_tree_1 (tree *tp, walk_tree_fn func, void *data,
     case INTEGER_CST:
     case REAL_CST:
     case FIXED_CST:
-    case VECTOR_CST:
     case STRING_CST:
     case BLOCK:
     case PLACEHOLDER_EXPR:
@@ -12062,6 +12060,18 @@ walk_tree_1 (tree *tp, walk_tree_fn func, void *data,
 
 	/* Now walk the first one as a tail call.  */
 	WALK_SUBTREE_TAIL (TREE_VEC_ELT (*tp, 0));
+      }
+
+    case VECTOR_CST:
+      {
+	unsigned len = vector_cst_encoded_nelts (*tp);
+	if (len == 0)
+	  break;
+	/* Walk all elements but the first.  */
+	while (--len)
+	  WALK_SUBTREE (VECTOR_CST_ENCODED_ELT (*tp, len));
+	/* Now walk the first one as a tail call.  */
+	WALK_SUBTREE_TAIL (VECTOR_CST_ENCODED_ELT (*tp, 0));
       }
 
     case COMPLEX_CST:

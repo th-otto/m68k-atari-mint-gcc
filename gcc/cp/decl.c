@@ -2899,6 +2899,16 @@ duplicate_decls (tree newdecl, tree olddecl, bool newdecl_is_friend)
 	snode->remove ();
     }
 
+  if (TREE_CODE (olddecl) == FUNCTION_DECL)
+    {
+      tree clone;
+      FOR_EACH_CLONE (clone, olddecl)
+	{
+	  DECL_ATTRIBUTES (clone) = DECL_ATTRIBUTES (olddecl);
+	  DECL_PRESERVE_P (clone) |= DECL_PRESERVE_P (olddecl);
+	}
+    }
+
   /* Remove the associated constraints for newdecl, if any, before
      reclaiming memory. */
   if (flag_concepts)
@@ -3635,17 +3645,17 @@ void
 pop_switch (void)
 {
   struct cp_switch *cs = switch_stack;
-  location_t switch_location;
 
   /* Emit warnings as needed.  */
-  switch_location = cp_expr_loc_or_input_loc (cs->switch_stmt);
+  location_t switch_location = cp_expr_loc_or_input_loc (cs->switch_stmt);
+  tree cond = SWITCH_STMT_COND (cs->switch_stmt);
   const bool bool_cond_p
     = (SWITCH_STMT_TYPE (cs->switch_stmt)
        && TREE_CODE (SWITCH_STMT_TYPE (cs->switch_stmt)) == BOOLEAN_TYPE);
   if (!processing_template_decl)
     c_do_switch_warnings (cs->cases, switch_location,
-			  SWITCH_STMT_TYPE (cs->switch_stmt),
-			  SWITCH_STMT_COND (cs->switch_stmt), bool_cond_p);
+			  SWITCH_STMT_TYPE (cs->switch_stmt), cond,
+			  bool_cond_p);
 
   /* For the benefit of block_may_fallthru remember if the switch body
      case labels cover all possible values and if there are break; stmts.  */
@@ -3656,6 +3666,15 @@ pop_switch (void)
     SWITCH_STMT_ALL_CASES_P (cs->switch_stmt) = 1;
   if (!cs->break_stmt_seen_p)
     SWITCH_STMT_NO_BREAK_P (cs->switch_stmt) = 1;
+  /* Now that we're done with the switch warnings, set the switch type
+     to the type of the condition if the index type was of scoped enum type.
+     (Such types don't participate in the integer promotions.)  We do this
+     because of bit-fields whose declared type is a scoped enum type:
+     gimplification will use the lowered index type, but convert the
+     case values to SWITCH_STMT_TYPE, which would have been the declared type
+     and verify_gimple_switch doesn't accept that.  */
+  if (is_bitfield_expr_with_lowered_type (cond))
+    SWITCH_STMT_TYPE (cs->switch_stmt) = TREE_TYPE (cond);
   gcc_assert (!cs->in_loop_body_p);
   splay_tree_delete (cs->cases);
   switch_stack = switch_stack->next;
@@ -6375,7 +6394,7 @@ reshape_init_r (tree type, reshape_iter *d, tree first_initializer_p,
      non-empty subaggregate, brace elision is assumed and the
      initializer is considered for the initialization of the first
      member of the subaggregate.  */
-  if (TREE_CODE (init) != CONSTRUCTOR
+  if ((TREE_CODE (init) != CONSTRUCTOR || COMPOUND_LITERAL_P (init))
       /* But don't try this for the first initializer, since that would be
 	 looking through the outermost braces; A a2 = { a1 }; is not a
 	 valid aggregate initialization.  */
@@ -6560,6 +6579,19 @@ bool
 check_array_initializer (tree decl, tree type, tree init)
 {
   tree element_type = TREE_TYPE (type);
+
+  /* Structured binding when initialized with an array type needs
+     to have complete type.  */
+  if (decl
+      && DECL_DECOMPOSITION_P (decl)
+      && !DECL_DECOMP_BASE (decl)
+      && !COMPLETE_TYPE_P (type))
+    {
+      error_at (DECL_SOURCE_LOCATION (decl),
+		"structured binding has incomplete type %qT", type);
+      TREE_TYPE (decl) = error_mark_node;
+      return true;
+    }
 
   /* The array type itself need not be complete, because the
      initializer may tell us how many elements are in the array.
@@ -7646,6 +7678,12 @@ cp_finish_decl (tree decl, tree init, bool init_const_expr_p,
 	  retrofit_lang_decl (decl);
 	  SET_DECL_DEPENDENT_INIT_P (decl, true);
 	}
+
+      if (VAR_P (decl) && DECL_REGISTER (decl) && asmspec)
+	{
+	  set_user_assembler_name (decl, asmspec);
+	  DECL_HARD_REGISTER (decl) = 1;
+	}
       return;
     }
 
@@ -8347,6 +8385,12 @@ cp_finish_decomp (tree decl, tree first, unsigned int count)
 			 : get_tuple_element_type (type, i));
 	  input_location = sloc;
 
+	  if (VOID_TYPE_P (eltype))
+	    {
+	      error ("%<std::tuple_element<%u, %T>::type%> is %<void%>",
+		     i, type);
+	      eltype = error_mark_node;
+	    }
 	  if (init == error_mark_node || eltype == error_mark_node)
 	    {
 	      inform (dloc, "in initialization of structured binding "
@@ -8963,17 +9007,25 @@ expand_static_init (tree decl, tree init)
 
 	  /* Do the initialization itself.  */
 	  init = add_stmt_to_compound (begin, init);
-	  init = add_stmt_to_compound
-	    (init, build2 (MODIFY_EXPR, void_type_node, flag, boolean_true_node));
-	  init = add_stmt_to_compound
-	    (init, build_call_n (release_fn, 1, guard_addr));
+	  init = add_stmt_to_compound (init,
+				       build2 (MODIFY_EXPR, void_type_node,
+					       flag, boolean_true_node));
+
+	  /* Use atexit to register a function for destroying this static
+	     variable.  Do this before calling __cxa_guard_release.  */
+	  init = add_stmt_to_compound (init, register_dtor_fn (decl));
+
+	  init = add_stmt_to_compound (init, build_call_n (release_fn, 1,
+							   guard_addr));
 	}
       else
-	init = add_stmt_to_compound (init, set_guard (guard));
+	{
+	  init = add_stmt_to_compound (init, set_guard (guard));
 
-      /* Use atexit to register a function for destroying this static
-	 variable.  */
-      init = add_stmt_to_compound (init, register_dtor_fn (decl));
+	  /* Use atexit to register a function for destroying this static
+	     variable.  */
+	  init = add_stmt_to_compound (init, register_dtor_fn (decl));
+	}
 
       finish_expr_stmt (init);
 

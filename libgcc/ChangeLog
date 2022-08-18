@@ -1,3 +1,61 @@
+2021-04-08  Release Manager
+
+	* GCC 10.3.0 released.
+
+2021-03-31  Jan Hubicka  <jh@suse.cz>
+
+	* config/i386/cpuinfo.c (get_amd_cpu): Support amdfam19.
+	* config/i386/cpuinfo.h (enum processor_types): Add AMDFAM19H.
+	(enum processor_subtypes): Add AMDFAM19H_ZNVER3.
+
+2021-02-24  Christophe Lyon  <christophe.lyon@linaro.org>
+
+	Backported from master:
+	2021-02-24  Christophe Lyon  <christophe.lyon@linaro.org>
+		    Hau Hsu  <hsuhau617@gmail.com>
+
+	PR target/99157
+	* config/arm/t-arm: Fix cmse support detection.
+
+2021-01-21  Michael Meissner  <meissner@linux.ibm.com>
+
+	* config/rs6000/t-linux (IBM128_STATIC_OBJS): Back port from
+	master (12/3/2020).  New make variable.
+	(IBM128_SHARED_OBJS): New make variable.
+	(IBM128_OBJS): New make variable.  Set all objects to use the
+	explicit IBM format, and disable gnu attributes.
+	(IBM128_CFLAGS): New make variable.
+	(gcc_s_compile): Add -mno-gnu-attribute to all shared library
+	modules.
+
+2021-01-13  Samuel Thibault  <samuel.thibault@gnu.org>
+
+	Backported from master:
+	2021-01-13  Samuel Thibault  <samuel.thibault@gnu.org>
+
+	* config/i386/gnu-unwind.h (x86_gnu_fallback_frame_state): Add the
+	posix siginfo case to struct handler_args. Detect between legacy
+	and siginfo from the second parameter, which is a small sigcode in
+	the legacy case, and a pointer in the siginfo case.
+
+2020-10-02  Sergei Trofimovich  <siarheit@google.com>
+
+	Backported from master:
+	2020-09-22  Sergei Trofimovich  <siarheit@google.com>
+
+	PR gcov-profile/96913
+	* libgcov-driver.c (write_one_data): Avoid function pointer
+	comparison in TOP streaming decision.
+
+2020-08-03  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-08-03  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/96402
+	* config/aarch64/lse.S (__aarch64_cas16_acq_rel): Use x2, x3 instead
+	of x(tmp0), x(tmp1) in STXP arguments.
+
 2020-07-23  Release Manager
 
 	* GCC 10.2.0 released.

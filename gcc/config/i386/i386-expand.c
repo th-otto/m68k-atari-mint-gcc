@@ -116,6 +116,12 @@ split_double_mode (machine_mode mode, rtx operands[],
     case E_DImode:
       half_mode = SImode;
       break;
+    case E_P2HImode:
+      half_mode = HImode;
+      break;
+    case E_P2QImode:
+      half_mode = QImode;
+      break;
     default:
       gcc_unreachable ();
     }
@@ -3491,6 +3497,13 @@ ix86_expand_sse_cmp (rtx dest, enum rtx_code code, rtx cmp_op0, rtx cmp_op1,
       || (op_false && reg_overlap_mentioned_p (dest, op_false)))
     dest = gen_reg_rtx (maskcmp ? cmp_mode : mode);
 
+  if (maskcmp)
+    {
+      bool ok = ix86_expand_mask_vec_cmp (dest, code, cmp_op0, cmp_op1);
+      gcc_assert (ok);
+      return dest;
+    }
+
   x = gen_rtx_fmt_ee (code, cmp_mode, cmp_op0, cmp_op1);
 
   if (cmp_mode != mode && !maskcmp)
@@ -3512,6 +3525,13 @@ ix86_expand_sse_movcc (rtx dest, rtx cmp, rtx op_true, rtx op_false)
 {
   machine_mode mode = GET_MODE (dest);
   machine_mode cmpmode = GET_MODE (cmp);
+
+  /* Simplify trivial VEC_COND_EXPR to avoid ICE in pr97506.  */
+  if (rtx_equal_p (op_true, op_false))
+    {
+      emit_move_insn (dest, op_true);
+      return;
+    }
 
   /* In AVX512F the result of comparison is an integer mask.  */
   bool maskcmp = mode != cmpmode && ix86_valid_mask_cmp_mode (mode);
@@ -3926,11 +3946,10 @@ ix86_cmp_code_to_pcmp_immediate (enum rtx_code code, machine_mode mode)
 /* Expand AVX-512 vector comparison.  */
 
 bool
-ix86_expand_mask_vec_cmp (rtx operands[])
+ix86_expand_mask_vec_cmp (rtx dest, enum rtx_code code, rtx cmp_op0, rtx cmp_op1)
 {
-  machine_mode mask_mode = GET_MODE (operands[0]);
-  machine_mode cmp_mode = GET_MODE (operands[2]);
-  enum rtx_code code = GET_CODE (operands[1]);
+  machine_mode mask_mode = GET_MODE (dest);
+  machine_mode cmp_mode = GET_MODE (cmp_op0);
   rtx imm = GEN_INT (ix86_cmp_code_to_pcmp_immediate (code, cmp_mode));
   int unspec_code;
   rtx unspec;
@@ -3948,10 +3967,9 @@ ix86_expand_mask_vec_cmp (rtx operands[])
       unspec_code = UNSPEC_PCMP;
     }
 
-  unspec = gen_rtx_UNSPEC (mask_mode, gen_rtvec (3, operands[2],
-						 operands[3], imm),
+  unspec = gen_rtx_UNSPEC (mask_mode, gen_rtvec (3, cmp_op0, cmp_op1, imm),
 			   unspec_code);
-  emit_insn (gen_rtx_SET (operands[0], unspec));
+  emit_insn (gen_rtx_SET (dest, unspec));
 
   return true;
 }
@@ -7958,7 +7976,17 @@ ix86_expand_call (rtx retval, rtx fnaddr, rtx callarg1,
 	    }
 	  else if (!TARGET_PECOFF && !TARGET_MACHO)
 	    {
-	      if (TARGET_64BIT)
+	      if (TARGET_64BIT
+		  && ix86_cmodel == CM_LARGE_PIC
+		  && DEFAULT_ABI != MS_ABI)
+		{
+		  fnaddr = gen_rtx_UNSPEC (Pmode, gen_rtvec (1, addr),
+					   UNSPEC_GOT);
+		  fnaddr = gen_rtx_CONST (Pmode, fnaddr);
+		  fnaddr = force_reg (Pmode, fnaddr);
+		  fnaddr = gen_rtx_PLUS (Pmode, pic_offset_table_rtx, fnaddr);
+		}
+	      else if (TARGET_64BIT)
 		{
 		  fnaddr = gen_rtx_UNSPEC (Pmode,
 					   gen_rtvec (1, addr),
@@ -12786,6 +12814,10 @@ rdseed_step:
       emit_insn (GEN_FCN (icode) (op0, gen_rtx_MEM (mode, op1)));
       return 0;
 
+    case IX86_BUILTIN_VZEROUPPER:
+      cfun->machine->has_explicit_vzeroupper = true;
+      break;
+
     default:
       break;
     }
@@ -15793,7 +15825,7 @@ ix86_expand_rint (rtx operand0, rtx operand1)
         return copysign (xa, operand1);
    */
   machine_mode mode = GET_MODE (operand0);
-  rtx res, xa, TWO52, two52, mask;
+  rtx res, xa, TWO52, mask;
   rtx_code_label *label;
 
   res = gen_reg_rtx (mode);
@@ -15806,16 +15838,18 @@ ix86_expand_rint (rtx operand0, rtx operand1)
   TWO52 = ix86_gen_TWO52 (mode);
   label = ix86_expand_sse_compare_and_jump (UNLE, TWO52, xa, false);
 
-  two52 = TWO52;
   if (flag_rounding_math)
     {
-      two52 = gen_reg_rtx (mode);
-      ix86_sse_copysign_to_positive (two52, TWO52, res, mask);
+      ix86_sse_copysign_to_positive (TWO52, TWO52, res, mask);
       xa = res;
     }
 
-  xa = expand_simple_binop (mode, PLUS, xa, two52, NULL_RTX, 0, OPTAB_DIRECT);
-  xa = expand_simple_binop (mode, MINUS, xa, two52, xa, 0, OPTAB_DIRECT);
+  xa = expand_simple_binop (mode, PLUS, xa, TWO52, NULL_RTX, 0, OPTAB_DIRECT);
+  xa = expand_simple_binop (mode, MINUS, xa, TWO52, xa, 0, OPTAB_DIRECT);
+
+  /* Remove the sign with FE_DOWNWARD, where x - x = -0.0.  */
+  if (HONOR_SIGNED_ZEROS (mode) && flag_rounding_math)
+    xa = ix86_expand_sse_fabs (xa, NULL);
 
   ix86_sse_copysign_to_positive (res, xa, res, mask);
 
@@ -15835,12 +15869,14 @@ ix86_expand_floorceil (rtx operand0, rtx operand1, bool do_floor)
         if (!isless (xa, TWO52))
           return x;
 	x2 = (double)(long)x;
+
      Compensate.  Floor:
 	if (x2 > x)
 	  x2 -= 1;
      Compensate.  Ceil:
 	if (x2 < x)
 	  x2 += 1;
+
 	if (HONOR_SIGNED_ZEROS (mode))
 	  return copysign (x2, x);
 	return x2;
@@ -15875,10 +15911,15 @@ ix86_expand_floorceil (rtx operand0, rtx operand1, bool do_floor)
   emit_insn (gen_rtx_SET (tmp, gen_rtx_AND (mode, one, tmp)));
   tmp = expand_simple_binop (mode, do_floor ? MINUS : PLUS,
 			     xa, tmp, NULL_RTX, 0, OPTAB_DIRECT);
-  emit_move_insn (res, tmp);
-
   if (HONOR_SIGNED_ZEROS (mode))
-    ix86_sse_copysign_to_positive (res, res, force_reg (mode, operand1), mask);
+    {
+      /* Remove the sign with FE_DOWNWARD, where x - x = -0.0.  */
+      if (do_floor && flag_rounding_math)
+	tmp = ix86_expand_sse_fabs (tmp, NULL);
+
+      ix86_sse_copysign_to_positive (tmp, tmp, res, mask);
+    }
+  emit_move_insn (res, tmp);
 
   emit_label (label);
   LABEL_NUSES (label) = 1;
@@ -15898,12 +15939,14 @@ ix86_expand_floorceildf_32 (rtx operand0, rtx operand1, bool do_floor)
           return x;
         xa = xa + TWO52 - TWO52;
         x2 = copysign (xa, x);
+
      Compensate.  Floor:
         if (x2 > x)
           x2 -= 1;
      Compensate.  Ceil:
         if (x2 < x)
           x2 += 1;
+
 	if (HONOR_SIGNED_ZEROS (mode))
 	  x2 = copysign (x2, x);
 	return x2;
@@ -15940,8 +15983,14 @@ ix86_expand_floorceildf_32 (rtx operand0, rtx operand1, bool do_floor)
   emit_insn (gen_rtx_SET (tmp, gen_rtx_AND (mode, one, tmp)));
   tmp = expand_simple_binop (mode, do_floor ? MINUS : PLUS,
 			     xa, tmp, NULL_RTX, 0, OPTAB_DIRECT);
-  if (!do_floor && HONOR_SIGNED_ZEROS (mode))
-    ix86_sse_copysign_to_positive (tmp, tmp, res, mask);
+  if (HONOR_SIGNED_ZEROS (mode))
+    {
+      /* Remove the sign with FE_DOWNWARD, where x - x = -0.0.  */
+      if (do_floor && flag_rounding_math)
+	tmp = ix86_expand_sse_fabs (tmp, NULL);
+
+      ix86_sse_copysign_to_positive (tmp, tmp, res, mask);
+    }
   emit_move_insn (res, tmp);
 
   emit_label (label);
@@ -16002,7 +16051,7 @@ void
 ix86_expand_truncdf_32 (rtx operand0, rtx operand1)
 {
   machine_mode mode = GET_MODE (operand0);
-  rtx xa, mask, TWO52, one, res, smask, tmp;
+  rtx xa, xa2, TWO52, tmp, one, res, mask;
   rtx_code_label *label;
 
   /* C code for SSE variant we expand below.
@@ -16025,28 +16074,29 @@ ix86_expand_truncdf_32 (rtx operand0, rtx operand1)
   emit_move_insn (res, operand1);
 
   /* xa = abs (operand1) */
-  xa = ix86_expand_sse_fabs (res, &smask);
+  xa = ix86_expand_sse_fabs (res, &mask);
 
   /* if (!isless (xa, TWO52)) goto label; */
   label = ix86_expand_sse_compare_and_jump (UNLE, TWO52, xa, false);
 
-  /* res = xa + TWO52 - TWO52; */
-  tmp = expand_simple_binop (mode, PLUS, xa, TWO52, NULL_RTX, 0, OPTAB_DIRECT);
-  tmp = expand_simple_binop (mode, MINUS, tmp, TWO52, tmp, 0, OPTAB_DIRECT);
-  emit_move_insn (res, tmp);
+  /* xa2 = xa + TWO52 - TWO52; */
+  xa2 = expand_simple_binop (mode, PLUS, xa, TWO52, NULL_RTX, 0, OPTAB_DIRECT);
+  xa2 = expand_simple_binop (mode, MINUS, xa2, TWO52, xa2, 0, OPTAB_DIRECT);
 
   /* generate 1.0 */
   one = force_reg (mode, const_double_from_real_value (dconst1, mode));
 
-  /* Compensate: res = xa2 - (res > xa ? 1 : 0)  */
-  mask = ix86_expand_sse_compare_mask (UNGT, res, xa, false);
-  emit_insn (gen_rtx_SET (mask, gen_rtx_AND (mode, mask, one)));
+  /* Compensate: xa2 = xa2 - (xa2 > xa ? 1 : 0)  */
+  tmp = ix86_expand_sse_compare_mask (UNGT, xa2, xa, false);
+  emit_insn (gen_rtx_SET (tmp, gen_rtx_AND (mode, one, tmp)));
   tmp = expand_simple_binop (mode, MINUS,
-			     res, mask, NULL_RTX, 0, OPTAB_DIRECT);
-  emit_move_insn (res, tmp);
+			     xa2, tmp, NULL_RTX, 0, OPTAB_DIRECT);
+  /* Remove the sign with FE_DOWNWARD, where x - x = -0.0.  */
+  if (HONOR_SIGNED_ZEROS (mode) && flag_rounding_math)
+    tmp = ix86_expand_sse_fabs (tmp, NULL);
 
-  /* res = copysign (res, operand1) */
-  ix86_sse_copysign_to_positive (res, res, force_reg (mode, operand1), smask);
+  /* res = copysign (xa2, operand1) */
+  ix86_sse_copysign_to_positive (res, tmp, res, mask);
 
   emit_label (label);
   LABEL_NUSES (label) = 1;
@@ -20042,7 +20092,6 @@ ix86_expand_pextr (rtx *operands)
     case E_V4SImode:
     case E_V2DImode:
     case E_V1TImode:
-    case E_TImode:
       {
 	machine_mode srcmode, dstmode;
 	rtx d, pat;
@@ -20138,7 +20187,6 @@ ix86_expand_pinsr (rtx *operands)
     case E_V4SImode:
     case E_V2DImode:
     case E_V1TImode:
-    case E_TImode:
       {
 	machine_mode srcmode, dstmode;
 	rtx (*pinsr)(rtx, rtx, rtx, rtx);

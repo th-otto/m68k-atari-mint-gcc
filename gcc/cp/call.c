@@ -5904,6 +5904,15 @@ op_is_ordered (tree_code code)
     case LSHIFT_EXPR:
       // 8. a >> b
     case RSHIFT_EXPR:
+      // a && b
+      // Predates P0145R3.
+    case TRUTH_ANDIF_EXPR:
+      // a || b
+      // Predates P0145R3.
+    case TRUTH_ORIF_EXPR:
+      // a , b
+      // Predates P0145R3.
+    case COMPOUND_EXPR:
       return (flag_strong_eval_order ? 1 : 0);
 
     default:
@@ -7123,6 +7132,14 @@ build_temp (tree expr, tree type, int flags,
       && !type_has_nontrivial_copy_init (TREE_TYPE (expr)))
     return get_target_expr_sfinae (expr, complain);
 
+  /* In decltype, we might have decided not to wrap this call in a TARGET_EXPR.
+     But it turns out to be a subexpression, so perform temporary
+     materialization now.  */
+  if (TREE_CODE (expr) == CALL_EXPR
+      && CLASS_TYPE_P (type)
+      && same_type_ignoring_top_level_qualifiers_p (type, TREE_TYPE (expr)))
+    expr = build_cplus_new (type, expr, complain);
+
   savew = warningcount + werrorcount, savee = errorcount;
   releasing_vec args (make_tree_vector_single (expr));
   expr = build_special_member_call (NULL_TREE, complete_ctor_identifier,
@@ -8151,11 +8168,7 @@ type_passed_as (tree type)
 {
   /* Pass classes with copy ctors by invisible reference.  */
   if (TREE_ADDRESSABLE (type))
-    {
-      type = build_reference_type (type);
-      /* There are no other pointers to this temporary.  */
-      type = cp_build_qualified_type (type, TYPE_QUAL_RESTRICT);
-    }
+    type = build_reference_type (type);
   else if (targetm.calls.promote_prototypes (NULL_TREE)
 	   && INTEGRAL_TYPE_P (type)
 	   && COMPLETE_TYPE_P (type)
@@ -8331,24 +8344,34 @@ call_copy_ctor (tree a, tsubst_flags_t complain)
   return r;
 }
 
-/* Return true iff T refers to a base field.  */
+/* Return true iff T refers to a base or potentially-overlapping field, which
+   cannot be used for return by invisible reference.  We avoid doing C++17
+   mandatory copy elision when this is true.
 
-static bool
-is_base_field_ref (tree t)
+   This returns true even if the type of T has no tail padding that other data
+   could be allocated into, because that depends on the particular ABI.
+   unsafe_copy_elision_p, below, does consider whether there is padding.  */
+
+bool
+unsafe_return_slot_p (tree t)
 {
   STRIP_NOPS (t);
   if (TREE_CODE (t) == ADDR_EXPR)
     t = TREE_OPERAND (t, 0);
   if (TREE_CODE (t) == COMPONENT_REF)
     t = TREE_OPERAND (t, 1);
-  if (TREE_CODE (t) == FIELD_DECL)
-    return DECL_FIELD_IS_BASE (t);
-  return false;
+  if (TREE_CODE (t) != FIELD_DECL)
+    return false;
+  if (!CLASS_TYPE_P (TREE_TYPE (t)))
+    /* The middle-end will do the right thing for scalar types.  */
+    return false;
+  return (DECL_FIELD_IS_BASE (t)
+	  || lookup_attribute ("no_unique_address", DECL_ATTRIBUTES (t)));
 }
 
-/* We can't elide a copy from a function returning by value to a base
-   subobject, as the callee might clobber tail padding.  Return true iff this
-   could be that case.  */
+/* We can't elide a copy from a function returning by value to a
+   potentially-overlapping subobject, as the callee might clobber tail padding.
+   Return true iff this could be that case.  */
 
 static bool
 unsafe_copy_elision_p (tree target, tree exp)
@@ -8358,10 +8381,11 @@ unsafe_copy_elision_p (tree target, tree exp)
     return false;
   tree type = TYPE_MAIN_VARIANT (TREE_TYPE (exp));
   /* It's safe to elide the copy for a class with no tail padding.  */
-  if (tree_int_cst_equal (TYPE_SIZE (type), CLASSTYPE_SIZE (type)))
+  if (!is_empty_class (type)
+      && tree_int_cst_equal (TYPE_SIZE (type), CLASSTYPE_SIZE (type)))
     return false;
   /* It's safe to elide the copy if we aren't initializing a base object.  */
-  if (!is_base_field_ref (target))
+  if (!unsafe_return_slot_p (target))
     return false;
   tree init = TARGET_EXPR_INITIAL (exp);
   /* build_compound_expr pushes COMPOUND_EXPR inside TARGET_EXPR.  */
@@ -8553,6 +8577,7 @@ build_over_call (struct z_candidate *cand, int flags, tsubst_flags_t complain)
       && DECL_COMPLETE_CONSTRUCTOR_P (fn)
       && (DECL_COPY_CONSTRUCTOR_P (fn)
 	  || DECL_MOVE_CONSTRUCTOR_P (fn))
+      && !unsafe_return_slot_p (first_arg)
       && conv_binds_ref_to_prvalue (convs[0]))
     {
       force_elide = true;
@@ -8940,7 +8965,7 @@ build_over_call (struct z_candidate *cand, int flags, tsubst_flags_t complain)
     {
       tree targ;
       tree arg = argarray[num_artificial_parms_for (fn)];
-      tree fa;
+      tree fa = argarray[0];
       bool trivial = trivial_fn_p (fn);
 
       /* Pull out the real argument, disregarding const-correctness.  */
@@ -8970,8 +8995,8 @@ build_over_call (struct z_candidate *cand, int flags, tsubst_flags_t complain)
       else
 	arg = cp_build_fold_indirect_ref (arg);
 
-      /* In C++17 we shouldn't be copying a TARGET_EXPR except into a base
-	 subobject.  */
+      /* In C++17 we shouldn't be copying a TARGET_EXPR except into a
+	 potentially-overlapping subobject.  */
       if (CHECKING_P && cxx_dialect >= cxx17)
 	gcc_assert (TREE_CODE (arg) != TARGET_EXPR
 		    || force_elide
@@ -8979,9 +9004,8 @@ build_over_call (struct z_candidate *cand, int flags, tsubst_flags_t complain)
 		    || convs[0]->need_temporary_p
 		    || seen_error ()
 		    /* See unsafe_copy_elision_p.  */
-		    || DECL_BASE_CONSTRUCTOR_P (fn));
+		    || unsafe_return_slot_p (fa));
 
-      fa = argarray[0];
       bool unsafe = unsafe_copy_elision_p (fa, arg);
       bool eliding_temp = (TREE_CODE (arg) == TARGET_EXPR && !unsafe);
 
@@ -9154,6 +9178,9 @@ build_over_call (struct z_candidate *cand, int flags, tsubst_flags_t complain)
 	      || !current_binding_level->immediate_fn_ctx_p))
 	{
 	  tree obj_arg = NULL_TREE;
+	  /* Undo convert_from_reference called by build_cxx_call.  */
+	  if (REFERENCE_REF_P (call))
+	    call = TREE_OPERAND (call, 0);
 	  if (DECL_CONSTRUCTOR_P (fndecl))
 	    obj_arg = cand->first_arg ? cand->first_arg : (*args)[0];
 	  if (obj_arg && is_dummy_object (obj_arg))
@@ -9175,6 +9202,9 @@ build_over_call (struct z_candidate *cand, int flags, tsubst_flags_t complain)
 		}
 	    }
 	  call = cxx_constant_value (call, obj_arg);
+	  if (obj_arg && !error_operand_p (call))
+	    call = build2 (INIT_EXPR, void_type_node, obj_arg, call);
+	  call = convert_from_reference (call);
 	}
     }
   return call;
@@ -9794,7 +9824,7 @@ build_special_member_call (tree instance, tree name, vec<tree, va_gc> **args,
      resolution.  */
   if (cxx_dialect >= cxx17
       && args && vec_safe_length (*args) == 1
-      && name == complete_ctor_identifier)
+      && !unsafe_return_slot_p (instance))
     {
       tree arg = (**args)[0];
 

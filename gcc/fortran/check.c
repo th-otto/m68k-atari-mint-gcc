@@ -340,9 +340,9 @@ gfc_boz2real (gfc_expr *x, int kind)
       /* Clear first two bits.  */
       else
 	{
-	  if (buf[0] == '4' || buf[0] == '6')
+	  if (buf[0] == '2' || buf[0] == '4' || buf[0] == '6')
 	    buf[0] = '0';
-	  else if (buf[0] == '5' || buf[0] == '7')
+	  else if (buf[0] == '3' || buf[0] == '5' || buf[0] == '7')
 	    buf[0] = '1';
 	}
     }
@@ -429,9 +429,9 @@ gfc_boz2int (gfc_expr *x, int kind)
       /* Clear first two bits.  */
       else
 	{
-	  if (buf[0] == '4' || buf[0] == '6')
+	  if (buf[0] == '2' || buf[0] == '4' || buf[0] == '6')
 	    buf[0] = '0';
-	  else if (buf[0] == '5' || buf[0] == '7')
+	  else if (buf[0] == '3' || buf[0] == '5' || buf[0] == '7')
 	    buf[0] = '1';
 	}
     }
@@ -4742,7 +4742,8 @@ gfc_check_reshape (gfc_expr *source, gfc_expr *shape,
 	   && shape->ref->u.ar.as->lower[0]->ts.type == BT_INTEGER
 	   && shape->ref->u.ar.as->upper[0]->expr_type == EXPR_CONSTANT
 	   && shape->ref->u.ar.as->upper[0]->ts.type == BT_INTEGER
-	   && shape->symtree->n.sym->attr.flavor == FL_PARAMETER)
+	   && shape->symtree->n.sym->attr.flavor == FL_PARAMETER
+	   && shape->symtree->n.sym->value)
     {
       int i, extent;
       gfc_expr *e, *v;

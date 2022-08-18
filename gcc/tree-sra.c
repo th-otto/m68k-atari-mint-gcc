@@ -931,9 +931,19 @@ create_access (tree expr, gimple *stmt, bool write)
     }
   if (size == 0)
     return NULL;
+  if (offset < 0)
+    {
+      disqualify_candidate (base, "Encountered a negative offset access.");
+      return NULL;
+    }
   if (size < 0)
     {
       disqualify_candidate (base, "Encountered an unconstrained access.");
+      return NULL;
+    }
+  if (offset + size > tree_to_shwi (DECL_SIZE (base)))
+    {
+      disqualify_candidate (base, "Encountered an access beyond the base.");
       return NULL;
     }
 
@@ -1667,6 +1677,7 @@ build_ref_for_model (location_t loc, tree base, HOST_WIDE_INT offset,
 		     struct access *model, gimple_stmt_iterator *gsi,
 		     bool insert_after)
 {
+  gcc_assert (offset >= 0);
   if (TREE_CODE (model->expr) == COMPONENT_REF
       && DECL_BIT_FIELD (TREE_OPERAND (model->expr, 1)))
     {
@@ -1874,12 +1885,12 @@ maybe_add_sra_candidate (tree var)
       reject (var, "has incomplete type");
       return false;
     }
-  if (!tree_fits_uhwi_p (TYPE_SIZE (type)))
+  if (!tree_fits_shwi_p (TYPE_SIZE (type)))
     {
       reject (var, "type size not fixed");
       return false;
     }
-  if (tree_to_uhwi (TYPE_SIZE (type)) == 0)
+  if (tree_to_shwi (TYPE_SIZE (type)) == 0)
     {
       reject (var, "type size is zero");
       return false;
@@ -2718,6 +2729,19 @@ budget_for_propagation_access (tree decl)
   return true;
 }
 
+/* Return true if ACC or any of its subaccesses has grp_child set.  */
+
+static bool
+access_or_its_child_written (struct access *acc)
+{
+  if (acc->grp_write)
+    return true;
+  for (struct access *sub = acc->first_child; sub; sub = sub->next_sibling)
+    if (access_or_its_child_written (sub))
+      return true;
+  return false;
+}
+
 /* Propagate subaccesses and grp_write flags of RACC across an assignment link
    to LACC.  Enqueue sub-accesses as necessary so that the write flag is
    propagated transitively.  Return true if anything changed.  Additionally, if
@@ -2825,7 +2849,7 @@ propagate_subaccesses_from_rhs (struct access *lacc, struct access *racc)
       if (rchild->grp_unscalarizable_region
 	  || !budget_for_propagation_access (lacc->base))
 	{
-	  if (rchild->grp_write && !lacc->grp_write)
+	  if (!lacc->grp_write && access_or_its_child_written (rchild))
 	    {
 	      ret = true;
 	      subtree_mark_written_and_rhs_enqueue (lacc);

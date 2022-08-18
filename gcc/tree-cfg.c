@@ -2133,7 +2133,17 @@ gimple_merge_blocks (basic_block a, basic_block b)
 	  if (FORCED_LABEL (label))
 	    {
 	      gimple_stmt_iterator dest_gsi = gsi_start_bb (a);
-	      gsi_insert_before (&dest_gsi, stmt, GSI_NEW_STMT);
+	      tree first_label = NULL_TREE;
+	      if (!gsi_end_p (dest_gsi))
+		if (glabel *first_label_stmt
+		    = dyn_cast <glabel *> (gsi_stmt (dest_gsi)))
+		  first_label = gimple_label_label (first_label_stmt);
+	      if (first_label
+		  && (DECL_NONLOCAL (first_label)
+		      || EH_LANDING_PAD_NR (first_label) != 0))
+		gsi_insert_after (&dest_gsi, stmt, GSI_NEW_STMT);
+	      else
+		gsi_insert_before (&dest_gsi, stmt, GSI_NEW_STMT);
 	    }
 	  /* Other user labels keep around in a form of a debug stmt.  */
 	  else if (!DECL_ARTIFICIAL (label) && MAY_HAVE_DEBUG_BIND_STMTS)
@@ -3966,7 +3976,7 @@ verify_gimple_assign_binary (gassign *stmt)
 	    /* Because we special-case pointers to void we allow difference
 	       of arbitrary pointers with the same mode.  */
 	    || TYPE_MODE (rhs1_type) != TYPE_MODE (rhs2_type)
-	    || TREE_CODE (lhs_type) != INTEGER_TYPE
+	    || !INTEGRAL_TYPE_P (lhs_type)
 	    || TYPE_UNSIGNED (lhs_type)
 	    || TYPE_PRECISION (lhs_type) != TYPE_PRECISION (rhs1_type))
 	  {
@@ -7235,6 +7245,8 @@ move_block_to_fn (struct function *dest_cfun, basic_block bb,
       free_stmt_operands (cfun, stmt);
       push_cfun (dest_cfun);
       update_stmt (stmt);
+      if (is_gimple_call (stmt))
+	notice_special_calls (as_a <gcall *> (stmt));
       pop_cfun ();
     }
 

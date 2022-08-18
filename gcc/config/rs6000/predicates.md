@@ -1036,7 +1036,12 @@
 		    && !((DEFAULT_ABI == ABI_AIX
 			  || DEFAULT_ABI == ABI_ELFv2)
 			 && (SYMBOL_REF_EXTERNAL_P (op)
-			     || SYMBOL_REF_WEAK (op)))")))
+			     || SYMBOL_REF_WEAK (op)))
+		    && !(DEFAULT_ABI == ABI_ELFv2
+			 && SYMBOL_REF_DECL (op) != NULL
+			 && TREE_CODE (SYMBOL_REF_DECL (op)) == FUNCTION_DECL
+			 && (rs6000_fndecl_pcrel_p (SYMBOL_REF_DECL (op))
+			     != rs6000_pcrel_p (cfun)))")))
 
 ;; Return 1 if this operand is a valid input for a move insn.
 (define_predicate "input_operand"
@@ -1122,7 +1127,9 @@
 ;; Return 1 if this operand is valid for a MMA assemble accumulator insn.
 (define_special_predicate "mma_assemble_input_operand"
   (match_test "(mode == V16QImode
-		&& (vsx_register_operand (op, mode) || MEM_P (op)))"))
+		&& (vsx_register_operand (op, mode)
+		    || (MEM_P (op)
+			&& quad_address_p (XEXP (op, 0), mode, false))))"))
 
 ;; Return true if operand is an operator used in rotate-and-mask instructions.
 (define_predicate "rotate_mask_operator"

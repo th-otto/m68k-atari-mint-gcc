@@ -956,10 +956,13 @@ Driver Undocumented
 ; 14: Corrects the mangling of nullptr expression.
 ;     Default in G++ 10.
 ;
+; 15: Corrects G++ 10 ABI tag regression [PR98481].
+;     Available, but not default, in G++ 10.3.
+;
 ; Additional positive integers will be assigned as new versions of
 ; the ABI become the default version of the ABI.
 fabi-version=
-Common Joined RejectNegative UInteger Var(flag_abi_version) Init(0)
+Common Joined RejectNegative UInteger Var(flag_abi_version) Init(14)
 The version of the C++ ABI in use.
 
 faggressive-loop-optimizations
@@ -1743,7 +1746,7 @@ Common RejectNegative Alias(fcf-protection=,full)
 
 fcf-protection=
 Common Report Joined RejectNegative Enum(cf_protection_level) Var(flag_cf_protection) Init(CF_NONE)
--fcf-protection=[full|branch|return|none]	Instrument functions with checks to verify jump/call/return control-flow transfer
+-fcf-protection=[full|branch|return|none|check]	Instrument functions with checks to verify jump/call/return control-flow transfer
 instructions have valid targets.
 
 Enum
@@ -1757,6 +1760,9 @@ Enum(cf_protection_level) String(branch) Value(CF_BRANCH)
 
 EnumValue
 Enum(cf_protection_level) String(return) Value(CF_RETURN)
+
+EnumValue
+Enum(cf_protection_level) String(check) Value(CF_CHECK)
 
 EnumValue
 Enum(cf_protection_level) String(none) Value(CF_NONE)
@@ -2192,7 +2198,7 @@ Enum(profile_reproducibility) String(parallel-runs) Value(PROFILE_REPRODUCIBILIT
 EnumValue
 Enum(profile_reproducibility) String(multithreaded) Value(PROFILE_REPRODUCIBILITY_MULTITHREADED)
 
-fprofile-reproducible
+fprofile-reproducible=
 Common Joined RejectNegative Var(flag_profile_reproducible) Enum(profile_reproducibility) Init(PROFILE_REPRODUCIBILITY_SERIAL)
 -fprofile-reproducible=[serial|parallel-runs|multithreaded]	Control level of reproducibility of profile gathered by -fprofile-generate.
 
@@ -2852,7 +2858,7 @@ Common Report Var(flag_unroll_all_loops) Optimization
 Perform loop unrolling for all loops.
 
 funroll-completely-grow-size
-Undocumented Var(flag_cunroll_grow_size) Init(2) Optimization
+Undocumented Var(flag_cunroll_grow_size) Optimization
 ; Internal undocumented flag, allow size growth during complete unrolling
 
 ; Nonzero means that loop optimizer may assume that the induction variables

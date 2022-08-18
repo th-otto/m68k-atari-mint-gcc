@@ -554,7 +554,7 @@ map_arguments (tree parms, tree args)
 	TREE_PURPOSE (p) = TMPL_ARG (args, level, index);
       }
     else
-      TREE_PURPOSE (p) = TREE_VALUE (p);
+      TREE_PURPOSE (p) = template_parm_to_arg (p);
 
   return parms;
 }
@@ -686,7 +686,8 @@ normalize_concept_check (tree check, tree args, norm_info info)
     }
 
   /* Substitute through the arguments of the concept check. */
-  targs = tsubst_template_args (targs, args, info.complain, info.in_decl);
+  if (args)
+    targs = tsubst_template_args (targs, args, info.complain, info.in_decl);
   if (targs == error_mark_node)
     return error_mark_node;
 
@@ -839,6 +840,8 @@ get_normalized_constraints_from_decl (tree d, bool diag = false)
   if (!diag)
     if (tree *p = hash_map_safe_get (normalized_map, tmpl))
       return *p;
+
+  push_nested_class_guard pncs (DECL_CONTEXT (d));
 
   tree args = generic_targs_for (tmpl);
   tree ci = get_constraints (decl);
@@ -1274,7 +1277,6 @@ build_concept_check_arguments (tree arg, tree rest)
     }
   else
     {
-      gcc_assert (rest != NULL_TREE);
       args = rest;
     }
   return args;
@@ -1373,13 +1375,6 @@ build_concept_check (tree target, tree args, tsubst_flags_t complain)
 tree
 build_concept_check (tree decl, tree arg, tree rest, tsubst_flags_t complain)
 {
-  if (arg == NULL_TREE && rest == NULL_TREE)
-    {
-      tree id = build_nt (TEMPLATE_ID_EXPR, decl, rest);
-      error ("invalid use concept %qE", id);
-      return error_mark_node;
-    }
-
   tree args = build_concept_check_arguments (arg, rest);
 
   if (standard_concept_p (decl))
@@ -1490,7 +1485,7 @@ finish_shorthand_constraint (tree decl, tree constr)
 
   /* Get the argument and overload used for the requirement
      and adjust it if we're going to expand later.  */
-  tree arg = template_parm_to_arg (build_tree_list (NULL_TREE, decl));
+  tree arg = template_parm_to_arg (decl);
   if (apply_to_each_p && declared_pack_p)
     arg = PACK_EXPANSION_PATTERN (TREE_VEC_ELT (ARGUMENT_PACK_ARGS (arg), 0));
 
@@ -2865,6 +2860,9 @@ constraint_satisfaction_value (tree t, tree args, tsubst_flags_t complain)
 bool
 constraints_satisfied_p (tree t)
 {
+  if (!flag_concepts)
+    return true;
+
   return constraint_satisfaction_value (t, tf_none) == boolean_true_node;
 }
 
@@ -2874,6 +2872,9 @@ constraints_satisfied_p (tree t)
 bool
 constraints_satisfied_p (tree t, tree args)
 {
+  if (!flag_concepts)
+    return true;
+
   return constraint_satisfaction_value (t, args, tf_none) == boolean_true_node;
 }
 

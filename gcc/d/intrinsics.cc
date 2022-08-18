@@ -430,11 +430,14 @@ expand_intrinsic_copysign (tree callexp)
     from = fold_convert (type, from);
 
   /* Which variant of __builtin_copysign* should we call?  */
-  tree builtin = mathfn_built_in (type, BUILT_IN_COPYSIGN);
-  gcc_assert (builtin != NULL_TREE);
+  built_in_function code = (type == float_type_node) ? BUILT_IN_COPYSIGNF
+    : (type == double_type_node) ? BUILT_IN_COPYSIGN
+    : (type == long_double_type_node) ? BUILT_IN_COPYSIGNL
+    : END_BUILTINS;
 
-  return call_builtin_fn (callexp, DECL_FUNCTION_CODE (builtin), 2,
-			  to, from);
+  gcc_assert (code != END_BUILTINS);
+
+  return call_builtin_fn (callexp, code, 2, to, from);
 }
 
 /* Expand a front-end intrinsic call to pow().  This takes two arguments, the
@@ -511,8 +514,17 @@ expand_intrinsic_vaarg (tree callexp)
     {
       parmn = CALL_EXPR_ARG (callexp, 1);
       STRIP_NOPS (parmn);
-      gcc_assert (TREE_CODE (parmn) == ADDR_EXPR);
-      parmn = TREE_OPERAND (parmn, 0);
+
+      /* The `ref' argument to va_arg is either an address or reference,
+	 get the value of it.  */
+      if (TREE_CODE (parmn) == PARM_DECL && POINTER_TYPE_P (TREE_TYPE (parmn)))
+	parmn = build_deref (parmn);
+      else
+	{
+	  gcc_assert (TREE_CODE (parmn) == ADDR_EXPR);
+	  parmn = TREE_OPERAND (parmn, 0);
+	}
+
       type = TREE_TYPE (parmn);
     }
 
@@ -546,10 +558,16 @@ expand_intrinsic_vastart (tree callexp)
   /* The va_list argument should already have its address taken.  The second
      argument, however, is inout and that needs to be fixed to prevent a
      warning.  Could be casting, so need to check type too?  */
-  gcc_assert (TREE_CODE (ap) == ADDR_EXPR && TREE_CODE (parmn) == ADDR_EXPR);
+  gcc_assert (TREE_CODE (ap) == ADDR_EXPR
+	      || (TREE_CODE (ap) == PARM_DECL
+		  && POINTER_TYPE_P (TREE_TYPE (ap))));
 
   /* Assuming nobody tries to change the return type.  */
-  parmn = TREE_OPERAND (parmn, 0);
+  if (TREE_CODE (parmn) != PARM_DECL)
+    {
+      gcc_assert (TREE_CODE (parmn) == ADDR_EXPR);
+      parmn = TREE_OPERAND (parmn, 0);
+    }
 
   return call_builtin_fn (callexp, BUILT_IN_VA_START, 2, ap, parmn);
 }

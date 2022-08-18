@@ -452,6 +452,16 @@
  (and (match_code "mem")
       (match_test "TARGET_32BIT && arm_coproc_mem_operand (op, FALSE)")))
 
+(define_memory_constraint "Uj"
+ "@internal
+  In ARM/Thumb-2 state a VFP load/store address that supports writeback
+  for Neon but not for MVE"
+ (and (match_code "mem")
+      (match_test "TARGET_32BIT")
+      (match_test "TARGET_HAVE_MVE
+                   ? arm_coproc_mem_operand_no_writeback (op)
+                   : neon_vector_mem_operand (op, 2, true)")))
+
 (define_memory_constraint "Uy"
  "@internal
   In ARM/Thumb-2 state a valid iWMMX load/store address."
@@ -487,6 +497,13 @@
       (match_test "(TARGET_HAVE_MVE || TARGET_HAVE_MVE_FLOAT)
 		   && mve_vector_mem_operand (GET_MODE (op),
 					      XEXP (op, 0), true)")))
+
+(define_constraint "Ui"
+  "@internal
+   Match a constant (as per the 'i' constraint) provided that we have the
+   literal pool available.  This is useful for load insns that would need
+   to move such constants to the literal pool after RA."
+ (match_test "!arm_disable_literal_pool && satisfies_constraint_i (op)"))
 
 (define_memory_constraint "Uq"
  "@internal

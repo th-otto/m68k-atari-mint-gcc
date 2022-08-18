@@ -1,3 +1,32 @@
+2021-04-08  Release Manager
+
+	* GCC 10.3.0 released.
+
+2021-01-24  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-01-23  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/98806
+	* libdruntime/gcc/sections/elf_shared.d (MIPS_Any): Declare version
+	for MIPS32 and MIPS64.
+	(getDependencies): Adjust dlpi_addr on MIPS_Any.
+
+2021-01-03  Iain Sandoe  <iain@sandoe.co.uk>
+	    Jakub Jelinek   <jakub@redhat.com>
+
+	PR target/97865
+	* configure: Regenerate.
+
+2020-10-15  Maciej W. Rozycki  <macro@linux-mips.org>
+
+	Backported from master:
+	2020-10-12  Maciej W. Rozycki  <macro@linux-mips.org>
+
+	* libdruntime/config/mips/switchcontext.S [__mips_hard_float]:
+	Use L.D and S.D generic assembly instructions rather than LDC1
+	and SDC1 MIPS II hardware instructions.
+
 2020-07-23  Release Manager
 
 	* GCC 10.2.0 released.

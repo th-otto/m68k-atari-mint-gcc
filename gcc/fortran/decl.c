@@ -1146,6 +1146,9 @@ char_len_param_value (gfc_expr **expr, bool *deferred)
       gfc_free_expr (e);
     }
 
+  if (gfc_seen_div0)
+    m = MATCH_ERROR;
+
   return m;
 
 syntax:
@@ -7387,6 +7390,7 @@ gfc_match_function_decl (void)
      procedure interface body.  */
     if (sym->attr.is_bind_c && sym->attr.module_procedure && sym->old_symbol
   	&& strcmp (sym->name, sym->old_symbol->name) == 0
+	&& sym->binding_label && sym->old_symbol->binding_label
 	&& strcmp (sym->binding_label, sym->old_symbol->binding_label) != 0)
       {
 	  const char *null = "NULL", *s1, *s2;
@@ -7902,6 +7906,7 @@ gfc_match_subroutine (void)
 	 procedure interface body.  */
       if (sym->attr.module_procedure && sym->old_symbol
   	  && strcmp (sym->name, sym->old_symbol->name) == 0
+	  && sym->binding_label && sym->old_symbol->binding_label
 	  && strcmp (sym->binding_label, sym->old_symbol->binding_label) != 0)
 	{
 	  const char *null = "NULL", *s1, *s2;
@@ -9798,6 +9803,15 @@ gfc_match_submod_proc (void)
 
   if (gfc_match_eos () != MATCH_YES)
     {
+      /* Unset st->n.sym. Note: in reject_statement (), the symbol changes are
+	 undone, such that the st->n.sym->formal points to the original symbol;
+	 if now this namespace is finalized, the formal namespace is freed,
+	 but it might be still needed in the parent namespace.  */
+      gfc_symtree *st = gfc_find_symtree (gfc_current_ns->sym_root, sym->name);
+      st->n.sym = NULL;
+      gfc_free_symbol (sym->tlink);
+      sym->tlink = NULL;
+      sym->refs--;
       gfc_syntax_error (ST_MODULE_PROC);
       return MATCH_ERROR;
     }

@@ -551,11 +551,12 @@ Objective-C and Objective-C++ Dialects}.
 -fprofile-dir=@var{path}  -fprofile-generate  -fprofile-generate=@var{path} @gol
 -fprofile-note=@var{path} -fprofile-prefix-path=@var{path} @gol
 -fprofile-update=@var{method} -fprofile-filter-files=@var{regex} @gol
--fprofile-exclude-files=@var{regex} -fprofile-reproducibility @gol
+-fprofile-exclude-files=@var{regex} @gol
+-fprofile-reproducible=@r{[}multithreaded@r{|}parallel-runs@r{|}serial@r{]} @gol
 -fsanitize=@var{style}  -fsanitize-recover  -fsanitize-recover=@var{style} @gol
 -fasan-shadow-offset=@var{number}  -fsanitize-sections=@var{s1},@var{s2},... @gol
 -fsanitize-undefined-trap-on-error  -fbounds-check @gol
--fcf-protection=@r{[}full@r{|}branch@r{|}return@r{|}none@r{]} @gol
+-fcf-protection=@r{[}full@r{|}branch@r{|}return@r{|}none@r{|}check@r{]} @gol
 -fstack-protector  -fstack-protector-all  -fstack-protector-strong @gol
 -fstack-protector-explicit  -fstack-check @gol
 -fstack-limit-register=@var{reg}  -fstack-limit-symbol=@var{sym} @gol
@@ -696,6 +697,7 @@ Objective-C and Objective-C++ Dialects}.
 -msign-return-address=@var{scope} @gol
 -mbranch-protection=@var{none}|@var{standard}|@var{pac-ret}[+@var{leaf}
 +@var{b-key}]|@var{bti} @gol
+-mharden-sls=@var{opts} @gol
 -march=@var{name}  -mcpu=@var{name}  -mtune=@var{name}  @gol
 -moverride=@var{string}  -mverbose-cost-dump @gol
 -mstack-protector-guard=@var{guard} -mstack-protector-guard-reg=@var{sysreg} @gol
@@ -862,7 +864,7 @@ Objective-C and Objective-C++ Dialects}.
 
 @emph{eBPF Options}
 @gccoptlist{-mbig-endian -mlittle-endian -mkernel=@var{version}
--mframe-limit=@var{bytes}}
+-mframe-limit=@var{bytes} -mxbpf}
 
 @emph{FR30 Options}
 @gccoptlist{-msmall-model  -mno-lsim}
@@ -13234,6 +13236,24 @@ The number of Newton iterations for calculating the reciprocal for double type.
 The precision of division is propotional to this param when division
 approximation is enabled.  The default value is 2.
 
+@item aarch64-autovec-preference
+Force an ISA selection strategy for auto-vectorization.  Accepts values from
+0 to 4, inclusive.
+@table @samp
+@item 0
+Use the default heuristics.
+@item 1
+Use only Advanced SIMD for auto-vectorization.
+@item 2
+Use only SVE for auto-vectorization.
+@item 3
+Use both Advanced SIMD and SVE.  Prefer Advanced SIMD when the costs are
+deemed equal.
+@item 4
+Use both Advanced SIMD and SVE.  Prefer SVE when the costs are deemed equal.
+@end table
+The default value is 0.
+
 @end table
 
 @end table
@@ -13478,14 +13498,14 @@ all the regular expressions (separated by a semi-colon).
 For example, @option{-fprofile-exclude-files=/usr/*} will prevent instrumentation
 of all files that are located in @file{/usr/} folder.
 
-@item -fprofile-reproducible
+@item -fprofile-reproducible=@r{[}multithreaded@r{|}parallel-runs@r{|}serial@r{]}
 @opindex fprofile-reproducible
 Control level of reproducibility of profile gathered by
 @code{-fprofile-generate}.  This makes it possible to rebuild program
 with same outcome which is useful, for example, for distribution
 packages.
 
-With @option{-fprofile-reproducibility=serial} the profile gathered by
+With @option{-fprofile-reproducible=serial} the profile gathered by
 @option{-fprofile-generate} is reproducible provided the trained program
 behaves the same at each invocation of the train run, it is not
 multi-threaded and profile data streaming is always done in the same
@@ -13500,7 +13520,7 @@ Such non-reproducible part of programs may be annotated by
 @option{-l} can be used to dump gathered data and verify that they are
 indeed reproducible.
 
-With @option{-fprofile-reproducibility=parallel-runs} collected profile
+With @option{-fprofile-reproducible=parallel-runs} collected profile
 stays reproducible regardless the order of streaming of the data into
 gcda files.  This setting makes it possible to run multiple instances of
 instrumented program in parallel (such as with @code{make -j}). This
@@ -13831,7 +13851,7 @@ operand constant, @code{__sanitizer_cov_trace_cmpf} or
 @code{__sanitizer_cov_trace_cmpd} for float or double comparisons and
 @code{__sanitizer_cov_trace_switch} for switch statements.
 
-@item -fcf-protection=@r{[}full@r{|}branch@r{|}return@r{|}none@r{]}
+@item -fcf-protection=@r{[}full@r{|}branch@r{|}return@r{|}none@r{|}check@r{]}
 @opindex fcf-protection
 Enable code instrumentation of control-flow transfers to increase
 program security by checking that target addresses of control-flow
@@ -13848,6 +13868,11 @@ implements checking of validity at the point of returning from a
 function.  The value @code{full} is an alias for specifying both
 @code{branch} and @code{return}. The value @code{none} turns off
 instrumentation.
+
+The value @code{check} is used for the final link with link-time
+optimization (LTO).  An error is issued if LTO object files are
+compiled with different @option{-fcf-protection} values.  The
+value @code{check} is ignored at the compile time.
 
 The macro @code{__CET__} is defined when @option{-fcf-protection} is
 used.  The first bit of @code{__CET__} is set to 1 for the value
@@ -16969,13 +16994,14 @@ performance of the code.  Permissible values for this option are:
 @samp{cortex-a57}, @samp{cortex-a72}, @samp{cortex-a73}, @samp{cortex-a75},
 @samp{cortex-a76}, @samp{cortex-a76ae}, @samp{cortex-a77},
 @samp{cortex-a65}, @samp{cortex-a65ae}, @samp{cortex-a34},
-@samp{ares}, @samp{exynos-m1}, @samp{emag}, @samp{falkor},
-@samp{neoverse-e1},@samp{neoverse-n1},@samp{qdf24xx}, @samp{saphira},
-@samp{phecda}, @samp{xgene1}, @samp{vulcan}, @samp{octeontx},
+@samp{ares}, @samp{exynos-m1}, @samp{emag}, @samp{falkor}, @samp{neoverse-e1},
+@samp{neoverse-n1}, @samp{neoverse-n2}, @samp{neoverse-v1}, @samp{qdf24xx},
+@samp{saphira}, @samp{phecda}, @samp{xgene1}, @samp{vulcan}, @samp{octeontx},
 @samp{octeontx81},  @samp{octeontx83},
 @samp{octeontx2}, @samp{octeontx2t98}, @samp{octeontx2t96}
 @samp{octeontx2t93}, @samp{octeontx2f95}, @samp{octeontx2f95n},
-@samp{octeontx2f95mm}
+@samp{octeontx2f95mm},
+@samp{a64fx},
 @samp{thunderx}, @samp{thunderxt88},
 @samp{thunderxt88p1}, @samp{thunderxt81}, @samp{tsv110},
 @samp{thunderxt83}, @samp{thunderx2t99}, @samp{thunderx3t110}, @samp{zeus},
@@ -17064,6 +17090,17 @@ argument @samp{leaf} can be used to extend the signing to include leaf
 functions.  The optional argument @samp{b-key} can be used to sign the functions
 with the B-key instead of the A-key.
 @samp{bti} turns on branch target identification mechanism.
+
+@item -mharden-sls=@var{opts}
+@opindex mharden-sls
+Enable compiler hardening against straight line speculation (SLS).
+@var{opts} is a comma-separated list of the following options:
+@table @samp
+@item retbr
+@item blr
+@end table
+In addition, @samp{-mharden-sls=all} enables all SLS hardening while
+@samp{-mharden-sls=none} disables all SLS hardening.
 
 @item -msve-vector-bits=@var{bits}
 @opindex msve-vector-bits
@@ -18805,9 +18842,9 @@ Permissible names are: @samp{arm7tdmi}, @samp{arm7tdmi-s}, @samp{arm710t},
 @samp{cortex-m35p}, @samp{cortex-m55},
 @samp{cortex-m1.small-multiply}, @samp{cortex-m0.small-multiply},
 @samp{cortex-m0plus.small-multiply}, @samp{exynos-m1}, @samp{marvell-pj4},
-@samp{neoverse-n1}, @samp{xscale}, @samp{iwmmxt}, @samp{iwmmxt2},
-@samp{ep9312}, @samp{fa526}, @samp{fa626}, @samp{fa606te}, @samp{fa626te},
-@samp{fmp626}, @samp{fa726te}, @samp{xgene1}.
+@samp{neoverse-n1}, @samp{neoverse-n2}, @samp{neoverse-v1}, @samp{xscale},
+@samp{iwmmxt}, @samp{iwmmxt2}, @samp{ep9312}, @samp{fa526}, @samp{fa626},
+@samp{fa606te}, @samp{fa626te}, @samp{fmp626}, @samp{fa726te}, @samp{xgene1}.
 
 Additionally, this option can specify that GCC should tune the performance
 of the code for a big.LITTLE system.  Permissible names are:
@@ -19197,7 +19234,7 @@ is only available when generating non-pic code for M-profile targets.
 @opindex mcmse
 Generate secure code as per the "ARMv8-M Security Extensions: Requirements on
 Development Tools Engineering Specification", which can be found on
-@url{http://infocenter.arm.com/help/topic/com.arm.doc.ecm0359818/ECM0359818_armv8m_security_extensions_reqs_on_dev_tools_1_0.pdf}.
+@url{https://developer.arm.com/documentation/ecm0359818/latest/}.
 
 @item -mfdpic
 @itemx -mno-fdpic
@@ -21032,6 +21069,14 @@ Generate code for a big-endian target.
 @item -mlittle-endian
 @opindex mlittle-endian
 Generate code for a little-endian target.  This is the default.
+
+@item -mxbpf
+Generate code for an expanded version of BPF, which relaxes some of
+the restrictions imposed by the BPF architecture:
+@itemize @minus
+@item Save and restore callee-saved registers at function entry and
+exit, respectively.
+@end itemize
 @end table
 
 @node FR30 Options
@@ -26171,9 +26216,10 @@ SVR4 ABI)@.
 @item -mabi=@var{abi-type}
 @opindex mabi
 Extend the current ABI with a particular extension, or remove such extension.
-Valid values are @samp{altivec}, @samp{no-altivec},
+Valid values are: @samp{altivec}, @samp{no-altivec},
 @samp{ibmlongdouble}, @samp{ieeelongdouble},
-@samp{elfv1}, @samp{elfv2}@.
+@samp{elfv1}, @samp{elfv2},
+and for AIX: @samp{vec-extabi}, @samp{vec-default}@.
 
 @item -mabi=ibmlongdouble
 @opindex mabi=ibmlongdouble
@@ -27019,7 +27065,7 @@ system representing a certain processor type.  Possible values for
 @var{cpu-type} are @samp{z900}/@samp{arch5}, @samp{z990}/@samp{arch6},
 @samp{z9-109}, @samp{z9-ec}/@samp{arch7}, @samp{z10}/@samp{arch8},
 @samp{z196}/@samp{arch9}, @samp{zEC12}, @samp{z13}/@samp{arch11},
-@samp{z14}/@samp{arch12}, and @samp{native}.
+@samp{z14}/@samp{arch12}, @samp{z15}/@samp{arch13}, and @samp{native}.
 
 The default is @option{-march=z900}.
 
@@ -28662,14 +28708,14 @@ BMI, BMI2 and F16C instruction set support.
 
 @item broadwell
 Intel Broadwell CPU with 64-bit extensions, MOVBE, MMX, SSE, SSE2, SSE3, SSSE3,
-SSE4.1, SSE4.2, POPCNT, AVX, AVX2, AES, PCLMUL, FSGSBASE, RDRND, FMA,
-BMI, BMI2, F16C, RDSEED, ADCX and PREFETCHW instruction set support.
+SSE4.1, SSE4.2, POPCNT, AVX, AVX2, AES, PCLMUL, FSGSBASE, RDRND, FMA, BMI, BMI2,
+F16C, RDSEED ADCX and PREFETCHW instruction set support.
 
 @item skylake
 Intel Skylake CPU with 64-bit extensions, MOVBE, MMX, SSE, SSE2, SSE3, SSSE3,
 SSE4.1, SSE4.2, POPCNT, AVX, AVX2, AES, PCLMUL, FSGSBASE, RDRND, FMA,
-BMI, BMI2, F16C, RDSEED, ADCX, PREFETCHW, CLFLUSHOPT, XSAVEC and
-XSAVES instruction set support.
+BMI, BMI2, F16C, RDSEED, ADCX, PREFETCHW, CLFLUSHOPT, XSAVEC and XSAVES
+instruction set support.
 
 @item bonnell
 Intel Bonnell CPU with 64-bit extensions, MOVBE, MMX, SSE, SSE2, SSE3 and SSSE3
@@ -28677,34 +28723,36 @@ instruction set support.
 
 @item silvermont
 Intel Silvermont CPU with 64-bit extensions, MOVBE, MMX, SSE, SSE2, SSE3, SSSE3,
-SSE4.1, SSE4.2, POPCNT, AES, PCLMUL and RDRND instruction set support.
+SSE4.1, SSE4.2, POPCNT, AES, PREFETCHW, PCLMUL and RDRND instruction set support.
 
 @item goldmont
 Intel Goldmont CPU with 64-bit extensions, MOVBE, MMX, SSE, SSE2, SSE3, SSSE3,
-SSE4.1, SSE4.2, POPCNT, AES, PCLMUL, RDRND, XSAVE, XSAVEOPT and FSGSBASE
-instruction set support.
+SSE4.1, SSE4.2, POPCNT, AES, PREFETCHW, PCLMUL, RDRND, XSAVE, XSAVEC, XSAVES,
+XSAVEOPT and FSGSBASE instruction set support.
 
 @item goldmont-plus
 Intel Goldmont Plus CPU with 64-bit extensions, MOVBE, MMX, SSE, SSE2, SSE3,
-SSSE3, SSE4.1, SSE4.2, POPCNT, AES, PCLMUL, RDRND, XSAVE, XSAVEOPT, FSGSBASE,
-PTWRITE, RDPID, SGX and UMIP instruction set support.
+SSSE3, SSE4.1, SSE4.2, POPCNT, AES, PREFETCHW, PCLMUL, RDRND, XSAVE, XSAVEC,
+XSAVES, XSAVEOPT, FSGSBASE, PTWRITE, RDPID, SGX and UMIP instruction set support.
 
 @item tremont
 Intel Tremont CPU with 64-bit extensions, MOVBE, MMX, SSE, SSE2, SSE3, SSSE3,
-SSE4.1, SSE4.2, POPCNT, AES, PCLMUL, RDRND, XSAVE, XSAVEOPT, FSGSBASE, PTWRITE,
-RDPID, SGX, UMIP, GFNI-SSE, CLWB and ENCLV instruction set support.
+SSE4.1, SSE4.2, POPCNT, AES, PREFETCHW, PCLMUL, RDRND, XSAVE, XSAVEC, XSAVES,
+XSAVEOPT, FSGSBASE, PTWRITE, RDPID, SGX, UMIP, GFNI-SSE, CLWB, MOVDIRI,
+MOVDIR64B, CLDEMOTE and WAITPKG instruction set support.
 
 @item knl
 Intel Knight's Landing CPU with 64-bit extensions, MOVBE, MMX, SSE, SSE2, SSE3,
 SSSE3, SSE4.1, SSE4.2, POPCNT, AVX, AVX2, AES, PCLMUL, FSGSBASE, RDRND, FMA,
-BMI, BMI2, F16C, RDSEED, ADCX, PREFETCHW, AVX512F, AVX512PF, AVX512ER and
-AVX512CD instruction set support.
+BMI, BMI2, F16C, RDSEED, ADCX, PREFETCHW, PREFETCHWT1, AVX512F, AVX512PF,
+AVX512ER and AVX512CD instruction set support.
 
 @item knm
 Intel Knights Mill CPU with 64-bit extensions, MOVBE, MMX, SSE, SSE2, SSE3,
 SSSE3, SSE4.1, SSE4.2, POPCNT, AVX, AVX2, AES, PCLMUL, FSGSBASE, RDRND, FMA,
-BMI, BMI2, F16C, RDSEED, ADCX, PREFETCHW, AVX512F, AVX512PF, AVX512ER, AVX512CD,
-AVX5124VNNIW, AVX5124FMAPS and AVX512VPOPCNTDQ instruction set support.
+BMI, BMI2, F16C, RDSEED, ADCX, PREFETCHW, PREFETCHWT1, AVX512F, AVX512PF,
+AVX512ER, AVX512CD, AVX5124VNNIW, AVX5124FMAPS and AVX512VPOPCNTDQ instruction
+set support.
 
 @item skylake-avx512
 Intel Skylake Server CPU with 64-bit extensions, MOVBE, MMX, SSE, SSE2, SSE3,
@@ -28755,8 +28803,8 @@ SSE4.1, SSE4.2, POPCNT, PKU, AVX, AVX2, AES, PCLMUL, FSGSBASE, RDRND, FMA, BMI,
 BMI2, F16C, RDSEED, ADCX, PREFETCHW, CLFLUSHOPT, XSAVEC, XSAVES, AVX512F,
 AVX512VL, AVX512BW, AVX512DQ, AVX512CD, AVX512VBMI, AVX512IFMA, SHA, CLWB, UMIP,
 RDPID, GFNI, AVX512VBMI2, AVX512VPOPCNTDQ, AVX512BITALG, AVX512VNNI, VPCLMULQDQ,
-VAES, PCONFIG, WBNOINVD, MOVDIRI, MOVDIR64B and  AVX512VP2INTERSECT instruction
-set support.
+VAES, PCONFIG, WBNOINVD, MOVDIRI, MOVDIR64B, AVX512VP2INTERSECT and KEYLOCKER
+instruction set support.
 
 @item k6
 AMD K6 CPU with MMX instruction set support.
@@ -28832,6 +28880,13 @@ supersets BMI, BMI2, CLWB, F16C, FMA, FSGSBASE, AVX, AVX2, ADCX, RDSEED,
 MWAITX, SHA, CLZERO, AES, PCLMUL, CX16, MOVBE, MMX, SSE, SSE2, SSE3, SSE4A,
 SSSE3, SSE4.1, SSE4.2, ABM, XSAVEC, XSAVES, CLFLUSHOPT, POPCNT, RDPID,
 WBNOINVD, and 64-bit instruction set extensions.)
+
+@item znver3
+AMD Family 19h core based CPUs with x86-64 instruction set support. (This
+supersets BMI, BMI2, CLWB, F16C, FMA, FSGSBASE, AVX, AVX2, ADCX, RDSEED,
+MWAITX, SHA, CLZERO, AES, PCLMUL, CX16, MOVBE, MMX, SSE, SSE2, SSE3, SSE4A,
+SSSE3, SSE4.1, SSE4.2, ABM, XSAVEC, XSAVES, CLFLUSHOPT, POPCNT, RDPID,
+WBNOINVD, PKU, VPCLMULQDQ, VAES, and 64-bit instruction set extensions.)
 
 @item btver1
 CPUs based on AMD Family 14h cores with x86-64 instruction set support.  (This

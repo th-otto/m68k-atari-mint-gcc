@@ -1,3 +1,60 @@
+2021-04-08  Release Manager
+
+	* GCC 10.3.0 released.
+
+2021-03-19  Matthias Klose  <doko@ubuntu.com>
+
+	Backported from master:
+	2021-03-19  Matthias Klose  <doko@ubuntu.com>
+
+	* texi2pod.pl: Substitute @tie{} with a space for the man pages.
+
+2021-01-28  Eric Botcazou  <ebotcazou@adacore.com>
+
+	PR lto/85574
+	* compare-lto: Deal with PE-COFF executables specifically.
+
+2021-01-07  Martin Liska  <mliska@suse.cz>
+
+	* gcc-changelog/git_commit.py: Sync from master.
+	* gcc-changelog/git_email.py: Likewise.
+	* gcc-changelog/git_repository.py: Likewise.
+	* gcc-changelog/test_email.py: Likewise.
+	* gcc-changelog/test_patches.txt: Likewise.
+
+2020-11-25  Martin Liska  <mliska@suse.cz>
+
+	* gcc-changelog/git_commit.py: Use revert_regex instead
+	of string prefix.  Convert sets to literals.
+
+2020-11-06  Martin Liska  <mliska@suse.cz>
+
+	* gcc-changelog/git_commit.py: Sync.
+	* gcc-changelog/git_email.py: Likewise.
+	* gcc-changelog/git_repository.py: Likewise.
+	* gcc-changelog/test_email.py: Likewise.
+	* gcc-changelog/test_patches.txt: Likewise.
+	* gcc-changelog/setup.cfg: New file.
+
+2020-07-29  Martin Liska  <mliska@suse.cz>
+
+	* git-backport.py: fix how are ChangeLog paths combined.
+
+2020-07-23  Martin Liska  <mliska@suse.cz>
+
+	Backported from master:
+	2020-07-23  Martin Liska  <mliska@suse.cz>
+
+	* gcc-changelog/git_commit.py: When reverting a backport,
+	we should print only Revert header.
+
+2020-07-23  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2020-07-17  Jonathan Wakely  <jwakely@redhat.com>
+
+	* gcc-changelog/git_update_version.py: Fix typo.
+
 2020-07-23  Release Manager
 
 	* GCC 10.2.0 released.
