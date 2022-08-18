@@ -3438,9 +3438,6 @@ finish_subprog_decl (tree decl, tree asm_name, tree type)
   DECL_BY_REFERENCE (result_decl) = TREE_ADDRESSABLE (type);
   DECL_RESULT (decl) = result_decl;
 
-  /* Propagate the "const" property.  */
-  TREE_READONLY (decl) = TYPE_READONLY (type);
-
   /* Propagate the "pure" property.  */
   DECL_PURE_P (decl) = TYPE_RESTRICT (type);
 
@@ -4233,6 +4230,7 @@ update_pointer_to (tree old_type, tree new_type)
 	    TREE_TYPE (t) = new_type;
 	    if (TYPE_NULL_BOUNDS (t))
 	      TREE_TYPE (TREE_OPERAND (TYPE_NULL_BOUNDS (t), 0)) = new_type;
+	    TYPE_CANONICAL (t) = TYPE_CANONICAL (TYPE_POINTER_TO (new_type));
 	  }
 
       /* Chain REF and its variants at the end.  */
@@ -4249,7 +4247,10 @@ update_pointer_to (tree old_type, tree new_type)
       /* Now adjust them.  */
       for (; ref; ref = TYPE_NEXT_REF_TO (ref))
 	for (t = TYPE_MAIN_VARIANT (ref); t; t = TYPE_NEXT_VARIANT (t))
-	  TREE_TYPE (t) = new_type;
+	  {
+	    TREE_TYPE (t) = new_type;
+	    TYPE_CANONICAL (t) = TYPE_CANONICAL (TYPE_REFERENCE_TO (new_type));
+	  }
 
       TYPE_POINTER_TO (old_type) = NULL_TREE;
       TYPE_REFERENCE_TO (old_type) = NULL_TREE;
@@ -5762,8 +5763,7 @@ can_materialize_object_renaming_p (Node_Id expr)
 
 	    const Uint bitpos
 	      = Normalized_First_Bit (Entity (Selector_Name (expr)));
-	    if (!UI_Is_In_Int_Range (bitpos)
-		|| (bitpos != UI_No_Uint && bitpos != UI_From_Int (0)))
+	    if (bitpos != UI_No_Uint && bitpos != Uint_0)
 	      return false;
 
 	    expr = Prefix (expr);

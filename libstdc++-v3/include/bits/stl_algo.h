@@ -5803,7 +5803,7 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
       using __uc_type = common_type_t<typename _Gen::result_type, _USize>;
 
       if (__first == __last)
-	return __out;
+	return ___out;
 
       __distrib_type __d{};
       _Size __unsampled_sz = std::distance(__first, __last);

@@ -2322,11 +2322,15 @@ gnat_to_gnu_entity (Entity_Id gnat_entity, tree gnu_expr, bool definition)
 	      set_nonaliased_component_on_array_type (tem);
 	  }
 
-	/* If an alignment is specified, use it if valid.  But ignore it
-	   for the original type of packed array types.  If the alignment
-	   was requested with an explicit alignment clause, state so.  */
-	if (No (Packed_Array_Impl_Type (gnat_entity))
-	    && Known_Alignment (gnat_entity))
+	/* If this is a packed type implemented specially, then process the
+	   implementation type so it is elaborated in the proper scope.  */
+	if (Present (Packed_Array_Impl_Type (gnat_entity)))
+	  gnat_to_gnu_entity (Packed_Array_Impl_Type (gnat_entity), NULL_TREE,
+			      false);
+
+	/* Otherwise, if an alignment is specified, use it if valid and, if
+	   the alignment was requested with an explicit clause, state so.  */
+	else if (Known_Alignment (gnat_entity))
 	  {
 	    SET_TYPE_ALIGN (tem,
 			    validate_alignment (Alignment (gnat_entity),
@@ -4253,6 +4257,8 @@ gnat_to_gnu_entity (Entity_Id gnat_entity, tree gnu_expr, bool definition)
      handling alignment and possible padding.  */
   if (is_type && (!gnu_decl || this_made_decl))
     {
+      const bool is_by_ref = Is_By_Reference_Type (gnat_entity);
+
       gcc_assert (!TYPE_IS_DUMMY_P (gnu_type));
 
       /* Process the attributes, if not already done.  Note that the type is
@@ -4267,15 +4273,18 @@ gnat_to_gnu_entity (Entity_Id gnat_entity, tree gnu_expr, bool definition)
 	 non-constant).  */
       if (!gnu_size && kind != E_String_Literal_Subtype)
 	{
+	  const char *size_s = "size for %s too small{, minimum allowed is ^}";
+	  const char *type_s = is_by_ref ? "by-reference type &" : "&";
+
 	  if (Known_Esize (gnat_entity))
 	    gnu_size
 	      = validate_size (Esize (gnat_entity), gnu_type, gnat_entity,
-			       VAR_DECL, false, false, NULL, NULL);
+			       VAR_DECL, false, false, size_s, type_s);
 	  else
 	    gnu_size
 	      = validate_size (RM_Size (gnat_entity), gnu_type, gnat_entity,
 			       TYPE_DECL, false, Has_Size_Clause (gnat_entity),
-			       NULL, NULL);
+			       size_s, type_s);
 	}
 
       /* If a size was specified, see if we can make a new type of that size
@@ -4578,7 +4587,7 @@ gnat_to_gnu_entity (Entity_Id gnat_entity, tree gnu_expr, bool definition)
 	    TYPE_ALIGN_OK (gnu_type) = 1;
 
 	  /* Record whether the type is passed by reference.  */
-	  if (Is_By_Reference_Type (gnat_entity) && !VOID_TYPE_P (gnu_type))
+	  if (is_by_ref && !VOID_TYPE_P (gnu_type))
 	    TYPE_BY_REFERENCE_P (gnu_type) = 1;
 
 	  /* Record whether an alignment clause was specified.  */
@@ -4698,6 +4707,14 @@ gnat_to_gnu_entity (Entity_Id gnat_entity, tree gnu_expr, bool definition)
       else
 	gnu_decl = create_type_decl (gnu_entity_name, gnu_type, artificial_p,
 				     debug_info_p, gnat_entity);
+
+      /* For vector types, make the representative array the debug type.  */
+      if (VECTOR_TYPE_P (gnu_type))
+	{
+	  tree rep = TYPE_REPRESENTATIVE_ARRAY (gnu_type);
+	  TYPE_NAME (rep) = DECL_NAME (gnu_decl);
+	  SET_TYPE_DEBUG_TYPE (gnu_type, rep);
+	}
     }
 
   /* Otherwise, for a type reusing an existing DECL, back-annotate values.  */
@@ -5719,16 +5736,16 @@ gnat_to_gnu_subprog_type (Entity_Id gnat_subprog, bool definition,
   tree gnu_cico_return_type = NULL_TREE;
   tree gnu_cico_field_list = NULL_TREE;
   bool gnu_cico_only_integral_type = true;
-  /* The semantics of "pure" in Ada essentially matches that of "const"
-     or "pure" in GCC.  In particular, both properties are orthogonal
-     to the "nothrow" property if the EH circuitry is explicit in the
-     internal representation of the middle-end.  If we are to completely
-     hide the EH circuitry from it, we need to declare that calls to pure
-     Ada subprograms that can throw have side effects since they can
-     trigger an "abnormal" transfer of control flow; therefore, they can
-     be neither "const" nor "pure" in the GCC sense.  */
-  bool const_flag = (Back_End_Exceptions () && Is_Pure (gnat_subprog));
-  bool pure_flag = false;
+  /* Although the semantics of "pure" units in Ada essentially match those of
+     "const" in GNU C, the semantics of the Is_Pure flag in GNAT do not say
+     anything about access to global memory, that's why it needs to be mapped
+     to "pure" instead of "const" in GNU C.  The property is orthogonal to the
+     "nothrow" property only if the EH circuitry is explicit in the internal
+     representation of the middle-end: if we are to completely hide the EH
+     circuitry from it, we need to declare that calls to pure Ada subprograms
+     that can throw have side effects, since they can trigger an "abnormal"
+     transfer of control; therefore they cannot be "pure" in the GCC sense.  */
+  bool pure_flag = Is_Pure (gnat_subprog) && Back_End_Exceptions ();
   bool return_by_direct_ref_p = false;
   bool return_by_invisi_ref_p = false;
   bool return_unconstrained_p = false;
@@ -5881,14 +5898,14 @@ gnat_to_gnu_subprog_type (Entity_Id gnat_subprog, bool definition,
     }
 
   /* A procedure (something that doesn't return anything) shouldn't be
-     considered const since there would be no reason for calling such a
+     considered pure since there would be no reason for calling such a
      subprogram.  Note that procedures with Out (or In Out) parameters
      have already been converted into a function with a return type.
      Similarly, if the function returns an unconstrained type, then the
      function will allocate the return value on the secondary stack and
      thus calls to it cannot be CSE'ed, lest the stack be reclaimed.  */
   if (VOID_TYPE_P (gnu_return_type) || return_unconstrained_p)
-    const_flag = false;
+    pure_flag = false;
 
   /* Loop over the parameters and get their associated GCC tree.  While doing
      this, build a copy-in copy-out structure if we need one.  */
@@ -6011,18 +6028,16 @@ gnat_to_gnu_subprog_type (Entity_Id gnat_subprog, bool definition,
 	  save_gnu_tree (gnat_param, gnu_param, false);
 
 	  /* A pure function in the Ada sense which takes an access parameter
-	     may modify memory through it and thus need be considered neither
-	     const nor pure in the GCC sense.  Likewise it if takes a by-ref
-	     In Out or Out parameter.  But if it takes a by-ref In parameter,
-	     then it may only read memory through it and can be considered
-	     pure in the GCC sense.  */
-	  if ((const_flag || pure_flag)
-	      && (POINTER_TYPE_P (gnu_param_type)
+	     may modify memory through it and thus cannot be considered pure
+	     in the GCC sense, unless it's access-to-function.  Likewise it if
+	     takes a by-ref In Out or Out parameter.  But if it takes a by-ref
+	     In parameter, then it may only read memory through it and can be
+	     considered pure in the GCC sense.  */
+	  if (pure_flag
+	      && ((POINTER_TYPE_P (gnu_param_type)
+		   && TREE_CODE (TREE_TYPE (gnu_param_type)) != FUNCTION_TYPE)
 		  || TYPE_IS_FAT_POINTER_P (gnu_param_type)))
-	    {
-	      const_flag = false;
-	      pure_flag = DECL_POINTS_TO_READONLY_P (gnu_param);
-	    }
+	    pure_flag = DECL_POINTS_TO_READONLY_P (gnu_param);
 	}
 
       /* If the parameter uses the copy-in copy-out mechanism, allocate a field
@@ -6220,9 +6235,6 @@ gnat_to_gnu_subprog_type (Entity_Id gnat_subprog, bool definition,
 	      TREE_ADDRESSABLE (gnu_type) = return_by_invisi_ref_p;
 	    }
 	}
-
-      if (const_flag)
-	gnu_type = change_qualified_type (gnu_type, TYPE_QUAL_CONST);
 
       if (pure_flag)
 	gnu_type = change_qualified_type (gnu_type, TYPE_QUAL_RESTRICT);
@@ -9032,13 +9044,12 @@ validate_size (Uint uint_size, tree gnu_type, Entity_Id gnat_object,
   /* Issue an error either if the default size of the object isn't a constant
      or if the new size is smaller than it.  */
   if (TREE_CODE (old_size) != INTEGER_CST
-      || TREE_OVERFLOW (old_size)
-      || tree_int_cst_lt (size, old_size))
+      || (!TREE_OVERFLOW (old_size) && tree_int_cst_lt (size, old_size)))
     {
       char buf[128];
       const char *s;
 
-      if (kind == FIELD_DECL)
+      if (s1 && s2)
 	{
 	  snprintf (buf, sizeof (buf), s1, s2);
 	  s = buf;
@@ -9047,6 +9058,7 @@ validate_size (Uint uint_size, tree gnu_type, Entity_Id gnat_object,
 	s = "component size for& too small{, minimum allowed is ^}";
       else
 	s = "size for& too small{, minimum allowed is ^}";
+
       post_error_ne_tree (s, gnat_error_node, gnat_object, old_size);
 
       return NULL_TREE;

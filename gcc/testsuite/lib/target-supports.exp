@@ -4671,6 +4671,23 @@ proc check_effective_target_arm_cmse_ok {} {
     } "-mcmse"];
 }
 
+# Return 1 if the target supports executing CMSE instructions, 0
+# otherwise.  Cache the result.
+
+proc check_effective_target_arm_cmse_hw { } {
+    return [check_runtime arm_cmse_hw_available {
+	int main (void)
+	{
+	    unsigned id_pfr1;
+	    asm ("ldr\t%0, =0xe000ed44\n" \
+		 "ldr\t%0, [%0]\n" \
+		 "sg" : "=l" (id_pfr1));
+	    /* Exit with code 0 iff security extension is available.  */
+	    return !(id_pfr1 & 0xf0);
+	}
+    } "-mcmse"]
+}
+
 # Return 1 if the target supports executing MVE instructions, 0
 # otherwise.
 
@@ -10330,6 +10347,21 @@ proc check_effective_target_indirect_calls { } {
   return 1
 }
 
+# Return 1 if we can use the -lgccjit option, 0 otherwise.
+
+proc check_effective_target_lgccjit { } {
+  if { [info procs jit_target_compile] == "" } then {
+    global GCC_UNDER_TEST
+    if ![info exists GCC_UNDER_TEST] {
+      set GCC_UNDER_TEST "[find_gcc]"
+    }
+    proc jit_target_compile { source dest type options } [info body gcc_target_compile]
+  }
+  return [check_no_compiler_messages lgccjit executable {
+     int main() { return 0; }
+  } "-lgccjit"]
+}
+
 # Return 1 if we're able to assemble movdiri and movdir64b
 
 proc check_effective_target_movdir { } {
@@ -10352,13 +10384,14 @@ proc check_effective_target_tune_cortex_a76 { } {
     return [check_configured_with "with-tune=cortex-a76"]
 }
 
-# Return 1 if target is not support address sanitize, 1 otherwise.
+# Return 1 if the target does not support address sanitizer, 0 otherwise
 
 proc check_effective_target_no_fsanitize_address {} {
     if ![check_no_compiler_messages fsanitize_address executable {
 	int main (void) { return 0; }
-    }] {
+    } "-fsanitize=address" ] {
 	return 1;
     }
+
     return 0;
 }

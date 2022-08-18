@@ -1,3 +1,3207 @@
+2022-06-28  Release Manager
+
+	* GCC 10.4.0 released.
+
+2022-06-20  Uros Bizjak  <ubizjak@gmail.com>
+
+	Backported from master:
+	2022-06-17  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/105209
+	* gcc.target/alpha/pr105209.c: New test.
+
+2022-06-20  Uros Bizjak  <ubizjak@gmail.com>
+
+	Backported from master:
+	2022-06-17  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/105970
+	* gcc.target/i386/pr105970.c: New test.
+
+2022-06-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-06-18  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/105998
+	* c-c++-common/pr105998.c: New test.
+
+2022-06-20  Jan Hubicka  <jh@suse.cz>
+
+	Backported from master:
+	2022-06-14  Jan Hubicka  <hubicka@ucw.cz>
+
+	* gcc.dg/ipa/pr105739.c: New test.
+
+2022-06-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-05-27  Jakub Jelinek  <jakub@redhat.com>
+
+	PR sanitizer/105729
+	* g++.dg/ubsan/pr105729.C: New test.
+
+2022-06-15  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-05-29  Jakub Jelinek  <jakub@redhat.com>
+
+	PR preprocessor/105732
+	* c-c++-common/cpp/va-opt-10.c: New test.
+
+2022-06-15  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2022-06-15  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	* gdc.dg/Wpadded.d: New test.
+
+2022-06-15  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-05-27  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105726
+	* g++.dg/warn/Warray-bounds-27.C: New testcase.
+
+2022-06-14  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/104637
+	* gcc.target/i386/pr104637.c: Don't run on ia32.  Add -Wno-div-by-zero
+	to dg-options.
+	(foo): Remove extraneous initializer.
+
+2022-06-14  Vladimir N. Makarov  <vmakarov@redhat.com>
+
+	PR rtl-optimization/104637
+	* gcc.target/i386/pr104637.c: New.
+
+2022-06-13  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2022-03-08  Marek Polacek  <polacek@redhat.com>
+
+	PR rtl-optimization/104777
+	* gcc.dg/torture/tls/pr104777.c: New test.
+
+2022-06-09  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2021-09-19  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* jit.dg/jit.exp (fixed_local_execute): Amend the match and
+	exit conditions to cater for more platforms.
+	* lib/target-supports.exp: Add support for checking that the
+	jit lib is usable on the target.
+
+2022-06-09  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2021-08-19  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* jit.dg/harness.h: Include jit-dejagnu.h.
+	* jit.dg/jit.exp: Use -rdynamic conditionally on target
+	support, instead of unconditional -Wl,--export-dynamic.
+
+2022-05-29  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-03-28  Richard Biener  <rguenther@suse.de>
+
+	* gcc.dg/torture/pr100786.c: Add dg-require alias.
+
+2022-05-29  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2021-03-04  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* lib/prune.exp: Prune useless output caused by a linker bug.
+
+2022-05-29  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2021-08-18  Iain Sandoe  <iain@sandoe.co.uk>
+		    Matt Jacobson   <mhjacobson@me.com>
+
+	PR objc/101666
+	* obj-c++.dg/pr101666-0.mm: New test.
+	* obj-c++.dg/pr101666-1.mm: New test.
+	* obj-c++.dg/pr101666.inc: New.
+	* objc.dg/pr101666-0.m: New test.
+	* objc.dg/pr101666-1.m: New test.
+	* objc.dg/pr101666.inc: New.
+
+2022-05-29  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* gcc.dg/torture/fp-int-convert-timode-3.c: Remove XFAIL.
+	* gcc.dg/torture/fp-int-convert-timode-4.c: Likewise.
+
+2022-05-29  François-Xavier Coudert  <fxcoudert@gcc.gnu.org>
+
+	Backported from master:
+	2021-12-18  François-Xavier Coudert  <fxcoudert@gcc.gnu.org>
+
+	* gcc.dg/darwin-minversion-link.c: Test darwin21.
+	* obj-c++.dg/cxx-ivars-3.mm: Homogeneize darwin versions.
+	* obj-c++.dg/objc-gc-3.mm: Homogeneize darwin versions.
+	* objc.dg/objc-gc-4.m: Homogeneize darwin versions.
+
+2022-05-27  Kewen Lin  <linkw@linux.ibm.com>
+
+	Backported from master:
+	2022-04-18  Kewen Lin  <linkw@linux.ibm.com>
+
+	PR testsuite/105266
+	* gcc.dg/pr105250.c: Skip for powerpc*-*-* and s390*-*-*.
+
+2022-05-27  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-04-13  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105250
+	* gcc.dg/pr105250.c: New testcase.
+
+2022-05-27  Andreas Krebbel  <krebbel@linux.ibm.com>
+
+	Backported from master:
+	2022-04-07  Andreas Krebbel  <krebbel@linux.ibm.com>
+
+	PR target/105147
+	* gcc.dg/pr105140.c: Skip for s390*-*-*.
+
+2022-05-27  Segher Boessenkool  <segher@kernel.crashing.org>
+
+	Backported from master:
+	2022-04-06  Segher Boessenkool  <segher@kernel.crashing.org>
+
+	PR target/105147
+	* gcc.dg/pr105140.c: Skip for powerpc*-*-*.
+
+2022-05-27  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-04-04  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/105140
+	* gcc.dg/pr105140.c: New testcase.
+
+2022-05-27  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-04-06  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105163
+	* gcc.dg/torture/pr105163.c: New testcase.
+
+2022-05-27  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-04-06  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105173
+	* gcc.dg/pr105173.c: New testcase.
+
+2022-05-25  Jason Merrill  <jason@redhat.com>
+
+	PR c++/102307
+	* g++.dg/cpp1z/constexpr-array2.C: New test.
+
+2022-05-25  Jason Merrill  <jason@redhat.com>
+
+	Revert:
+	2022-05-25  Jason Merrill  <jason@redhat.com>
+
+	PR c++/102629
+	* g++.dg/cpp2a/lambda-pack-init7.C: New test.
+
+2022-05-16  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2022-05-11  Harald Anlauf  <anlauf@gmx.de>
+		    Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/105230
+	* gfortran.dg/pr105230.f90: New test.
+
+2022-05-16  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2022-03-09  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/104849
+	* gfortran.dg/pr104849.f90: New test.
+
+2022-05-16  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2022-04-05  Harald Anlauf  <anlauf@gmx.de>
+		    Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/105138
+	* gfortran.dg/recursive_reference_3.f90: New test.
+
+2022-05-16  Sebastian Pop  <spop@amazon.com>
+
+	PR target/105162
+	* gcc.target/aarch64/sync-comp-swap-ool.c: New.
+	* gcc.target/aarch64/sync-op-acquire-ool.c: New.
+	* gcc.target/aarch64/sync-op-full-ool.c: New.
+	* gcc.target/aarch64/target_attr_20.c: Update check.
+	* gcc.target/aarch64/target_attr_21.c: Same.
+
+2022-05-13  Jason Merrill  <jason@redhat.com>
+
+	PR c++/101078
+	* g++.dg/template/access39.C: New test.
+
+2022-05-13  Jason Merrill  <jason@redhat.com>
+
+	PR c++/65211
+	* g++.target/i386/vec-tmpl1.C: New test.
+
+2022-05-13  Jason Merrill  <jason@redhat.com>
+
+	PR c++/101698
+	* g++.dg/template/conv19.C: New test.
+
+2022-05-13  Jason Merrill  <jason@redhat.com>
+
+	PR c++/101442
+	* g++.dg/cpp0x/initlist-nrv1.C: New test.
+
+2022-05-13  Jason Merrill  <jason@redhat.com>
+
+	PR c++/99066
+	* g++.dg/cpp0x/extern_template-6.C: New test.
+
+2022-05-13  Jason Merrill  <jason@redhat.com>
+
+	PR c++/91241
+	* g++.dg/abi/lambda-defarg1.C: New test.
+
+2022-05-13  Jason Merrill  <jason@redhat.com>
+
+	PR c++/86355
+	* g++.dg/cpp0x/alias-decl-variadic2.C: New test.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	Revert:
+	2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/101767
+	* g++.dg/ext/anon-struct10.C: New test.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	Revert:
+	2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/41723
+	* g++.dg/template/friend71.C: New test.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/104142
+	* g++.dg/opt/const7.C: New test.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/102071
+	* g++.dg/cpp1z/aligned-new9.C: New test.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/100838
+	PR c++/105265
+	* g++.dg/init/no-elide2.C: New test.
+	* g++.dg/cpp0x/initlist-new6.C: New test.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/82980
+	* g++.dg/cpp0x/lambda/lambda-current-inst1.C: New test.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/104646
+	* g++.dg/cpp0x/constexpr-fno-elide-ctors1.C: New test.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/102629
+	* g++.dg/cpp2a/lambda-pack-init7.C: New test.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/59950
+	* g++.dg/init/assign2.C: New test.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/105245
+	PR c++/100111
+	* g++.dg/cpp1y/constexpr-empty2.C: Add -fno-elide-constructors.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/101717
+	* g++.dg/cpp1y/lambda-generic-this4.C: New test.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/100608
+	* g++.dg/warn/Wshadow-compatible-local-3.C: New test.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/98249
+	* g++.dg/lookup/new3.C: New test.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/101767
+	* g++.dg/ext/anon-struct10.C: New test.
+
+2022-05-11  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2021-07-01  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/101194
+	* g++.dg/cpp0x/constexpr-empty16.C: New test.
+
+2022-05-10  Jeff Law  <jeffreyalaw@gmail.com>
+
+	Backported from master:
+	2022-04-28  Jeff Law  <jeffreyalaw@gmail.com>
+
+	* lib/prune.exp (prune_gcc_output): Prune new linker warning.
+
+2022-05-10  Tobias Burnus  <tobias@codesourcery.com>
+
+	Backported from master:
+	2021-05-05  Tobias Burnus  <tobias@codesourcery.com>
+
+	PR testsuite/100422
+	* g++.dg/gomp/clause-3.C: Use 'reduction(&:..)' instead of '...(&&:..)'.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-04-27  Jakub Jelinek  <jakub@redhat.com>
+
+	PR sanitizer/105396
+	* gcc.dg/asan/pr105396.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/105333
+	* gcc.dg/pr105333.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-04-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/105257
+	* gcc.dg/pr105257.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-04-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/105256
+	* g++.dg/cpp0x/pr105256.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-04-12  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/105214
+	* gcc.dg/asan/pr105214.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-04-12  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/105211
+	* gcc.dg/pr105211.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-04-11  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/105186
+	* c-c++-common/pr105186.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-04-08  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/105189
+	* g++.dg/torture/pr105189.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-04-03  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/105123
+	* gcc.target/i386/pr105123.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-03-30  Jakub Jelinek  <jakub@redhat.com>
+
+	PR sanitizer/105093
+	* g++.dg/ubsan/pr105093.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-03-30  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/105094
+	* gcc.dg/pr105094.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-03-30  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/105061
+	* g++.dg/concepts/pr105061.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-03-26  Jakub Jelinek  <jakub@redhat.com>
+
+	* c-c++-common/builtin-convertvector-3.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-03-24  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/104994
+	* g++.dg/cpp2a/constexpr-nonlit7.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-03-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/104971
+	* gcc.target/i386/pr104971.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-03-18  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/104568
+	* g++.dg/cpp2a/constexpr-new22.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-03-16  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/104910
+	* gcc.dg/pr104910.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-03-15  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/104814
+	* gcc.c-torture/execute/pr104814.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-03-09  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/104711
+	* c-c++-common/Wshift-negative-value-1.c: Remove
+	dg-additional-options, instead in target selectors of each diagnostic
+	check for exact C++ versions where it should be diagnosed.
+	* c-c++-common/Wshift-negative-value-2.c: Likewise.
+	* c-c++-common/Wshift-negative-value-3.c: Likewise.
+	* c-c++-common/Wshift-negative-value-4.c: Likewise.
+	* c-c++-common/Wshift-negative-value-7.c: New test.
+	* c-c++-common/Wshift-negative-value-8.c: New test.
+	* c-c++-common/Wshift-negative-value-9.c: New test.
+	* c-c++-common/Wshift-negative-value-10.c: New test.
+	* c-c++-common/Wshift-overflow-1.c: Remove
+	dg-additional-options, instead in target selectors of each diagnostic
+	check for exact C++ versions where it should be diagnosed.
+	* c-c++-common/Wshift-overflow-2.c: Likewise.
+	* c-c++-common/Wshift-overflow-5.c: Likewise.
+	* c-c++-common/Wshift-overflow-6.c: Likewise.
+	* c-c++-common/Wshift-overflow-7.c: Likewise.
+	* c-c++-common/Wshift-overflow-8.c: New test.
+	* c-c++-common/Wshift-overflow-9.c: New test.
+	* c-c++-common/Wshift-overflow-10.c: New test.
+	* c-c++-common/Wshift-overflow-11.c: New test.
+	* c-c++-common/Wshift-overflow-12.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-03-08  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/104806
+	* g++.dg/spellcheck-pr104806.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-03-07  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/104775
+	* gcc.target/s390/pr104775.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-02-25  Jakub Jelinek  <jakub@redhat.com>
+		    Marc Glisse  <marc.glisse@inria.fr>
+
+	PR tree-optimization/104675
+	* gcc.dg/pr104675-3.c : New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-02-25  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/104681
+	* g++.dg/opt/pr104681.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-02-25  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/104675
+	* gcc.dg/pr104675-1.c: New test.
+	* gcc.dg/pr104675-2.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-02-17  Jakub Jelinek  <jakub@redhat.com>
+
+	PR debug/104557
+	* gcc.dg/dfp/pr104557.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-02-16  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/104544
+	* gcc.dg/pr104544.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-02-16  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/104510
+	* gcc.dg/dfp/pr104510.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-02-14  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/104513
+	* g++.dg/cpp1y/constexpr-104513.C: New test.
+	* g++.dg/cpp2a/constexpr-dtor12.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-02-12  Jakub Jelinek  <jakub@redhat.com>
+
+	PR sanitizer/104449
+	* gcc.dg/asan/pr104449.c: New test.
+	* g++.dg/asan/pr104449.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-02-12  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/104502
+	* gcc.target/i386/pr104502.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-02-11  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/104472
+	* g++.dg/cpp0x/constexpr-104472.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-02-11  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/104446
+	* gcc.target/i386/pr104446.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-02-08  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/102140
+	* gcc.dg/pr102140.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-02-01  Jakub Jelinek  <jakub@redhat.com>
+
+	PR preprocessor/104147
+	* c-c++-common/cpp/pr104147.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-01-28  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/104263
+	* gcc.dg/pr104263.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-01-21  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/102478
+	* gcc.dg/pr102478.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-01-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/102860
+	* gfortran.dg/pr102860.f90: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-01-18  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/104055
+	* g++.dg/cpp2a/consteval27.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-01-12  Jakub Jelinek  <jakub@redhat.com>
+		    Jason Merrill  <jason@redhat.com>
+
+	PR c++/103480
+	* g++.dg/warn/Wuseless-cast2.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-01-11  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/101537
+	PR c/103881
+	* c-c++-common/pr101537.c: New test.
+	* c-c++-common/pr103881.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-01-10  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/103912
+	* g++.dg/cpp2a/consteval26.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-01-06  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/103908
+	* gcc.target/i386/pr103908.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-12-30  Jakub Jelinek  <jakub@redhat.com>
+
+	PR preprocessor/89971
+	* c-c++-common/cpp/va-opt-9.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-12-30  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/103860
+	* gcc.dg/pr103860.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-12-28  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/103837
+	* gcc.dg/pr103837.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-12-14  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/103587
+	* gcc.dg/pr103587.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-11-23  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/102431
+	* c-c++-common/gomp/pr102431.c: New test.
+	* g++.dg/gomp/pr102431.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-11-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/70796
+	* g++.dg/cpp1z/eval-order11.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-11-15  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/103205
+	* gcc.target/i386/pr103205.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-11-11  Jakub Jelinek  <jakub@redhat.com>
+
+	PR debug/101378
+	* g++.dg/debug/dwarf2/pr101378.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-10-21  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/64888
+	* c-c++-common/ubsan/pr64888.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-10-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/102786
+	* g++.dg/cpp2a/constexpr-virtual19.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-10-05  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/102548
+	* g++.target/i386/pr102548.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-10-01  Jakub Jelinek  <jakub@redhat.com>
+		    Richard Biener  <rguenther@suse.de>
+
+	PR sanitizer/102515
+	* c-c++-common/ubsan/float-div-by-zero-2.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-09-28  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/102498
+	* gcc.target/i386/pr102498.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-09-15  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/88578
+	PR c++/102295
+	* g++.dg/ext/flexary39.C: New test.
+	* g++.dg/ext/flexary40.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-09-14  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/102295
+	* g++.target/i386/pr102295.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-09-14  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/102305
+	* g++.dg/cpp0x/pr102305.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-09-08  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/102224
+	* gcc.dg/pr102224.c: New test.
+	* gcc.target/i386/avx-pr102224.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-08-23  Jakub Jelinek  <jakub@redhat.com>
+
+	PR debug/101905
+	* gcc.dg/guality/pr101905.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-07-28  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/101624
+	* gfortran.dg/ubsan/ubsan.exp: New file.
+	* gfortran.dg/ubsan/pr101624.f90: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-07-23  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/101562
+	* gcc.c-torture/compile/pr101562.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-07-21  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/101535
+	* c-c++-common/gomp/pr101535-1.c: New test.
+	* c-c++-common/gomp/pr101535-2.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-07-21  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/101516
+	* g++.dg/gomp/pr101516.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-07-20  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/101384
+	* gcc.dg/pr101384.c: New test.
+
+2022-05-10  Tobias Burnus  <tobias@codesourcery.com>
+
+	Backported from master:
+	2021-05-04  Tobias Burnus  <tobias@codesourcery.com>
+
+	* gcc.dg/gomp/clause-1.c: Use 'reduction(&:..)' instead of '...(&&:..)'.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-07-15  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/101443
+	* g++.dg/cpp0x/nullptr46.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-07-01  Jakub Jelinek  <jakub@redhat.com>
+
+	PR debug/101266
+	* gcc.dg/pr101266.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-06-29  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/101210
+	* g++.dg/ubsan/pr101210.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-06-24  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/101171
+	* gcc.dg/pr101171.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-06-21  Jakub Jelinek  <jakub@redhat.com>
+
+	PR inline-asm/100785
+	* c-c++-common/pr100785.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-06-16  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/101062
+	* gcc.dg/pr101062.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-06-16  Jakub Jelinek  <jakub@redhat.com>
+
+	* gcc.dg/guality/pr49888.c (f): Use noipa attribute instead of
+	noinline, noclone.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-06-07  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/100898
+	* g++.dg/ext/va-arg-pack-3.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-05-25  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/100666
+	* g++.dg/cpp1z/nodiscard8.C: New test.
+	* g++.dg/cpp1z/nodiscard9.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-05-18  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/100580
+	* g++.dg/other/pr100580.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-05-15  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/100342
+	* gcc.target/i386/pr100342.c: New test.
+
+2022-05-10  liuhongt  <hongtao.liu@intel.com>
+
+	Backported from master:
+	2021-01-21  liuhongt  <hongtao.liu@intel.com>
+
+	PR rtl-optimization/98694
+	* gcc.target/i386/pr98694.c: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-05-14  Jakub Jelinek  <jakub@redhat.com>
+
+	* g++.dg/cpp1y/pr88872.C: New test.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-05-12  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/100508
+	* gcc.dg/gomp/pr100508.c: New test.
+
+2022-05-10  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* gcc.target/sparc/20220510-1.c: New test.
+
+2022-05-09  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2022-04-26  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/105304
+	* g++.dg/cpp2a/concepts-requires30.C: New test.
+
+2022-05-09  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2022-03-26  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/103455
+	* g++.dg/overload/builtin6.C: New test.
+
+2022-05-09  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2022-02-17  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/104565
+	* g++.dg/template/non-dependent22.C: New test.
+
+2022-05-09  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2022-01-25  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/101532
+	PR c++/104225
+	* g++.dg/cpp0x/nsdmi-template21.C: New test.
+	* g++.dg/cpp0x/nsdmi-template21a.C: New test.
+
+2022-05-06  Michael Meissner  <meissner@linux.ibm.com>
+
+	Backported from master:
+	2022-05-06   Michael Meissner  <meissner@linux.ibm.com>
+
+	PR target/102059
+	* gcc.target/powerpc/pr102059-4.c: New test.
+
+2022-05-06  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-04-08  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105198
+	* gcc.dg/torture/pr105198.c: New testcase.
+
+2022-05-06  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-02-07  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/104402
+	* gcc.dg/torture/pr104402.c: New testcase.
+
+2022-04-27  Hongyu Wang  <hongyu.wang@intel.com>
+
+	Backported from master:
+	2022-04-25  Hongyu Wang  <hongyu.wang@intel.com>
+
+	PR target/105339
+	* gcc.target/i386/sse-14.c: Add tests for new macro.
+
+2022-04-24  Mikael Morin  <mikael@gcc.gnu.org>
+
+	PR fortran/104228
+	PR fortran/104570
+	* gfortran.dg/asan_associate_58.f90: New test.
+	* gfortran.dg/asan_associate_59.f90: New test.
+	* gfortran.dg/associate_58.f90: New test.
+
+2022-04-21  Fritz Reese  <foreese@gcc.gnu.org>
+
+	Backported from master:
+	2022-04-21  Fritz Reese  <foreese@gcc.gnu.org>
+
+	PR fortran/105310
+	* gfortran.dg/dec_union_12.f90: New test.
+
+2022-04-21  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-01-20  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/100786
+	* gcc.dg/torture/pr100786.c: New testcase.
+
+2022-04-21  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-11-23  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/103361
+	* g++.dg/torture/pr103361.C: New testcase.
+
+2022-04-21  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-12-07  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/103596
+	* gcc.dg/torture/pr103596.c: New testcase.
+
+2022-04-21  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-02-03  Richard Biener  <rguenther@suse.de>
+
+	PR debug/104337
+	* gcc.dg/debug/pr104337.c: New testcase.
+
+2022-04-21  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-03-09  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/104786
+	* gcc.dg/pr104786.c: New testcase.
+
+2022-04-21  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-04-12  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105226
+	* gcc.dg/pr105226.c: New testcase.
+
+2022-04-11  Alexandre Oliva  <oliva@adacore.com>
+
+	Backported from master:
+	2022-04-11  Alexandre Oliva  <oliva@adacore.com>
+
+	PR target/104253
+	* gcc.target/powerpc/pr104253.c: Add missing dg- before
+	require-effective-target.  Prune warning about -mfloat128
+	possibly not being fully supported.
+
+2022-04-05  Martin Jambor  <mjambor@suse.cz>
+
+	Backported from master:
+	2022-03-31  Martin Jambor  <mjambor@suse.cz>
+
+	* gcc.dg/ipa/pr103083-1.c: New test.
+	* gcc.dg/ipa/pr103083-2.c: Likewise.
+
+2022-03-18  Peter Bergner  <bergner@linux.ibm.com>
+
+	Backported from master:
+	2022-03-04  Peter Bergner  <bergner@linux.ibm.com>
+
+	PR target/87496
+	PR target/104208
+	* gcc.target/powerpc/pr104208-1.c: New test.
+	* gcc.target/powerpc/pr104208-2.c: Likewise.
+	* gcc.target/powerpc/pr87496-2.c: Swap long double options to trigger
+	the expected error.
+	* gcc.target/powerpc/pr87496-3.c: Likewise.
+
+2022-03-16  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-02-09  Richard Biener  <rguenther@suse.de>
+
+	PR target/104453
+	* gcc.target/i386/pr104453.c: New testcase.
+
+2022-03-16  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-02-14  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/104511
+	* gcc.dg/pr104511.c: New testcase.
+
+2022-03-12  Michael Meissner  <meissner@the-meissners.org>
+
+	PR target/99708
+	* gcc.target/powerpc/pr99708.c: Revert 2022-03-05 patch.
+
+2022-03-06  Michael Meissner  <meissner@the-meissners.org>
+
+	PR target/104253
+	* gcc.target/powerpc/pr104253.c: New test.  Backport change made
+	to the master branch on 2022-02-14.
+
+2022-03-06  Michael Meissner  <meissner@the-meissners.org>
+
+	PR target/99708
+	* gcc.target/powerpc/pr99708.c: New test.  Backport change to
+	master branch on 2022-02-17.
+
+2022-02-23  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2022-02-22  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/104619
+	* gfortran.dg/derived_constructor_comps_7.f90: New test.
+
+2022-02-17  Jason Merrill  <jason@redhat.com>
+
+	Revert:
+	2022-02-17  Jason Merrill  <jason@redhat.com>
+
+	PR c++/92918
+	* g++.dg/lookup/using66.C: New test.
+
+2022-02-17  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-11-15  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/103237
+	* gcc.dg/torture/pr103237.c: New testcase.
+
+2022-02-17  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-11-22  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/103181
+	PR middle-end/103248
+	* gcc.dg/torture/pr103181.c: New testcase.
+	* gcc.dg/pr103248.c: Likewise.
+
+2022-02-17  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-11-08  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/102798
+	* gcc.dg/pr102798.c: New testcase.
+
+2022-02-17  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-10-15  Richard Biener  <rguenther@suse.de>
+
+	PR ipa/102762
+	* gcc.dg/torture/pr102762.c: New testcase.
+
+2022-02-17  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-06-08  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/100923
+	* gcc.dg/torture/pr100923.c: New testcase.
+
+2022-02-17  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-06-22  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/101158
+	* gfortran.dg/pr101158.f90: New testcase.
+
+2022-02-15  Kewen Lin  <linkw@linux.ibm.com>
+
+	Backported from master:
+	2022-02-07  Kewen Lin  <linkw@linux.ibm.com>
+
+	PR target/103627
+	* gcc.target/powerpc/pr103627-3.c: New test.
+
+2022-02-15  Kewen Lin  <linkw@linux.ibm.com>
+
+	Backported from master:
+	2022-02-07  Kewen Lin  <linkw@linux.ibm.com>
+
+	PR target/103627
+	* gcc.target/powerpc/pr103627-1.c: New test.
+	* gcc.target/powerpc/pr103627-2.c: New test.
+
+2022-02-10  H.J. Lu  <hjl.tools@gmail.com>
+
+	Backported from master:
+	2022-02-10  H.J. Lu  <hjl.tools@gmail.com>
+
+	PR target/104458
+	* gcc.target/i386/pr104458.c: Replace long with long long.
+
+2022-02-10  Uros Bizjak  <ubizjak@gmail.com>
+
+	Backported from master:
+	2022-02-10  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/104469
+	* gcc.target/i386/pr104469.c: New test.
+
+2022-02-09  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/104458
+	* gcc.target/i386/pr104458.c: New test.
+
+2022-02-09  liuhongt  <hongtao.liu@intel.com>
+
+	PR target/104451
+	* gcc.target/i386/pr104451.c: New test.
+
+2022-02-04  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2022-02-03  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/104311
+	* gfortran.dg/transfer_simplify_15.f90: New test.
+
+2022-02-02  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2022-02-01  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/104331
+	* gfortran.dg/eoshift_9.f90: New test.
+
+2022-02-02  Xi Ruoyao  <xry111@mengyan1223.wang>
+
+	Backported from master:
+	2022-02-01  Xi Ruoyao  <xry111@mengyan1223.wang>
+
+	* gcc.dg/pr95115.c: New test.
+
+2022-01-29  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2022-01-15  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/83079
+	* gfortran.dg/transfer_char_kind4.f90: New test.
+
+2022-01-29  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2022-01-22  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/104127
+	* gfortran.dg/transfer_simplify_11.f90: Fix logic.
+	* gfortran.dg/transfer_simplify_13.f90: New test.
+
+2022-01-26  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2022-01-25  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/104227
+	* gfortran.dg/transfer_check_6.f90: New test.
+
+2022-01-25  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2022-01-09  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/101762
+	* gfortran.dg/pr101762.f90: New test.
+
+2022-01-25  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2022-01-13  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/67804
+	* gfortran.dg/pr93604.f90: Adjust to changed diagnostics.
+	* gfortran.dg/pr67804.f90: New test.
+
+2022-01-21  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2022-01-14  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/103782
+	* gfortran.dg/overload_4.f90: New test.
+
+2022-01-20  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2022-01-18  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/103692
+	* gfortran.dg/pr102520.f90: Adjust error messages.
+	* gfortran.dg/pr103692.f90: New test.
+
+2022-01-15  Peter Bergner  <bergner@linux.ibm.com>
+
+	Backported from master:
+	2021-11-16  Peter Bergner  <bergner@linux.ibm.com>
+
+	PR target/102976
+	* gcc.target/powerpc/pr102976.c: New test.
+
+2022-01-15  Peter Bergner  <bergner@linux.ibm.com>
+
+	Backported from master:
+	2021-09-14  Peter Bergner  <bergner@linux.ibm.com>
+
+	* gcc.target/powerpc/mma-builtin-6.c: Add second call to xxsetacc
+	built-in.  Update instruction counts.
+
+2022-01-14  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* gnat.dg/lto25.adb: New test.
+	* gnat.dg/opt96.adb: Likewise.
+	* gnat.dg/opt96_pkg.ads, gnat.dg/opt96_pkg.adb: New helper.
+
+2022-01-13  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-12-29  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/102332
+	* gfortran.dg/pr102332.f90: New test.
+
+2022-01-12  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2020-11-26  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/97953
+	* gcc.dg/pr97953.c: New testcase.
+
+2022-01-07  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-05-23  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/100551
+	* gfortran.dg/pr100551.f90: New test.
+
+2021-12-27  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-12-10  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/103418
+	* gfortran.dg/move_alloc_8.f90: Adjust error messages.
+	* gfortran.dg/pointer_intent_9.f90: New test.
+
+2021-12-27  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-12-14  Harald Anlauf  <anlauf@gmx.de>
+
+	PR libfortran/103634
+	* gfortran.dg/intrinsic_pack_6.f90: New test.
+
+2021-12-27  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-12-22  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/103778
+	* gfortran.dg/illegal_boz_arg_3.f90: New test.
+
+2021-12-27  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-11-18  Harald Anlauf  <anlauf@gmx.de>
+		    Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/101329
+	* gfortran.dg/pr101329.f90: New test.
+
+2021-12-19  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-12-07  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/103588
+	* gfortran.dg/pr103588.f90: New test.
+
+2021-12-19  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-12-03  Harald Anlauf  <anlauf@gmx.de>
+		    Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/103505
+	* gfortran.dg/pr103505.f90: New test.
+
+2021-12-19  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-12-18  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/103412
+	* gfortran.dg/illegal_boz_arg_2.f90: New test.
+
+2021-12-17  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-12-08  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/103610
+	* gfortran.dg/shape_11.f90: New test.
+
+2021-12-16  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-12-11  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/103606
+	* gfortran.dg/pr103606.f90: New test.
+
+2021-12-16  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-12-14  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/103717
+	* gfortran.dg/do_check_19.f90: New test.
+
+2021-12-15  Kewen Lin  <linkw@linux.ibm.com>
+
+	Backported from master:
+	2021-11-30  Kewen Lin  <linkw@linux.ibm.com>
+
+	PR target/102347
+	* gcc.target/powerpc/pr102347.c: New test.
+
+2021-12-11  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-11-30  Harald Anlauf  <anlauf@gmx.de>
+
+	* gfortran.dg/array_constructor_54.f90: New test.
+
+2021-12-11  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-10-14  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/102717
+	* gfortran.dg/reshape_shape_2.f90: New test.
+
+2021-12-11  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-11-26  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/103411
+	* gfortran.dg/pr68153.f90: Adjust test to improved check.
+	* gfortran.dg/reshape_7.f90: Likewise.
+	* gfortran.dg/reshape_9.f90: New test.
+
+2021-12-10  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-12-07  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/103607
+	* gfortran.dg/pr103607.f90: New test.
+
+2021-11-26  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-11-23  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/103392
+	* gfortran.dg/bound_simplification_7.f90: New test.
+
+2021-11-25  Jan Hubicka  <jh@suse.cz>
+
+	Backported from master:
+	2021-11-20  Jan Hubicka  <hubicka@ucw.cz>
+
+	PR ipa/103052
+	* gcc.c-torture/execute/pr103052.c: New test.
+
+2021-11-23  Bill Schmidt  <wschmidt@linux.ibm.com>
+
+	PR target/101985
+	* gcc.target/powerpc/pr101985-1.c: New.
+	* gcc.target/powerpc/pr101985-2.c: New.
+
+2021-11-22  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-11-21  Harald Anlauf  <anlauf@gmx.de>
+		    Steven G. Kargl  <kargl@gcc.gnu.org>
+
+	PR fortran/99061
+	* gfortran.dg/dec_math_5.f90: New test.
+
+2021-11-22  Stefan Schulze Frielinghaus  <stefansf@linux.ibm.com>
+
+	Backported from master:
+	2021-11-19  Stefan Schulze Frielinghaus  <stefansf@linux.ibm.com>
+
+	* gcc.target/s390/20211119.c: New test.
+
+2021-11-13  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-10-26  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/102816
+	* gfortran.dg/pr102816.f90: New test.
+
+2021-11-13  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-10-15  Harald Anlauf  <anlauf@gmx.de>
+		    Tobias Burnus  <tobias@codesourcery.com>
+
+	PR fortran/102685
+	* gfortran.dg/derived_constructor_char_1.f90: Fix invalid code.
+	* gfortran.dg/pr70931.f90: Likewise.
+	* gfortran.dg/transfer_simplify_2.f90: Likewise.
+	* gfortran.dg/pr102685.f90: New test.
+
+2021-11-13  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-11-06  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/102715
+	* gfortran.dg/pr68019.f90: Adjust error message.
+	* gfortran.dg/pr102715.f90: New test.
+
+2021-11-13  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-11-05  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/102817
+	* gfortran.dg/pr102817.f90: New test.
+
+2021-11-13  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-10-10  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/99348
+	PR fortran/102521
+	* gfortran.dg/parameter_array_init_8.f90: New test.
+
+2021-11-09  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-10-13  Richard Biener  <rguenther@suse.de>
+
+	PR ipa/102714
+	* gcc.dg/ipa/pr102714.c: New testcase.
+
+2021-11-09  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-05-19  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/100672
+	* gcc.dg/torture/pr100672.c: New testcase.
+
+2021-11-09  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/100253
+	* g++.dg/pr100253.C: New testcase.
+
+2021-11-03  Vladimir N. Makarov  <vmakarov@redhat.com>
+
+	PR rtl-optimization/102842
+	* g++.target/arm/pr102842.C: New test.
+
+2021-11-02  Martin Jambor  <mjambor@suse.cz>
+
+	Backported from master:
+	2021-10-21  Martin Jambor  <mjambor@suse.cz>
+
+	PR tree-optimization/102505
+	* g++.dg/torture/pr102505.C: New test.
+
+2021-10-27  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/102761
+	* gcc.target/i386/pr102761.c: New test.
+
+2021-10-23  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-10-14  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/102716
+	* gfortran.dg/shape_10.f90: New test.
+
+2021-10-13  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-08-25  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/102046
+	* gcc.dg/vect/pr102046.c: New testcase.
+
+2021-10-13  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-08-17  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/101925
+	* gcc.dg/sso-16.c: New testcase.
+
+2021-10-13  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-08-17  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/101373
+	PR tree-optimization/101868
+	* gcc.dg/lto/pr101868_0.c: New testcase.
+	* gcc.dg/lto/pr101868_1.c: Likewise.
+	* gcc.dg/lto/pr101868_2.c: Likewise.
+	* gcc.dg/lto/pr101868_3.c: Likewise.
+
+2021-10-13  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-08-10  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/101824
+	* gcc.dg/tree-ssa/pr101824.c: New testcase.
+
+2021-10-11  Andrew Pinski  <apinski@marvell.com>
+
+	PR tree-optimization/102622
+	* gcc.c-torture/execute/bitfld-10.c: New test.
+
+2021-10-05  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-09-30  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/102458
+	* gfortran.dg/pr102458b.f90: New test.
+
+2021-10-05  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-10-03  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/102458
+	* gfortran.dg/pr102458.f90: New test.
+
+2021-10-03  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2021-07-19  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/95520
+	* g++.dg/coroutines/pr95520.C: New test.
+
+2021-09-30  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-09-13  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/82314
+	* gfortran.dg/pr82314.f90: New test.
+
+2021-09-30  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-09-29  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/102520
+	* gfortran.dg/pr102520.f90: New test.
+
+2021-09-21  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-09-13  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/85130
+	* gfortran.dg/substr_6.f90: Revert commit r8-7574, adding again
+	test that was erroneously considered as illegal.
+
+2021-09-21  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-09-16  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/102287
+	* gfortran.dg/intent_out_14.f90: New test.
+
+2021-09-21  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-09-17  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/102366
+	* gfortran.dg/pr102366.f90: New test.
+
+2021-09-21  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* lib/target-supports.exp (no_fsanitize_address): Add missing bits.
+	* gcc.dg/pr91441.c: Likewise.
+	* gcc.dg/pr96260.c: Likewise.
+	* gcc.dg/pr96307.c: Likewise.
+	* g++.dg/abi/anon4.C: Likewise.
+
+2021-09-17  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* gcc.target/sparc/20210917-1.c: New test.
+
+2021-09-16  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-09-07  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/101327
+	* gfortran.dg/pr101327.f90: New test.
+
+2021-09-16  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-09-09  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/98490
+	* gfortran.dg/bounds_check_23.f90: New test.
+
+2021-09-14  Xionghu Luo  <luoxhu@linux.ibm.com>
+
+	Backported from master:
+	2021-09-07  Xionghu Luo  <luoxhu@linux.ibm.com>
+
+	PR target/97142
+	* gcc.target/powerpc/pr97142.c: New test.
+
+2021-09-10  Paul Thomas  <pault@gcc.gnu.org>
+
+	Backported from master:
+	2020-12-29  Paul Thomas  <pault@gcc.gnu.org>
+
+	PR fortran/97612
+	* gfortran.dg/structure_constructor_17.f90: New test.
+
+2021-09-10  Paul Thomas  <pault@gcc.gnu.org>
+
+	Backported from master:
+	2021-01-22  Paul Thomas  <pault@gcc.gnu.org>
+
+	PR fortran/98565
+	* gfortran.dg/associated_target_7.f90 : New test.
+
+2021-09-10  Paul Thomas  <pault@gcc.gnu.org>
+
+	Backported from master:
+	2020-12-27  Paul Thomas  <pault@gcc.gnu.org>
+
+	PR fortran/97694
+	PR fortran/97723
+	* gfortran.dg/select_rank_5.f90: New test.
+
+2021-09-10  Paul Thomas  <pault@gcc.gnu.org>
+
+	Backported from master:
+	2021-01-07  Paul Thomas  <pault@gcc.gnu.org>
+
+	PR fortran/93701
+	* gfortran.dg/associate_54.f90: New test.
+	* gfortran.dg/associate_55.f90: New test.
+	* gfortran.dg/associate_56.f90: New test.
+
+2021-09-10  Paul Thomas  <pault@gcc.gnu.org>
+
+	Backported from master:
+	2021-01-27  Paul Thomas  <pault@gcc.gnu.org>
+
+	PR fortran/98472
+	* gfortran.dg/elemental_function_5.f90 : New test.
+
+2021-09-10  Paul Thomas  <pault@gcc.gnu.org>
+
+	Backported from master:
+	2021-04-20  Paul Thomas  <pault@gcc.gnu.org>
+
+	PR fortran/100110
+	* gfortran.dg/pdt_31.f03: New test.
+	* gfortran.dg/pdt_26.f03: Reduce 'builtin_malloc' count from 9
+	to 8.
+
+2021-09-06  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-07-12  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/101394
+	* gcc.dg/torture/pr101394.c: New testcase.
+
+2021-09-06  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-07-07  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/101173
+	PR tree-optimization/101280
+	* gcc.dg/torture/pr101173.c: New testcase.
+	* gcc.dg/tree-ssa/loop-interchange-16.c: New file.
+
+2021-09-06  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-06-24  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/101105
+	* gcc.dg/torture/pr101105.c: New testcase.
+
+2021-09-06  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-06-11  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/101009
+	* gcc.dg/torture/pr101009.c: New testcase.
+
+2021-09-03  Peter Bergner  <bergner@linux.ibm.com>
+
+	Backported from master:
+	2021-08-19  Peter Bergner  <bergner@linux.ibm.com>
+
+	PR target/101849
+	* gcc.target/powerpc/pr101849.c: New test.
+
+2021-09-03  Peter Bergner  <bergner@linux.ibm.com>
+
+	Backported from master:
+	2021-07-02  Peter Bergner  <bergner@linux.ibm.com>
+
+	* gcc.target/powerpc/mma-builtin-7.c: New test.
+	* gcc.target/powerpc/mma-builtin-8.c: New test.
+
+2021-08-30  Paul Thomas  <pault@gcc.gnu.org>
+
+	Backported from master:
+	2021-05-06  Paul Thomas  <pault@gcc.gnu.org>
+
+	PR fortran/46691
+	PR fortran/99819
+	* gfortran.dg/class_dummy_6.f90: New test.
+	* gfortran.dg/class_dummy_7.f90: New test.
+
+2021-08-28  Paul Thomas  <pault@gcc.gnu.org>
+
+	Backported from master:
+	2021-04-03  Paul Thomas  <pault@gcc.gnu.org>
+
+	PR fortran/99818
+	* gfortran.dg/coarray_48.f90: New test.
+
+2021-08-28  Paul Thomas  <pault@gcc.gnu.org>
+
+	Backported from master:
+	2021-01-27  Paul Thomas  <pault@gcc.gnu.org>
+
+	PR fortran/93924
+	PR fortran/93925
+	* gfortran.dg/proc_ptr_52.f90 : New test.
+
+2021-08-28  Paul Thomas  <pault@gcc.gnu.org>
+
+	Backported from master:
+	2021-01-08  Paul Thomas  <pault@gcc.gnu.org>
+
+	PR fortran/93794
+	* gfortran.dg/deferred_character_35.f90 : New test.
+
+2021-08-28  Paul Thomas  <pault@gcc.gnu.org>
+
+	Backported from master:
+	2021-03-13  Paul Thomas  <pault@gcc.gnu.org>
+
+	PR fortran/99125
+	* gfortran.dg/alloc_deferred_comp_1.f90: New test.
+
+2021-08-27  konglin1  <lingling.kong@intel.com>
+
+	PR target/101472
+	* gcc.target/i386/avx512f-pr101472.c: New test.
+	* gcc.target/i386/avx512vl-pr101472.c: New test.
+
+2021-08-26  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-08-24  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/98411
+	* gfortran.dg/pr98411.f90: Adjust testcase options to restrict to
+	F2008, and verify case of implicit SAVE.
+
+2021-08-25  konglin1  <lingling.kong@intel.com>
+
+	PR target/101471
+	* gcc.target/i386/avx512f-pr101471.c: New test.
+
+2021-08-24  Richard Earnshaw  <rearnsha@arm.com>
+
+	Backported from master:
+	2021-08-24  Richard Earnshaw  <rearnsha@arm.com>
+
+	PR target/102035
+	* gcc.target/arm/cmse/mainline/8_1m/soft/cmse-13a.c: New test.
+	* gcc.target/arm/cmse/mainline/8_1m/soft/cmse-7a.c: Likewise.
+	* gcc.target/arm/cmse/mainline/8_1m/soft/cmse-8a.c: Likewise.
+	* gcc.target/arm/cmse/mainline/8_1m/softfp-sp/cmse-7a.c: Likewise.
+	* gcc.target/arm/cmse/mainline/8_1m/softfp-sp/cmse-8a.c: Likewise.
+	* gcc.target/arm/cmse/mainline/8_1m/softfp/cmse-13a.c: Likewise.
+	* gcc.target/arm/cmse/mainline/8_1m/softfp/cmse-7a.c: Likewise.
+	* gcc.target/arm/cmse/mainline/8_1m/softfp/cmse-8a.c: Likewise.
+
+2021-08-24  Richard Earnshaw  <rearnsha@arm.com>
+
+	Backported from master:
+	2021-08-24  Richard Earnshaw  <rearnsha@arm.com>
+
+	* lib/target-supports.exp (check_effective_target_arm_cmse_hw):
+	New function.
+
+2021-08-24  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-08-23  Richard Biener  <rguenther@suse.de>
+
+	PR ipa/97565
+	* g++.dg/lto/pr97565_0.C: New testcase.
+	* g++.dg/lto/pr97565_1.C: Likewise.
+
+2021-08-23  Christophe Lyon  <christophe.lyon@foss.st.com>
+
+	Backported from master:
+	2021-08-06  Christophe Lyon  <christophe.lyon@foss.st.com>
+
+	PR target/101723
+	* gcc.target/arm/pr69245.c: Make sure to emit code for fn1, fix
+	typo.
+
+2021-08-23  Christophe Lyon  <christophe.lyon@foss.st.com>
+
+	Backported from master:
+	2021-08-06  Christophe Lyon  <christophe.lyon@foss.st.com>
+
+	PR target/101723
+	* gcc.target/arm/attr-neon3.c: Fix typo.
+	* gcc.target/arm/pragma_fpu_attribute_2.c: Fix typo.
+
+2021-08-23  Richard Earnshaw  <rearnsha@arm.com>
+
+	Backported from master:
+	2021-08-05  Richard Earnshaw  <rearnsha@arm.com>
+
+	PR target/101723
+	* gcc.target/arm/cortex-m55-nofp-flag-hard.c: Update expected output.
+	* gcc.target/arm/cortex-m55-nofp-flag-softfp.c: Likewise.
+	* gcc.target/arm/cortex-m55-nofp-nomve-flag-softfp.c: Likewise.
+	* gcc.target/arm/mve/intrinsics/mve_fpu1.c: Convert to dg-do assemble.
+	Add a non-no-op function body.
+	* gcc.target/arm/mve/intrinsics/mve_fpu2.c: Likewise.
+	* gcc.target/arm/attr-neon.c: Tighten scan-assembler tests.
+	* gcc.target/arm/attr-neon2.c: Use -Ofast, convert test to use
+	check-function-bodies.
+	* gcc.target/arm/attr-neon3.c: Likewise.
+	* gcc.target/arm/pr69245.c: Tighten scan-assembler match, but allow
+	multiple instances.
+	* gcc.target/arm/pragma_fpu_attribute.c: Likewise.
+	* gcc.target/arm/pragma_fpu_attribute_2.c: Likewise.
+
+2021-08-19  Thomas Schwinge  <thomas@codesourcery.com>
+
+	Backported from master:
+	2021-08-19  Thomas Schwinge  <thomas@codesourcery.com>
+
+	PR testsuite/101969
+	* gcc.dg/pr78213.c: Fix up for '--enable-checking=release' etc.
+
+2021-08-17  Thomas Schwinge  <thomas@codesourcery.com>
+
+	Backported from master:
+	2021-08-17  Thomas Schwinge  <thomas@codesourcery.com>
+
+	* gcc.dg/pr78213.c: Restore testing.
+
+2021-08-17  Richard Sandiford  <richard.sandiford@arm.com>
+
+	Backported from master:
+	2021-04-28  Richard Sandiford  <richard.sandiford@arm.com>
+
+	PR target/100305
+	* gcc.c-torture/compile/pr100305.c: New test.
+
+2021-08-13  Martin Liska  <mliska@suse.cz>
+
+	PR gcov-profile/100788
+	* gcc.dg/pr100788.c: New test.
+
+2021-07-30  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-07-21  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/101514
+	* gfortran.dg/pr101514.f90: New test.
+
+2021-07-30  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-07-23  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/101536
+	* gfortran.dg/pr101536.f90: New test.
+
+2021-07-29  Bill Schmidt  <wschmidt@linux.ibm.com>
+
+	PR target/101531
+	* gcc.target/powerpc/pr101129.c: Adjust.
+
+2021-07-29  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-07-29  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/96435
+	* gdc.dg/pr96435.d: New test.
+
+2021-07-28  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-07-18  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/101084
+	* gfortran.dg/fmt_nonchar_3.f90: New test.
+
+2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/101640
+	* gdc.dg/pr101640.d: New test.
+
+2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/101490
+	* gdc.dg/pr101490.d: New test.
+	* gdc.test/fail_compilation/fail22144.d: New test.
+
+2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/101441
+	* gdc.test/compilable/b19002.d: New test.
+
+2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/101127
+	* gdc.dg/pr101127a.d: New test.
+	* gdc.dg/pr101127b.d: New test.
+
+2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/101619
+	* gdc.test/fail_compilation/fail7424b.d: Update test.
+	* gdc.test/fail_compilation/fail7424c.d: Update test.
+	* gdc.test/fail_compilation/fail7424d.d: Update test.
+	* gdc.test/fail_compilation/fail7424e.d: Update test.
+	* gdc.test/fail_compilation/fail7424f.d: Update test.
+	* gdc.test/fail_compilation/fail7424g.d: Update test.
+	* gdc.test/fail_compilation/fail7424h.d: Update test.
+	* gdc.test/fail_compilation/fail7424i.d: Update test.
+	* gdc.test/compilable/test22133.d: New test.
+	* gdc.test/fail_compilation/fail22133.d: New test.
+
+2021-07-20  Martin Jambor  <mjambor@suse.cz>
+
+	Backported from master:
+	2021-07-08  Martin Jambor  <mjambor@suse.cz>
+
+	PR ipa/101066
+	* gcc.dg/ipa/pr101066.c: New test.
+
+2021-07-20  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/100182
+	* gcc.target/i386/pr71245-1.c: Remove.
+	* gcc.target/i386/pr71245-2.c: Ditto.
+
+2021-07-19  Bill Schmidt  <wschmidt@linux.ibm.com>
+
+	PR target/101129
+	* gcc.target/powerpc/pr101129.c: New.
+
+2021-07-16  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-07-14  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/100949
+	* gfortran.dg/pr100949.f90: New test.
+
+2021-07-12  Thomas Koenig  <tkoenig@gcc.gnu.org>
+
+	Backported from master:
+	2021-07-06  Thomas Koenig  <tkoenig@gcc.gnu.org>
+
+	PR fortran/100227
+	* gfortran.dg/implied_do_io_7.f90: New test.
+
+2021-07-08  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2021-07-08  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/101087
+	* g++.dg/cpp0x/noexcept70.C: New test.
+
+2021-06-24  Uros Bizjak  <ubizjak@gmail.com>
+
+	Backported from master:
+	2021-06-23  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/101175
+	* gcc.target/i386/pr101175.c: New test.
+
+2021-06-18  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-06-16  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/95501
+	PR fortran/95502
+	* gfortran.dg/pr95502.f90: New test.
+
+2021-06-18  Srinath Parvathaneni  <srinath.parvathaneni@arm.com>
+
+	Backported from master:
+	2021-06-18  Srinath Parvathaneni  <srinath.parvathaneni@arm.com>
+
+	PR target/100856
+	* gcc.target/arm/acle/pr100856.c: New test.
+	* gcc.target/arm/multilib.exp: Add tests for cde options.
+
+2021-06-18  Srinath Parvathaneni  <srinath.parvathaneni@arm.com>
+
+	Backported from master:
+	2021-06-11  Srinath Parvathaneni  <srinath.parvathaneni@arm.com>
+
+	PR target/101016
+	* gcc.target/arm/mve/intrinsics/pr101016.c: New test.
+
+2021-06-18  Srinath Parvathaneni  <srinath.parvathaneni@arm.com>
+
+	Backported from master:
+	2021-06-11  Srinath Parvathaneni  <srinath.parvathaneni@arm.com>
+
+	PR target/99939
+	* gcc.target/arm/cmse/cmse-18.c: Add separate scan-assembler
+	directives check for target is v8.1-m.main+mve or not before
+	comparing the assembly output.
+	* gcc.target/arm/cmse/cmse-20.c: New test.
+
+2021-06-18  Peter Bergner  <bergner@linux.ibm.com>
+
+	Backported from master:
+	2021-06-14  Peter Bergner  <bergner@linux.ibm.com>
+
+	PR target/100777
+	* gcc.target/powerpc/pr100777.c: New test.
+
+2021-06-18  Peter Bergner  <bergner@linux.ibm.com>
+
+	Backported from master:
+	2021-06-10  Peter Bergner  <bergner@linux.ibm.com>
+
+	* gcc.target/powerpc/mma-builtin-4.c (__builtin_vsx_build_pair): Add
+	tests.  Update expected counts.
+	* gcc.target/powerpc/mma-builtin-5.c (__builtin_mma_build_acc): Add
+	tests.  Update expected counts.
+
+2021-06-18  Peter Bergner  <bergner@linux.ibm.com>
+
+	Backported from master:
+	2021-05-31  Peter Bergner  <bergner@linux.ibm.com>
+
+	PR target/99842
+	* g++.target/powerpc/pr99842.C: New.
+
+2021-06-17  Jason Merrill  <jason@redhat.com>
+
+	PR c++/101029
+	* g++.dg/ext/array4.C: New test.
+
+2021-06-16  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-06-14  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/100934
+	* gcc.dg/torture/pr100934.c: New testcase.
+
+2021-06-16  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-05-28  Richard Biener  <rguenther@suse.de>
+
+	PR ipa/100791
+	* gcc.dg/pr100791.c: New testcase.
+
+2021-06-16  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-05-11  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/100509
+	* gcc.dg/pr100509.c: New testcase.
+
+2021-06-16  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-05-10  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/100492
+	* gcc.dg/torture/pr100492.c: New testcase.
+
+2021-06-16  José Rui Faustino de Sousa  <jrfsousa@gmail.com>
+
+	PR fortran/82376
+	* gfortran.dg/PR82376.f90: New test.
+
+2021-06-11  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-06-11  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/100999
+	* gdc.test/compilable/staticforeach.d: Add new tests.
+	* gdc.test/fail_compilation/diag16976.d: Likewise.
+	* gdc.test/fail_compilation/fail117.d: Likewise.
+	* gdc.test/fail_compilation/fail238_m32.d: Likewise.
+	* gdc.test/fail_compilation/fail238_m64.d: Likewise.
+	* gdc.test/fail_compilation/fail7424b.d: Likewise.
+	* gdc.test/fail_compilation/fail7424c.d: Likewise.
+	* gdc.test/fail_compilation/fail7424d.d: Likewise.
+	* gdc.test/fail_compilation/fail7424e.d: Likewise.
+	* gdc.test/fail_compilation/fail7424f.d: Likewise.
+	* gdc.test/fail_compilation/fail7424g.d: Likewise.
+	* gdc.test/fail_compilation/fail7424h.d: Likewise.
+	* gdc.test/fail_compilation/fail7424i.d: Likewise.
+	* gdc.test/fail_compilation/fail9766.d: Likewise.
+	* gdc.test/fail_compilation/ice9406.d: Likewise.
+	* gdc.test/compilable/extra-files/minimal/object.d: New file.
+	* gdc.test/compilable/interpret5.d: New test.
+	* gdc.test/compilable/minimal3.d: New test.
+	* gdc.test/compilable/test21742.d: New test.
+	* gdc.test/compilable/test22006.d: New test.
+	* gdc.test/fail_compilation/b12504.d: New test.
+	* gdc.test/fail_compilation/fail22006.d: New test.
+	* gdc.test/fail_compilation/test21927.d: New test.
+	* gdc.test/fail_compilation/test21939.d: New test.
+
+2021-06-10  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-06-10  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/100967
+	* gdc.dg/pr100967.d: New test.
+
+2021-06-09  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-06-09  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/100964
+	* gdc.test/compilable/betterCarray.d: Add test cases.
+
+2021-06-09  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-06-09  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/100935
+	* gdc.test/compilable/aggr_alignment.d: Add test cases.
+
+2021-06-07  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2021-06-04  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/100102
+	* g++.dg/cpp0x/alias-decl-72.C: New test.
+	* g++.dg/cpp0x/alias-decl-72a.C: New test.
+
+2021-06-04  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-06-04  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/100882
+	* gdc.dg/pr100882a.d: New test.
+	* gdc.dg/pr100882b.d: New test.
+	* gdc.dg/pr100882c.d: New test.
+	* gdc.dg/pr100882d.d: New test.
+
+2021-06-04  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-06-04  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/99839
+	* gfortran.dg/inline_matmul_25.f90: New test.
+
+2021-06-04  Alex Coplan  <alex.coplan@arm.com>
+
+	Backported from master:
+	2021-05-19  Alex Coplan  <alex.coplan@arm.com>
+
+	PR target/100333
+	* gcc.target/arm/cmse/pr100333.c: New test.
+
+2021-06-02  Vladimir N. Makarov  <vmakarov@redhat.com>
+
+	Backported from master:
+	2021-01-21  Vladimir N. Makarov  <vmakarov@redhat.com>
+
+	PR rtl-optimization/98777
+	* gcc.target/riscv/pr98777.c: New.
+
+2021-06-02  Vladimir N. Makarov  <vmakarov@redhat.com>
+
+	Backported from master:
+	2021-01-20  Vladimir N. Makarov  <vmakarov@redhat.com>
+
+	PR rtl-optimization/98722
+	* g++.target/s390/pr98722.C: New.
+
+2021-06-02  Vladimir N. Makarov  <vmakarov@redhat.com>
+
+	Backported from master:
+	2021-01-12  Vladimir N. Makarov  <vmakarov@redhat.com>
+
+	PR target/97969
+	* gcc.target/arm/pr97969.c: New.
+
+2021-06-01  Alex Coplan  <alex.coplan@arm.com>
+
+	Backported from master:
+	2021-05-11  Alex Coplan  <alex.coplan@arm.com>
+
+	PR target/99725
+	* gcc.target/arm/cmse/pr99725.c: New test.
+
+2021-06-01  Jason Merrill  <jason@redhat.com>
+
+	PR c++/100797
+	PR c++/95719
+	* g++.dg/inherit/virtual15.C: New test.
+	* g++.dg/inherit/virtual15a.C: New test.
+
+2021-05-28  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-05-17  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/98411
+	* gfortran.dg/pr98411.f90: New test.
+
+2021-05-25  Alex Coplan  <alex.coplan@arm.com>
+
+	Backported from master:
+	2021-05-10  Alex Coplan  <alex.coplan@arm.com>
+
+	PR target/99960
+	* gcc.target/arm/mve/intrinsics/vldrdq_gather_base_wb_s64.c:
+	Update now that we're (correctly) using full 128-bit vector
+	loads/stores.
+	* gcc.target/arm/mve/intrinsics/vldrdq_gather_base_wb_u64.c:
+	Likewise.
+	* gcc.target/arm/mve/intrinsics/vldrdq_gather_base_wb_z_s64.c:
+	Likewise.
+	* gcc.target/arm/mve/intrinsics/vldrdq_gather_base_wb_z_u64.c:
+	Likewise.
+	* gcc.target/arm/mve/intrinsics/vuninitializedq_int.c: Likewise.
+	* gcc.target/arm/mve/intrinsics/vuninitializedq_int1.c:
+	Likewise.
+
+2021-05-21  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* gnat.dg/derived_type7.adb, gnat.dg/derived_type7.ads: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/100489
+	* g++.dg/cpp2a/desig18.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/80456
+	* g++.dg/cpp0x/constexpr-volatile3.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/100054
+	* g++.dg/cpp1y/lambda-generic-local-class1.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/100032
+	* g++.dg/cpp0x/alias-decl-equiv1.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/91933
+	* g++.dg/cpp0x/constexpr-base7.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/99180
+	PR c++/93295
+	PR c++/93867
+	PR c++/95486
+	* g++.dg/cpp2a/class-deduction-alias5.C: New test.
+	* g++.dg/cpp2a/class-deduction-alias6.C: New test.
+	* g++.dg/cpp2a/class-deduction-alias7.C: New test.
+	* g++.dg/cpp2a/class-deduction-alias8.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/41723
+	* g++.dg/template/friend71.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/52625
+	* g++.dg/template/friend70.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/92918
+	* g++.dg/lookup/using66.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/96673
+	* g++.dg/cpp1y/nsdmi-aggr13.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/99901
+	* g++.dg/cpp1z/inline-var9.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/96311
+	* g++.dg/cpp1y/lambda-generic-Wunused.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/95870
+	* g++.dg/cpp0x/lambda/lambda-nsdmi10.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/99201
+	* g++.dg/cpp1z/constexpr-if-lambda4.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/99643
+	* g++.dg/cpp0x/initlist-new5.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/90664
+	* g++.dg/cpp1z/noexcept-type24.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/91217
+	* g++.dg/opt/nrv20.C: New test.
+
+2021-05-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/97938
+	* g++.dg/cpp2a/lambda-pack-init6.C: New test.
+
+2021-05-20  Eric Botcazou  <ebotcazou@adacore.com>
+
+	PR testsuite/96488
+	* gnat.dg/unchecked_convert5.adb: Do not run on PowerPC64 LE.
+	* gnat.dg/unchecked_convert6.adb: Likewise.
+
+2021-05-20  Alex Coplan  <alex.coplan@arm.com>
+	    Christophe Lyon  <christophe.lyon@linaro.org>
+
+	PR target/99977
+	* gcc.target/arm/pr99977.c: New test.
+
+2021-05-17  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-05-12  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/100566
+	* gcc.dg/torture/pr100566.c: New testcase.
+
+2021-05-13  Richard Earnshaw  <rearnsha@arm.com>
+
+	* gcc.dg/pr100563.c: New test.
+
+2021-05-12  Martin Sebor  <msebor@redhat.com>
+
+	PR middle-end/100571
+	* gcc.dg/Wstringop-overflow-67.c: New test.
+
+2021-05-12  Alex Coplan  <alex.coplan@arm.com>
+
+	Backported from master:
+	2021-05-11  Alex Coplan  <alex.coplan@arm.com>
+
+	PR target/99988
+	* gcc.target/aarch64/pr99988.c: New test.
+
+2021-05-07  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-05-07  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/100450
+	* c-c++-common/gomp/pr100450.c: New test.
+
+2021-05-06  Roman Zhuykov  <zhroma@ispras.ru>
+
+	Backported from master:
+	2021-04-30  Roman Zhuykov  <zhroma@ispras.ru>
+
+	PR rtl-optimization/100225
+	PR rtl-optimization/84878
+	* gcc.dg/pr100225.c: New test.
+
+2021-05-06  Andre Vieira  <andre.simoesdiasvieira@arm.com>
+
+	Backported from master:
+	2020-09-15  Andre Vieira  <andre.simoesdiasvieira@arm.com>
+
+	* gcc.target/arm/pr95646.c: Fix testism.
+
+2021-05-06  Srinath Parvathaneni  <srinath.parvathaneni@arm.com>
+
+	Backported from master:
+	2020-06-23  Andre Vieira  <andre.simoesdiasvieira@arm.com>
+
+	PR target/95646
+	* gcc.target/arm/pr95646.c: New test.
+
+2021-05-05  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* gcc.c-torture/execute/20210505-1.c: New test.
+
+2021-05-05  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-05-05  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/100274
+	* gfortran.dg/argument_checking_25.f90: New test.
+
+2021-05-05  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/98786
+	* gcc.dg/torture/pr98786.c: New testcase.
+
+2021-05-05  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-04-27  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/100278
+	* gcc.dg/tree-ssa/pr100278.c: New testcase.
+
+2021-05-04  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-04-27  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/100254
+	* g++.dg/opt/pr100254.C: New test.
+
+2021-04-30  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-04-30  Richard Biener  <rguenther@suse.de>
+
+	PR c++/98032
+	* g++.dg/pr98032.C: New testcase.
+
+2021-04-30  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/96513
+	* gcc.dg/torture/pr96513.c: New testcase.
+
+2021-04-29  Tobias Burnus  <tobias@codesourcery.com>
+
+	Backported from master:
+	2021-04-28  Tobias Burnus  <tobias@codesourcery.com>
+
+	* gfortran.dg/gomp/map-5.f90: New test.
+
+2021-04-28  Uros Bizjak  <ubizjak@gmail.com>
+
+	Backported from master:
+	2021-04-23  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/100182
+	* gcc.target/i386/pr100182.c: New test.
+	* gcc.target/i386/pr71245-1.c (dg-final): Xfail scan-assembler-not.
+	* gcc.target/i386/pr71245-2.c (dg-final): Ditto.
+
+2021-04-27  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-04-24  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/100154
+	* gfortran.dg/pr100154.f90: New test.
+
+2021-04-27  Michael Meissner  <meissner@linux.ibm.com>
+
+	PR target/98952
+	* gcc.target/powerpc/pr98952.c: New test.  Test backported from
+	trunk change on 4/23, 886b6c1e8af502b69e3f318b9830b73b88215878.
+
+2021-04-26  Alex Coplan  <alex.coplan@arm.com>
+
+	Backported from master:
+	2021-04-08  Alex Coplan  <alex.coplan@arm.com>
+
+	PR target/99647
+	* gcc.c-torture/compile/pr99647.c: New test.
+
+2021-04-26  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-04-13  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/100053
+	* gcc.dg/torture/pr100053.c: New testcase.
+	* gcc.dg/tree-ssa/ssa-fre-93.c: Likewise.
+
+2021-04-26  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-04-07  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/99954
+	* gcc.dg/torture/pr99954.c: New testcase.
+
+2021-04-26  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-04-06  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/99880
+	* gcc.dg/torture/pr99880.c: New testcase.
+
+2021-04-24  Richard Sandiford  <richard.sandiford@arm.com>
+
+	PR rtl-optimization/96796
+	* gcc.c-torture/compile/pr96796.c: New test.
+
+2021-04-23  Richard Sandiford  <richard.sandiford@arm.com>
+
+	Backported from master:
+	2021-04-14  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* gcc.target/aarch64/sve/pr99929_1.c: New file.
+	* gcc.target/aarch64/sve/pr99929_2.c: Likewise.
+
+2021-04-23  Richard Sandiford  <richard.sandiford@arm.com>
+
+	Backported from master:
+	2021-03-31  Richard Sandiford  <richard.sandiford@arm.com>
+
+	PR target/98119
+	* gcc.target/aarch64/sve/pr98119.c: New test.
+
+2021-04-23  Bin Cheng  <bin.cheng@linux.alibaba.com>
+
+	Backported from master:
+	2021-04-07  Bin Cheng  <bin.cheng@linux.alibaba.com>
+
+	PR tree-optimization/98736
+	* gcc.c-torture/execute/pr98736.c: New test.
+
+2021-04-23  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2020-07-31  Richard Biener  <rguenther@suse.de>
+
+	* gcc.dg/torture/20200727-0.c: New testcase.
+
+2021-04-23  Richard Sandiford  <richard.sandiford@arm.com>
+
+	Backported from master:
+	2021-04-14  Richard Sandiford  <richard.sandiford@arm.com>
+
+	PR target/99249
+	* gcc.target/aarch64/sve/acle/general/pr99246.c: New test.
+
+2021-04-23  Richard Sandiford  <richard.sandiford@arm.com>
+
+	Backported from master:
+	2021-03-31  Richard Sandiford  <richard.sandiford@arm.com>
+
+	PR rtl-optimization/97141
+	PR rtl-optimization/98726
+	* gcc.c-torture/compile/pr97141.c: New test.
+	* gcc.c-torture/compile/pr98726.c: Likewise.
+	* gcc.target/aarch64/sve/pr97141.c: Likewise.
+	* gcc.target/aarch64/sve/pr98726.c: Likewise.
+
+2021-04-23  Richard Sandiford  <richard.sandiford@arm.com>
+
+	Backported from master:
+	2021-03-30  Richard Sandiford  <richard.sandiford@arm.com>
+
+	PR target/98136
+	* g++.dg/pr98136.C: New test.
+
+2021-04-23  Richard Sandiford  <richard.sandiford@arm.com>
+
+	Backported from master:
+	2021-03-31  Richard Sandiford  <richard.sandiford@arm.com>
+
+	PR tree-optimization/98268
+	* gcc.target/aarch64/sve/pr98268-1.c: New test.
+	* gcc.target/aarch64/sve/pr98268-2.c: Likewise.
+
+2021-04-23  Richard Sandiford  <richard.sandiford@arm.com>
+
+	Backported from master:
+	2021-03-31  Richard Sandiford  <richard.sandiford@arm.com>
+
+	PR tree-optimization/99726
+	* gcc.target/i386/pr99726.c: New test.
+
+2021-04-22  Alex Coplan  <alex.coplan@arm.com>
+
+	PR target/99216
+	* g++.target/aarch64/sve/pr99216.C: New test.
+
+2021-04-21  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2020-09-19  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/97051
+	* g++.dg/cpp2a/is-constant-evaluated11.C: New test.
+
+2021-04-21  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2020-07-30  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/95486
+	* g++.dg/cpp2a/class-deduction-alias3.C: New test.
+
+2021-04-21  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-04-21  Richard Biener  <rguenther@suse.de>
+
+	PR testsuite/100176
+	* g++.dg/compat/struct-layout-1_generate.c: Add missing return.
+	* gcc.dg/compat/struct-layout-1_generate.c: Likewise.
+
+2021-04-21  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-04-21  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/100148
+	* g++.dg/opt/pr100148.C: New test.
+
+2021-04-20  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2020-10-08  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/97052
+	* g++.dg/cpp2a/concepts-defarg2.C: New test.
+
+2021-04-20  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2021-01-20  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/95434
+	* g++.dg/cpp2a/lambda-generic9.C: New test.
+
+2021-04-20  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2021-04-14  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/83476
+	PR c++/99885
+	* g++.dg/cpp1z/class-deduction85.C: New test.
+	* g++.dg/template/ref11.C: New test.
+
+2021-04-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-04-16  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/100111
+	* g++.dg/cpp0x/constexpr-100111.C: New test.
+
+2021-04-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-04-16  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/99767
+	* gcc.target/aarch64/pr99767.c: New test.
+
+2021-04-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-04-16  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/99833
+	* g++.dg/cpp1z/pr99833.C: New test.
+	* g++.dg/cpp2a/pr99833.C: New test.
+
+2021-04-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-04-12  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/99905
+	* gcc.target/i386/pr99905.c: New test.
+
+2021-04-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-04-12  Jakub Jelinek  <jakub@redhat.com>
+
+	PR debug/99830
+	* gcc.dg/pr99830.c: New test.
+
+2021-04-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-04-10  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/99990
+	* gcc.dg/pr99990.c: New test.
+
+2021-04-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-04-10  Jakub Jelinek  <jakub@redhat.com>
+
+	PR lto/99849
+	* gcc.dg/lto/pr99849_0.c: New test.
+
+2021-04-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-04-10  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/98601
+	* gcc.dg/torture/pr98601.c: New test.
+
+2021-04-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-04-08  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/99859
+	* g++.dg/cpp1y/constexpr-99859-1.C: New test.
+	* g++.dg/cpp1y/constexpr-99859-2.C: New test.
+	* g++.dg/cpp2a/constexpr-new18.C: New test.
+	* g++.dg/cpp2a/constexpr-new19.C: New test.
+
+2021-04-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-04-03  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/99863
+	* gcc.target/i386/pr99863.c: New test.
+
+2021-04-19  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-04-19  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/98457
+	* gdc.dg/pr98457.d: New test.
+
+2021-04-19  Tobias Burnus  <tobias@codesourcery.com>
+
+	Backported from master:
+	2020-11-27  Tobias Burnus  <tobias@codesourcery.com>
+
+	PR c/97880
+	* gcc.dg/goacc/tile-1.c: New test.
+
+2021-04-19  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* gnat.dg/opt92.adb: New test.
+
+2021-04-18  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-04-16  Harald Anlauf  <anlauf@gmx.de>
+		    Paul Thomas  <pault@gcc.gnu.org>
+
+	PR fortran/63797
+	* gfortran.dg/pr63797.f90: New test.
+
+2021-04-18  Hafiz Abid Qadeer  <abidh@codesourcery.com>
+
+	Backported from master:
+	2021-04-11  Hafiz Abid Qadeer  <abidh@codesourcery.com>
+
+	PR middle-end/98088
+	* c-c++-common/goacc/collapse-2.c: New.
+
+2021-04-16  Tamar Christina  <tamar.christina@arm.com>
+
+	Backported from master:
+	2021-04-16  Tamar Christina  <tamar.christina@arm.com>
+
+	PR target/100048
+	* gcc.target/aarch64/sve/pr100048.c: New test.
+
+2021-04-12  Tobias Burnus  <tobias@codesourcery.com>
+
+	Backported from master:
+	2021-04-09  Tobias Burnus  <tobias@codesourcery.com>
+
+	PR fortran/99817
+	* gfortran.dg/coarray/dummy_2.f90: New test.
+
+2021-04-10  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/97973
+	* g++.dg/conversion/real-to-int1.C: New test.
+
+2021-04-09  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2021-04-09  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/99806
+	* g++.dg/concepts/abbrev10.C: New test.
+	* g++.dg/concepts/abbrev11.C: New test.
+
+2021-04-09  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2021-04-03  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/91416
+	* g++.dg/other/gc7.C: New test.
+
+2021-04-09  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2021-04-01  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/99831
+	* g++.dg/other/gc6.C: New test.
+
+2021-04-09  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2021-03-25  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/99331
+	* g++.dg/warn/Wconversion5.C: New test.
+
+2021-04-09  Marek Polacek  <polacek@redhat.com>
+
+	DR 1312
+	PR c++/99176
+	* g++.dg/cpp0x/constexpr-nullptr-2.C: Adjust dg-error.
+	* g++.dg/cpp0x/constexpr-cast2.C: New test.
+	* g++.dg/cpp0x/constexpr-cast3.C: New test.
+
+2021-04-09  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2021-03-05  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/99120
+	* g++.dg/warn/Wshadow-17.C: New test.
+
+2021-04-09  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2021-03-05  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/99374
+	* g++.dg/cpp1z/noexcept-type23.C: New test.
+
+2021-04-09  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2021-02-05  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/98947
+	* g++.dg/cpp2a/volatile5.C: New test.
+
+2021-04-09  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/97966
+	* g++.dg/cpp0x/noexcept63.C: New test.
+
+2021-04-09  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2021-01-19  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/98333
+	* g++.dg/cpp0x/noexcept62.C: New test.
+
 2021-04-08  Release Manager
 
 	* GCC 10.3.0 released.

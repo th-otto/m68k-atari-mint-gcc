@@ -2422,8 +2422,107 @@ body
 
     version (GNU)
     {
-        __builtin_unwind_init();
-        sp = &sp;
+        // The generic solution below using a call to __builtin_unwind_init ()
+        // followed by an assignment to sp has two issues:
+        // 1) On some archs it stores a huge amount of FP and Vector state which
+        //    is not the subject of the scan - and, indeed might produce false
+        //    hits.
+        // 2) Even on archs like X86, where there are no callee-saved FPRs/VRs there
+        //    tend to be 'holes' in the frame allocations (to deal with alignment) which
+        //    also will  contain random data which could produce false positives.
+        // This solution stores only the integer callee-saved registers.
+        version (X86)
+        {
+            void*[3] regs = void;
+            asm pure nothrow @nogc
+            {
+                "movl   %%ebx, %0" : "=m" (regs[0]);
+                "movl   %%esi, %0" : "=m" (regs[1]);
+                "movl   %%edi, %0" : "=m" (regs[2]);
+            }
+            sp = cast(void*)&regs[0];
+        }
+        else version (X86_64)
+        {
+            void*[5] regs = void;
+            asm pure nothrow @nogc
+            {
+                "movq   %%rbx, %0" : "=m" (regs[0]);
+                "movq   %%r12, %0" : "=m" (regs[1]);
+                "movq   %%r13, %0" : "=m" (regs[2]);
+                "movq   %%r14, %0" : "=m" (regs[3]);
+                "movq   %%r15, %0" : "=m" (regs[4]);
+            }
+            sp = cast(void*)&regs[0];
+        }
+        else version (PPC)
+        {
+            void*[19] regs = void;
+            version (Darwin)
+                enum regname = "r";
+            else
+                enum regname = "";
+            static foreach (i; 0 .. regs.length)
+            {{
+                enum int j = 13 + i; // source register
+                asm pure nothrow @nogc
+                {
+                    "stw "~regname~j.stringof~", %0" : "=m" (regs[i]);
+                }
+            }}
+            sp = cast(void*)&regs[0];
+        }
+        else version (PPC64)
+        {
+            void*[19] regs = void;
+            version (Darwin)
+                enum regname = "r";
+            else
+                enum regname = "";
+            static foreach (i; 0 .. regs.length)
+            {{
+                enum int j = 13 + i; // source register
+                asm pure nothrow @nogc
+                {
+                    "std "~regname~j.stringof~", %0" : "=m" (regs[i]);
+                }
+            }}
+            sp = cast(void*)&regs[0];
+        }
+        else version (AArch64)
+        {
+            // Callee-save registers, x19-x28 according to AAPCS64, section
+            // 5.1.1.  Include x29 fp because it optionally can be a callee
+            // saved reg
+            size_t[11] regs = void;
+            // store the registers in pairs
+            asm pure nothrow @nogc
+            {
+                "stp x19, x20, %0" : "=m" (regs[ 0]), "=m" (regs[1]);
+                "stp x21, x22, %0" : "=m" (regs[ 2]), "=m" (regs[3]);
+                "stp x23, x24, %0" : "=m" (regs[ 4]), "=m" (regs[5]);
+                "stp x25, x26, %0" : "=m" (regs[ 6]), "=m" (regs[7]);
+                "stp x27, x28, %0" : "=m" (regs[ 8]), "=m" (regs[9]);
+                "str x29, %0"      : "=m" (regs[10]);
+                "mov %0, sp"       : "=r" (sp);
+            }
+        }
+        else version (ARM)
+        {
+            // Callee-save registers, according to AAPCS, section 5.1.1.
+            // arm and thumb2 instructions
+            size_t[8] regs = void;
+            asm pure nothrow @nogc
+            {
+                "stm %0, {r4-r11}" : : "r" (regs.ptr) : "memory";
+                "mov %0, sp"       : "=r" (sp);
+            }
+        }
+        else
+        {
+            __builtin_unwind_init();
+            sp = &sp;
+        }
     }
     else version (AsmX86_Posix)
     {
@@ -4146,6 +4245,24 @@ class Fiber
     // Initialization
     ///////////////////////////////////////////////////////////////////////////
 
+    version (Windows)
+        // exception handling walks the stack, invoking DbgHelp.dll which
+        // needs up to 16k of stack space depending on the version of DbgHelp.dll,
+        // the existence of debug symbols and other conditions. Avoid causing
+        // stack overflows by defaulting to a larger stack size
+        enum defaultStackPages = 8;
+    else version (OSX)
+    {
+        version (X86_64)
+            // libunwind on macOS 11 now requires more stack space than 16k, so
+            // default to a larger stack size. This is only applied to X86 as
+            // the PAGESIZE is still 4k, however on AArch64 it is 16k.
+            enum defaultStackPages = 8;
+        else
+            enum defaultStackPages = 4;
+    }
+    else
+        enum defaultStackPages = 4;
 
     /**
      * Initializes a fiber object which is associated with a static
@@ -4160,7 +4277,7 @@ class Fiber
      * In:
      *  fn must not be null.
      */
-    this( void function() fn, size_t sz = PAGESIZE*4,
+    this( void function() fn, size_t sz = PAGESIZE * defaultStackPages,
           size_t guardPageSize = PAGESIZE ) nothrow
     in
     {
@@ -4186,7 +4303,7 @@ class Fiber
      * In:
      *  dg must not be null.
      */
-    this( void delegate() dg, size_t sz = PAGESIZE*4,
+    this( void delegate() dg, size_t sz = PAGESIZE * defaultStackPages,
           size_t guardPageSize = PAGESIZE ) nothrow
     in
     {

@@ -122,7 +122,7 @@ namespace __gnu_test
    */
   template<class T>
   struct output_iterator_wrapper
-  : public std::iterator<std::output_iterator_tag, T, std::ptrdiff_t, T*, T&>
+  : public std::iterator<std::output_iterator_tag, void, std::ptrdiff_t, void, void>
   {
   protected:
     output_iterator_wrapper() : ptr(0), SharedInfo(0)
@@ -175,10 +175,14 @@ namespace __gnu_test
 #if __cplusplus >= 201103L
     template<typename U>
       void operator,(const U&) const = delete;
+
+    void operator&() const = delete;
 #else
   private:
     template<typename U>
       void operator,(const U&) const;
+
+    void operator&() const;
 #endif
   };
 
@@ -275,10 +279,14 @@ namespace __gnu_test
 #if __cplusplus >= 201103L
     template<typename U>
       void operator,(const U&) const = delete;
+
+    void operator&() const = delete;
 #else
   private:
     template<typename U>
       void operator,(const U&) const;
+
+    void operator&() const;
 #endif
   };
 
