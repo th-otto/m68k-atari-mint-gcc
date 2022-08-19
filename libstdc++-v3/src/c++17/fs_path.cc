@@ -1938,7 +1938,7 @@ path::_M_split_cmpts()
 
 path::string_type
 path::_S_convert_loc(const char* __first, const char* __last,
-		     const std::locale& __loc)
+		     const std::locale& __loc __attribute__((__unused__)))
 {
 #if _GLIBCXX_USE_WCHAR_T
   auto& __cvt = std::use_facet<codecvt<wchar_t, char, mbstate_t>>(__loc);

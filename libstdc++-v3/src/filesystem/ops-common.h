@@ -203,7 +203,7 @@ namespace __gnu_posix
   {
     using namespace std::chrono;
 #ifdef _GLIBCXX_USE_ST_MTIM
-    time_t s = st.st_mtim.tv_sec;
+    time_t s = st.st_mtime;
     nanoseconds ns{st.st_mtim.tv_nsec};
 #else
     time_t s = st.st_mtime;
