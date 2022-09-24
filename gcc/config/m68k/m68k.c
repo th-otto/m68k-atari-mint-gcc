@@ -183,7 +183,7 @@ static rtx m68k_function_arg (cumulative_args_t, machine_mode,
 			      const_tree, bool);
 static bool m68k_cannot_force_const_mem (machine_mode mode, rtx x);
 static bool m68k_output_addr_const_extra (FILE *, rtx);
-static void m68k_init_sync_libfuncs (void) ATTRIBUTE_UNUSED;
+static void m68k_init_libfuncs (void) ATTRIBUTE_UNUSED;
 static enum flt_eval_method
 m68k_excess_precision (enum excess_precision_type);
 static machine_mode m68k_promote_function_mode (const_tree, machine_mode,
@@ -6530,7 +6530,7 @@ m68k_conditional_register_usage (void)
 }
 
 static void
-m68k_init_sync_libfuncs (void)
+m68k_init_libfuncs (void)
 {
   init_sync_libfuncs (UNITS_PER_WORD);
 }
