@@ -239,4 +239,4 @@ along with GCC; see the file COPYING3.  If not see
 
 /* Install the __sync libcalls.  */
 #undef TARGET_INIT_LIBFUNCS
-#define TARGET_INIT_LIBFUNCS  m68k_init_sync_libfuncs
+#define TARGET_INIT_LIBFUNCS  m68k_init_libfuncs
