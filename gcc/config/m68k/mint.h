@@ -292,3 +292,7 @@ do {									\
  --wrap=mmap --wrap=munmap --wrap=alloca\
  %{fmudflapth: --wrap=pthread_create\
 }} %{fmudflap|fmudflapth: --wrap=main}"
+
+/* Install the __sync libcalls.  */
+#undef TARGET_INIT_LIBFUNCS
+#define TARGET_INIT_LIBFUNCS  m68k_init_libfuncs
