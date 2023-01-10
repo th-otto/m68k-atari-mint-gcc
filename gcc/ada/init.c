@@ -572,9 +572,6 @@ __gnat_error_handler (int sig, siginfo_t *si ATTRIBUTE_UNUSED, void *ucontext)
 #define HAVE_GNAT_ALTERNATE_STACK 1
 /* This must be in keeping with System.OS_Interface.Alternate_Stack_Size.
    It must be larger than MINSIGSTKSZ and hopefully near 2 * SIGSTKSZ.  */
-# if 16 * 1024 < MINSIGSTKSZ
-#  error "__gnat_alternate_stack too small"
-# endif
 char __gnat_alternate_stack[16 * 1024];
 #endif
 
@@ -635,6 +632,8 @@ __gnat_install_handler (void)
 	 from stack usage by the handler itself.  */
       stack_t stack;
 
+      if (sizeof(__gnat_alternate_stack) < MINSIGSTKSZ)
+         abort();
       stack.ss_sp = __gnat_alternate_stack;
       stack.ss_size = sizeof (__gnat_alternate_stack);
       stack.ss_flags = 0;
