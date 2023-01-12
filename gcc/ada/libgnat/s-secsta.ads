@@ -274,7 +274,7 @@ private
    --  consumption overheads.
 
    type Chunk_Memory is array (Memory_Size range <>) of SSE.Storage_Element;
-   for Chunk_Memory'Alignment use Memory_Alignment;
+   --  for Chunk_Memory'Alignment use Memory_Alignment;
    --  The memory storage of a single chunk
 
    --------------
