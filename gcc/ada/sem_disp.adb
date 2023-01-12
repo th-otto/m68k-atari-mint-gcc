@@ -603,6 +603,7 @@ package body Sem_Disp is
                Wrapper_Found : Boolean := False;
 
             begin
+               Prim := 0;
                Prim_Elmt := First_Elmt (Primitive_Operations (Typ));
                while Present (Prim_Elmt) loop
                   Prim := Node (Prim_Elmt);

@@ -830,7 +830,7 @@ __gnat_localtime_tzoff (const OS_Time *timer ATTRIBUTE_UNUSED,
 
 #elif defined (__APPLE__) || defined (__FreeBSD__) || defined (__linux__) \
   || defined (__GLIBC__) || defined (__DragonFly__) || defined (__OpenBSD__) \
-  || defined (__DJGPP__) || defined (__QNX__)
+  || defined (__DJGPP__) || defined (__QNX__) || defined(__MINT__)
 {
   localtime_r (&time, &tp);
   *off = tp.tm_gmtoff;
