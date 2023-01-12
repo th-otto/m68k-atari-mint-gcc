@@ -207,6 +207,7 @@ package body System.Storage_Pools.Subpools is
       else
          N_Size      := Storage_Size;
          N_Alignment := Alignment;
+         Header_And_Padding := 0;
       end if;
 
       --  Step 3: Allocation of object

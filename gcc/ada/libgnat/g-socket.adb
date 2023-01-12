@@ -2879,6 +2879,7 @@ package body GNAT.Sockets is
          --  Check for possible Duration overflow when Tv_Sec field is 64 bit
          --  integer.
 
+         pragma Warnings (Off);
          if Val.Tv_Sec > time_t (Max_D)
              or else
            (Val.Tv_Sec = time_t (Max_D)

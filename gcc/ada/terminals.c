@@ -34,7 +34,7 @@
 /* First all unsupported platforms. Add stubs for exported routines. */
 
 #if defined (VMS) || defined (__vxworks) || defined (__Lynx__) \
-  || defined (__ANDROID__) || defined (__PikeOS__) || defined(__DJGPP__)
+  || defined (__ANDROID__) || defined (__PikeOS__) || defined(__DJGPP__) || defined(__MINT__)
 
 void *
 __gnat_new_tty (void)
@@ -108,7 +108,7 @@ __gnat_tty_supported (void)
 }
 
 int
-__gnat_tty_waitpid (void *desc ATTRIBUTE_UNUSED, int blocking)
+__gnat_tty_waitpid (void *desc ATTRIBUTE_UNUSED, int blocking ATTRIBUTE_UNUSED)
 {
   return 1;
 }

@@ -72,7 +72,7 @@ package Interfaces.C.Extensions is
    --  typedef int signed_128 __attribute__ ((mode (TI)));
 
    pragma Convention (C_Pass_By_Copy, Signed_128);
-   for Signed_128'Alignment use unsigned_long_long'Alignment * 2;
+   --  for Signed_128'Alignment use unsigned_long_long'Alignment * 2;
 
    type Float_128 is record
       low, high : unsigned_long_long;
@@ -81,7 +81,7 @@ package Interfaces.C.Extensions is
    --  typedef float float_128 __attribute__ ((mode (TF)));
 
    pragma Convention (C_Pass_By_Copy, Float_128);
-   for Float_128'Alignment use unsigned_long_long'Alignment * 2;
+   --  for Float_128'Alignment use unsigned_long_long'Alignment * 2;
 
    type CFloat_128 is record
       re, im : Float_128;

@@ -1137,8 +1137,12 @@ is
       ------------------
 
       function To_Unix_Time (Ada_Time : Time) return Long_Integer is
+         pragma Unreferenced (Ada_Time);
       begin
-         return Long_Integer (To_Unix_Time_64 (Ada_Time));
+         --  crashes in extract_constrain_insn, at recog.cc:2783
+         --  expanding subdi3?
+         --  return Long_Integer (To_Unix_Time_64 (Ada_Time));
+         return 0;
       end To_Unix_Time;
 
       ---------------------

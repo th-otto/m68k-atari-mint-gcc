@@ -86,7 +86,7 @@ pragma Style_Checks ("N");
  ** a number of non-POSIX but useful/required features.
  **/
 
-#if defined (__linux__) || defined (__ANDROID__) || defined (__GNU__)
+#if defined (__linux__) || defined (__ANDROID__) || defined (__GNU__) || defined(__MINT__)
 
 /* Define _XOPEN_SOURCE to get IOV_MAX */
 # if !defined (_XOPEN_SOURCE)
@@ -160,7 +160,7 @@ pragma Style_Checks ("N");
 #endif
 
 #if defined (__linux__) || defined (__ANDROID__) || defined (__QNX__) \
-  || defined (__rtems__) || defined (__GNU__)
+  || defined (__rtems__) || defined (__GNU__) || defined(__MINT__)
 # include <pthread.h>
 # include <signal.h>
 #endif
@@ -1210,12 +1210,12 @@ CND(NI_NUMERICSERV, "Numeric form of the service")
 CND(NI_NUMERICHOST, "Numeric form of the hostname")
 
 #ifndef NI_MAXHOST
-# define NI_MAXHOST -1
+# define NI_MAXHOST 1025
 #endif
 CND(NI_MAXHOST, "Maximum size of hostname")
 
 #ifndef NI_MAXSERV
-# define NI_MAXSERV -1
+# define NI_MAXSERV 32
 #endif
 CND(NI_MAXSERV, "Maximum size of service name")
 
@@ -1465,7 +1465,7 @@ CND(MSG_EOR, "Send end of record")
 CND(MSG_WAITALL, "Wait for full reception")
 
 #ifndef MSG_NOSIGNAL
-# define MSG_NOSIGNAL -1
+# define MSG_NOSIGNAL 0
 #endif
 CND(MSG_NOSIGNAL, "No SIGPIPE on send")
 
@@ -1938,7 +1938,7 @@ CST(Poll_Linkname, "")
 
 #endif /* HAVE_SOCKETS */
 
-#if defined (__linux__) || defined (__ANDROID__) || defined (__QNX__) || defined (__GNU__)
+#if defined (__linux__) || defined (__ANDROID__) || defined (__QNX__) || defined (__GNU__) || defined(__MINT__)
 #define SIZEOF_sigset (sizeof (sigset_t))
 CND(SIZEOF_sigset, "sigset")
 #endif
@@ -1999,7 +1999,7 @@ CNS(CLOCK_RT_Ada, "")
 
 #if defined (__APPLE__) || defined (__ANDROID__) || defined (DUMMY) \
   || defined (__FreeBSD__) || defined (__linux__) \
-  || defined (__QNX__) || defined (__rtems__) || defined (__GNU__)
+  || defined (__QNX__) || defined (__rtems__) || defined (__GNU__) || defined(__MINT__)
 
 /*
 

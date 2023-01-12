@@ -12188,6 +12188,7 @@ package body Sem_Ch12 is
          return Decl_Node;
 
       else
+         Nam := 0;
          pragma Assert (False);
       end if;
 

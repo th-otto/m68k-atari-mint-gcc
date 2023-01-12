@@ -1398,6 +1398,7 @@ package body Ch6 is
 
    begin
       Specification_List := New_List;
+      Specification_Node := 0;
       Specification_Loop : loop
          begin
             if Token = Tok_Pragma then

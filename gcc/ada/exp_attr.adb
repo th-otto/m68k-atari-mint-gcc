@@ -6104,6 +6104,8 @@ package body Exp_Attr is
 
                   C_Type := Root_Type (Underlying_Type (C_Type));
                end;
+            else
+               C_Type := 0;
             end if;
 
             --  If Put_Image is disabled, call the "unknown" version

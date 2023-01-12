@@ -4581,7 +4581,7 @@ cbl_file_t::keys_str() const {
                  []( const cbl_file_key_t& key ) {
                    return key.str();
                  } );
-  size_t n = 4 * nkey + std::accumulate(ks.begin(), ks.end(), 0,
+  size_t n = 3 + 4 * nkey + std::accumulate(ks.begin(), ks.end(), 0,
                                         []( int n, const char *s ) {
                                           return n +  strlen(s);
                                         } );

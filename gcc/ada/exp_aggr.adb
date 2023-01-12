@@ -7092,6 +7092,9 @@ package body Exp_Aggr is
                        Defining_Identifier => Key_Index,
                        Object_Definition   =>
                          New_Occurrence_Of (Key_Type, Loc)));
+               else
+                  Key_Type := 0;
+                  Key_Index := 0;
                end if;
 
                Comp := First (Expressions (N));

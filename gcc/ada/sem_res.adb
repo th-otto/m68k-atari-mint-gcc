@@ -11422,6 +11422,7 @@ package body Sem_Res is
          --  of the correct name and type.
 
          Found := False;
+         It1.Typ := 0;
          Get_First_Interp (P, I, It);
 
          Search : while Present (It.Typ) loop

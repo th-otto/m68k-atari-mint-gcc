@@ -1085,6 +1085,7 @@ package body Scng is
          --  literal circuit.
 
          String_Start := Scan_Ptr;
+         Code := 0;
 
          --  Continuation of interpolated string literal
 
