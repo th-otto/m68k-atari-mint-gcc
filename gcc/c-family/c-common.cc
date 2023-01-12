@@ -5592,9 +5592,14 @@ check_user_alignment (const_tree align, bool objfile, bool warn_zero)
       unsigned maxalign = MAX_OFILE_ALIGNMENT / BITS_PER_UNIT;
       if (!tree_fits_uhwi_p (align) || tree_to_uhwi (align) > maxalign)
 	{
+#if 0
 	  error ("requested alignment %qE exceeds object file maximum %u",
 		 align, maxalign);
 	  return -1;
+#else
+	  warning (OPT_Wattributes, "requested alignment %qE exceeds object file maximum %u",
+		 align, maxalign);
+#endif
 	}
     }
 

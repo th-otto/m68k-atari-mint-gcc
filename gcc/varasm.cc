@@ -1098,9 +1098,15 @@ align_variable (tree decl, bool dont_output_data)
      In particular, a.out format supports a maximum alignment of 4.  */
   if (align > MAX_OFILE_ALIGNMENT)
     {
+#if 0
       error ("alignment of %q+D is greater than maximum object "
 	     "file alignment %d", decl,
 	     MAX_OFILE_ALIGNMENT/BITS_PER_UNIT);
+#else
+      warning (OPT_Wattributes, "alignment of %q+D is greater than maximum object "
+	     "file alignment %d", decl,
+	     MAX_OFILE_ALIGNMENT/BITS_PER_UNIT);
+#endif
       align = MAX_OFILE_ALIGNMENT;
     }
 
