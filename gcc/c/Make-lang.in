@@ -85,7 +85,7 @@ cc1-checksum.cc : build/genchecksum$(build_exeext) checksum-options \
 cc1$(exeext): $(C_OBJS) cc1-checksum.o $(BACKEND) $(LIBDEPS)
 	@$(call LINK_PROGRESS,$(INDEX.c),start)
 	+$(LLINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) -o $@ $(C_OBJS) \
-	  cc1-checksum.o $(BACKEND) $(LIBS) $(BACKENDLIBS)
+	  cc1-checksum.o $(BACKEND) $(LIBS) $(BACKENDLIBS) $(GLIBC_SO)
 	@$(call LINK_PROGRESS,$(INDEX.c),end)
 
 cc1.fda: ../stage1-gcc/cc1$(exeext) ../prev-gcc/$(PERF_DATA)
