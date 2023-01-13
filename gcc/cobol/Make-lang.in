@@ -263,7 +263,7 @@ cobol.srcextra: cobol/parse.cc cobol/cdf.cc cobol/scan.cc
 cobol1$(exeext): $(cobol1_OBJS) $(BACKEND) $(LIBDEPS) attribs.o $(cobol.prev)
 	@$(call LINK_PROGRESS,$(INDEX.cobol),start)
 	+$(LLINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) attribs.o -o $@	\
-	      $(cobol1_OBJS) $(BACKEND) $(LIBS) $(BACKENDLIBS)
+	      $(cobol1_OBJS) $(BACKEND) $(LIBS) $(BACKENDLIBS) $(GLIBC_SO)
 	@$(call LINK_PROGRESS,$(INDEX.cobol),end)
 
 cobol.all.cross: gcobol-cross$(exeext)

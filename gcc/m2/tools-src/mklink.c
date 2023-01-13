@@ -137,6 +137,8 @@ addGccArg (char *arg)
     }
 }
 
+#include "libcmain.h"
+
 int
 main (int argc, char *argv[])
 {

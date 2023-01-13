@@ -879,6 +879,8 @@ static int maybe_parse_socket (std::string &option, module_resolver *r)
   return fd;
 }
 
+#include "libcmain.h"
+
 int
 main (int argc, char *argv[])
 {
