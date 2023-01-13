@@ -44,14 +44,6 @@
 #define _THREAD_SAFE
 #endif
 
-/* Use 64 bit Large File API */
-#if defined (__QNX__)
-#define _LARGEFILE64_SOURCE 1
-#elif !defined(_LARGEFILE_SOURCE)
-#define _LARGEFILE_SOURCE
-#endif
-#define _FILE_OFFSET_BITS 64
-
 #ifdef __vxworks
 
 /* No need to redefine exit here.  */
