@@ -122,6 +122,8 @@ setup_prefixes (const char *exec_path)
   prefix_from_env ("PATH", &path);
 }
 
+#include "libcmain.h"
+
 int 
 main (int ac, char **av)
 {

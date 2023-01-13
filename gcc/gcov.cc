@@ -859,6 +859,8 @@ get_cycles_count (line_info &linfo)
   return count;
 }
 
+#include "libcmain.h"
+
 int
 main (int argc, char **argv)
 {

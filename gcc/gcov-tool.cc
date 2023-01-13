@@ -635,6 +635,8 @@ process_args (int argc, char **argv)
   return optind;
 }
 
+#include "libcmain.h"
+
 /* Main function for gcov-tool.  */
 
 int

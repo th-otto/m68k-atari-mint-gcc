@@ -2128,6 +2128,8 @@ cont:
 
 /* Entry point.  */
 
+#include "libcmain.h"
+
 int
 main (int argc, char *argv[])
 {

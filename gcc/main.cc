@@ -24,6 +24,8 @@ along with GCC; see the file COPYING3.  If not see
 #include "diagnostic-core.h"
 #include "toplev.h"
 
+#include "libcmain.h"
+
 int main (int argc, char **argv);
 
 /* We define main() to call toplev::main(), which is defined in toplev.cc.

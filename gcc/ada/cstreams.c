@@ -31,12 +31,6 @@
 
 /* Routines required for implementing routines in Interfaces.C.Streams.  */
 
-#ifndef _LARGEFILE_SOURCE
-#define _LARGEFILE_SOURCE
-#endif
-#define _FILE_OFFSET_BITS 64
-/* the define above will make off_t a 64bit type on GNU/Linux */
-
 /* Tell Cygwin's <stdio.h> to expose fileno_unlocked() */
 #if defined(__CYGWIN__) && !defined(__CYGWIN32__) && !defined(_GNU_SOURCE)
 #define _GNU_SOURCE
