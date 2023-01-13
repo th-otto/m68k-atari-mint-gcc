@@ -39,7 +39,7 @@ GDC_OBJS = $(GCC_OBJS) d/d-spec.o
 gdc$(exeext): $(GDC_OBJS) $(EXTRA_GCC_OBJS) libcommon-target.a $(LIBDEPS)
 	+$(LINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) -o $@ \
 	  $(GDC_OBJS) $(EXTRA_GCC_OBJS) libcommon-target.a \
-	  $(EXTRA_GCC_LIBS) $(LIBS)
+	  $(EXTRA_GCC_LIBS) $(LIBS) $(GLIBC_SO)
 
 # Create a version of the gdc driver which calls the cross-compiler.
 gdc-cross$(exeext): gdc$(exeext)
@@ -240,7 +240,7 @@ d_OBJS = $(D_ALL_OBJS) d/d-spec.o
 d21$(exeext): $(D_ALL_OBJS) attribs.o $(BACKEND) $(LIBDEPS) $(d.prev)
 	@$(call LINK_PROGRESS,$(INDEX.d),start)
 	+$(DLLINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) -static-libphobos -o $@ \
-		$(D_ALL_OBJS) attribs.o $(BACKEND) $(LIBS) $(BACKENDLIBS)
+		$(D_ALL_OBJS) attribs.o $(BACKEND) $(LIBS) $(BACKENDLIBS) $(GLIBC_SO)
 	@$(call LINK_PROGRESS,$(INDEX.d),end)
 
 # Documentation.

@@ -652,6 +652,7 @@ GNATBIND_OBJS = \
  ada/g-sets.o     \
  ada/s-resfil.o   \
  ada/version.o    \
+ ada/libcmain.o   \
  ada/s-utf_32.o
 
 ifeq ($(STAGE1),False)
@@ -763,12 +764,12 @@ gnat1$(exeext): $(TARGET_ADA_SRCS) $(GNAT1_OBJS) $(ADA_BACKEND) $(EXTRA_HOST_OBJ
 		$(EXTRA_HOST_OBJS) $(LIBDEPS) $(ada.prev)
 	@$(call LINK_PROGRESS,$(INDEX.ada),start)
 	+$(GCC_LLINK) -o $@ $(GNAT1_OBJS) $(ADA_BACKEND) $(EXTRA_HOST_OBJS) $(CFLAGS) \
-	  libcommon-target.a $(LIBS) $(SYSLIBS) $(BACKENDLIBS) $(GNATLIB)
+	  libcommon-target.a $(LIBS) $(SYSLIBS) $(BACKENDLIBS) $(GNATLIB) $(GLIBC_SO)
 	$(RM) stamp-gnatlib2-rts stamp-tools
 	@$(call LINK_PROGRESS,$(INDEX.ada),end)
 
 gnatbind$(exeext): ada/b_gnatb.o $(CONFIG_H) $(GNATBIND_OBJS) $(EXTRA_HOST_OBJS) ggc-none.o libcommon-target.a $(LIBDEPS)
-	+$(GCC_LINK) -o $@ $(CFLAGS) ada/b_gnatb.o $(GNATBIND_OBJS) $(EXTRA_HOST_OBJS) ggc-none.o libcommon-target.a $(LIBS) $(SYSLIBS) $(GNATLIB)
+	+$(GCC_LINK) -o $@ $(CFLAGS) ada/b_gnatb.o $(GNATBIND_OBJS) $(EXTRA_HOST_OBJS) ggc-none.o libcommon-target.a $(LIBS) $(SYSLIBS) $(GNATLIB) $(GLIBC_SO)
 
 # use target-gcc target-gnatmake target-gnatbind target-gnatlink
 gnattools: $(GCC_PARTS) $(CONFIG_H) prefix.o force
@@ -970,7 +971,7 @@ gnat-install-tools:
 	    fi ; \
 	  done; \
 	  $(RM) $(DESTDIR)$(bindir)/gnatdll$(exeext); \
-	  test -f gnatdll$(exeext) && $(INSTALL_PROGRAM) gnatdll$(exeext) $(DESTDIR)$(bindir)/gnatdll$(exeext); \
+	  if test -f gnatdll$(exeext); then $(INSTALL_PROGRAM) gnatdll$(exeext) $(DESTDIR)$(bindir)/gnatdll$(exeext); fi; \
 	fi
 
 #

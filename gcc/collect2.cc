@@ -776,6 +776,8 @@ do_link (char **ld_argv, const char *atsuffix)
 
 /* Main program.  */
 
+#include "libcmain.h"
+
 int
 main (int argc, char **argv)
 {
