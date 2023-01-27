@@ -86,7 +86,7 @@ pragma Style_Checks ("M32766");
  ** a number of non-POSIX but useful/required features.
  **/
 
-#if defined (__linux__) || defined (__ANDROID__)
+#if defined (__linux__) || defined (__ANDROID__) || defined(__MINT__)
 
 /* Define _XOPEN_SOURCE to get IOV_MAX */
 # if !defined (_XOPEN_SOURCE)
@@ -157,7 +157,7 @@ pragma Style_Checks ("M32766");
 # include <_types.h>
 #endif
 
-#if defined (__linux__) || defined (__ANDROID__) || defined (__rtems__)
+#if defined (__linux__) || defined (__ANDROID__) || defined (__rtems__) || defined(__MINT__)
 # include <pthread.h>
 # include <signal.h>
 #endif
@@ -1361,7 +1361,7 @@ CND(SIZEOF_struct_hostent, "struct hostent")
 #define SIZEOF_struct_servent (sizeof (struct servent))
 CND(SIZEOF_struct_servent, "struct servent")
 
-#if defined (__linux__) || defined (__ANDROID__)
+#if defined (__linux__) || defined (__ANDROID__) || defined(__MINT__)
 #define SIZEOF_sigset (sizeof (sigset_t))
 CND(SIZEOF_sigset, "sigset")
 #endif
@@ -1463,7 +1463,7 @@ CNS(CLOCK_RT_Ada, "")
 #endif
 
 #if defined (__APPLE__) || defined (__linux__) || defined (__ANDROID__) \
-  || defined (__rtems__) || defined (DUMMY)
+  || defined (__rtems__) || defined (DUMMY) || defined(__MINT__)
 /*
 
    --  Sizes of pthread data types

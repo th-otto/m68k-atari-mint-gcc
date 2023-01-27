@@ -87,6 +87,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <time.h>
+#include <sys/time.h>
 
 #if defined (__vxworks) || defined (__ANDROID__)
 /* S_IREAD and S_IWRITE are not defined in VxWorks or Android */

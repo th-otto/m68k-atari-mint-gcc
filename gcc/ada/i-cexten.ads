@@ -70,7 +70,7 @@ package Interfaces.C.Extensions is
       low, high : unsigned_long_long;
    end record;
    pragma Convention (C_Pass_By_Copy, Signed_128);
-   for Signed_128'Alignment use unsigned_long_long'Alignment * 2;
+   --  for Signed_128'Alignment use unsigned_long_long'Alignment * 2;
 
    --  Types for bitfields
 

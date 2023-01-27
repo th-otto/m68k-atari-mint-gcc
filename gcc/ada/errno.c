@@ -58,7 +58,7 @@ __get_errno(void)
   return errno;
 }
 
-#ifndef __ANDROID__
+#if !defined(__ANDROID__) && !defined(__set_errno)
 void
 __set_errno(int err)
 {
