@@ -92,6 +92,9 @@ __gnat_install_int_handler (void (*proc) (void))
   if (sigint_intercepted == 0)
     {
       act.sa_handler = __gnat_int_handler;
+#ifndef SA_RESTART
+#define SA_RESTART 0
+#endif
 #if defined (__Lynx__) || defined (VMS) || defined(__DJGPP__)
       /* LynxOS, VMS and DJGPP do not support SA_RESTART. */
       act.sa_flags = 0;

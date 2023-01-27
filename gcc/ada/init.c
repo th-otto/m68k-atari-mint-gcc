@@ -274,6 +274,9 @@ __gnat_install_handler (void)
      exceptions.  Make sure that the handler isn't interrupted by another
      signal that might cause a scheduling event!  */
 
+#ifndef SA_RESTART
+#define SA_RESTART 0
+#endif
   act.sa_flags = SA_NODEFER | SA_RESTART | SA_SIGINFO;
   act.sa_sigaction = __gnat_error_handler;
   sigemptyset (&act.sa_mask);
