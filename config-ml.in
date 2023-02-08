@@ -361,6 +361,7 @@ m68*-*-*)
 	        for x in ${old_multidirs}; do
 		  case "$x" in
 		    *mshort ) : ;;
+		    *mfastcall ) : ;;
 		    *) multidirs="${multidirs} ${x}" ;;
 		  esac
 		done
