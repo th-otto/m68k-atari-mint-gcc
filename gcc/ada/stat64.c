@@ -8,6 +8,8 @@
 extern "C" {
 #endif
 
+#ifdef __linux__
+
 #if __GLIBC_PREREQ(2, 33)
 
 #include <stdarg.h>
@@ -56,6 +58,8 @@ int fcntl64(int fd, int cmd, ...)
 }
 
 #endif /* __GLIBC_PREREQ */
+
+#endif /* __linux__ */
 
 #if defined (__cplusplus)
 }

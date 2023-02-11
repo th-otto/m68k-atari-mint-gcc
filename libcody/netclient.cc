@@ -69,6 +69,7 @@ int OpenLocal (char const **e, char const *name)
   return OpenSocket (e, (sockaddr *)&addr, sizeof (addr));
 }
 
+#ifdef AF_INET6
 int OpenInet6 (char const **e, char const *name, int port)
 {
   addrinfo *addrs = nullptr;
@@ -133,6 +134,7 @@ int OpenInet6 (char const **e, char const *name, int port)
 
   return fd;
 }
+#endif
 
 }
 
