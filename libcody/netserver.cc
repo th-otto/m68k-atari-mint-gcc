@@ -76,6 +76,7 @@ int ListenLocal (char const **e, char const *name, unsigned backlog)
   return ListenSocket (e, (sockaddr *)&addr, sizeof (addr), backlog);
 }
 
+#ifdef AF_INET6
 int ListenInet6 (char const **e, char const *name, int port, unsigned backlog)
 {
   addrinfo *addrs = nullptr;
@@ -150,6 +151,7 @@ int ListenInet6 (char const **e, char const *name, int port, unsigned backlog)
 
   return fd;
 }
+#endif
 
 }
 #endif
