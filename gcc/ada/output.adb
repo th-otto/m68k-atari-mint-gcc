@@ -26,7 +26,7 @@
 package body Output is
 
    Buffer : String (1 .. Buffer_Max + 1) := (others => '*');
-   for Buffer'Alignment use 4;
+   for Buffer'Alignment use Integer'Alignment;
    --  Buffer used to build output line. We do line buffering because it is
    --  needed for the support of the debug-generated-code option (-gnatD). Note
    --  any attempt to write more output to a line than can fit in the buffer

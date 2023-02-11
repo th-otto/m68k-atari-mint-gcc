@@ -9,7 +9,7 @@
 // generally only good for requesting no networking
 #if !defined (CODY_NETWORKING)
 // Have a known-good list of networking systems
-#if defined (__unix__) || defined (__MACH__)
+#if (defined (__unix__) || defined (__MACH__)) && !defined(__MINT__)
 #define CODY_NETWORKING 1
 #else
 #define CODY_NETWORKING 0
@@ -792,9 +792,11 @@ int OpenLocal (char const **, char const *name);
 int ListenLocal (char const **, char const *name, unsigned backlog = 0);
 
 // ipv6 socket
+#ifdef AF_INET6
 int OpenInet6 (char const **e, char const *name, int port);
 int ListenInet6 (char const **, char const *name, int port,
 		 unsigned backlog = 0);
+#endif
 #endif
 
 // FIXME: Mapping file utilities?

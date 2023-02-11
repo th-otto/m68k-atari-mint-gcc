@@ -21,6 +21,10 @@
 #else
 #define HAVE_FSTATAT 0
 #endif
+#ifdef __MINT__
+#undef HAVE_FSTATAT
+#define HAVE_FSTATAT 0
+#endif
 
 // Resolver code
 
