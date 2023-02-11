@@ -931,7 +931,7 @@ private
    end record;
    Dope_Rec_Size : constant := 2 * Source_Ptr'Base'Size;
    for Dope_Rec'Size use Dope_Rec_Size;
-   for Dope_Rec'Alignment use Dope_Rec_Size / 8;
+   for Dope_Rec'Alignment use Source_Ptr'Base'Alignment;
    type Dope_Ptr is access all Dope_Rec;
 
    procedure Set_Dope
