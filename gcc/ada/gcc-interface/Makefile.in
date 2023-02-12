@@ -118,7 +118,7 @@ GNATLIBCFLAGS = -g -O2
 GNATLIBCFLAGS_FOR_C = \
   -W -Wall $(GNATLIBCFLAGS) -fexceptions -DIN_RTS -DHAVE_GETIPINFO
 PICFLAG_FOR_TARGET = @PICFLAG_FOR_TARGET@
-ALL_ADAFLAGS = $(CFLAGS) $(ADA_CFLAGS) $(ADAFLAGS)
+ALL_ADAFLAGS = $(CFLAGS) $(ADA_CFLAGS) $(ADAFLAGS) -include $(fsrcdir)/libcwrap.h
 THREAD_KIND = native
 THREADSLIB =
 GMEM_LIB =
@@ -195,7 +195,7 @@ RTSDIR = rts$(subst /,_,$(MULTISUBDIR))
 # Link flags used to build gnat tools.  By default we prefer to statically
 # link with libgcc to avoid a dependency on shared libgcc (which is tricky
 # to deal with as it may conflict with the libgcc provided by the system).
-GCC_LINK_FLAGS=-static-libstdc++ -static-libgcc
+GCC_LINK_FLAGS=
 
 # End of variables for you to override.
 
@@ -247,9 +247,9 @@ LIBS = $(LIBINTL) $(LIBICONV) $(LIBBACKTRACE) $(LIBIBERTY) $(SYSLIBS)
 LIBDEPS = $(LIBINTL_DEP) $(LIBICONV_DEP) $(LIBBACKTRACE) $(LIBIBERTY)
 # Default is no TGT_LIB; one might be passed down or something
 TGT_LIB =
-TOOLS_LIBS = ../link.o ../targext.o ../../ggc-none.o ../../libcommon-target.a \
+TOOLS_LIBS = ../link.o ../targext.o ../../ggc-none.o ../libcmain.o ../../libcommon-target.a \
   ../../libcommon.a ../../../libcpp/libcpp.a $(LIBGNAT) $(LIBINTL) $(LIBICONV) \
-  ../$(LIBBACKTRACE) ../$(LIBIBERTY) $(SYSLIBS) $(TGT_LIB)
+  ../$(LIBBACKTRACE) ../$(LIBIBERTY) $(SYSLIBS) $(TGT_LIB) $(GLIBC_SO)
 
 # Add -no-pie to TOOLS_LIBS since some of them are compiled with -fno-PIE.
 TOOLS_LIBS += @NO_PIE_FLAG@
@@ -344,6 +344,15 @@ ifeq ($(strip $(filter-out %x86_64, $(target_cpu))),)
   else
     ifeq ($(strip $(MULTISUBDIR)),/x32)
       target_cpu:=x32
+    endif
+  endif
+endif
+ifeq ($(strip $(filter-out %m68000, $(target_cpu))),)
+  ifeq ($(strip $(MULTISUBDIR)),/m68020-60)
+    target_cpu:=m68020
+  else
+    ifeq ($(strip $(MULTISUBDIR)),/m5475)
+      target_cpu:=m5475
     endif
   endif
 endif
@@ -2563,6 +2572,9 @@ GCC_LINK=$(CXX) $(GCC_LINK_FLAGS) $(ADA_INCLUDES) $(LDFLAGS)
 	                tools/$(word 1,$(subst <, ,$(PAIR)));)
 	touch ../stamp-tools
 
+../stat64.o: $(fsrcdir)/ada/stat64.c
+	$(CC) -O2 -c $< -o $@
+
 # when compiling the tools, the runtime has to be first on the path so that
 # it hides the runtime files lying with the rest of the sources
 ifeq ($(TOOLSCASE),native)
@@ -2618,23 +2630,23 @@ common-tools: ../stamp-tools
 	  gnatchop gnatcmd gnatkr gnatls gnatprep gnatxref gnatfind gnatname \
 	  gnatclean -bargs $(ADA_INCLUDES) $(GNATBIND_FLAGS)
 	$(GNATLINK) -v gnatcmd -o ../../gnat$(exeext) \
-		--GCC="$(GCC_LINK)" $(TOOLS_LIBS)
+		--GCC="$(GCC_LINK)" $(TOOLS_LIBS) ../stat64.o
 	$(GNATLINK) -v gnatchop -o ../../gnatchop$(exeext) \
-		--GCC="$(GCC_LINK)" $(TOOLS_LIBS)
+		--GCC="$(GCC_LINK)" $(TOOLS_LIBS) ../stat64.o
 	$(GNATLINK) -v gnatkr -o ../../gnatkr$(exeext) \
-		--GCC="$(GCC_LINK)" $(TOOLS_LIBS)
+		--GCC="$(GCC_LINK)" $(TOOLS_LIBS) ../stat64.o
 	$(GNATLINK) -v gnatls -o ../../gnatls$(exeext) \
-		--GCC="$(GCC_LINK)" $(TOOLS_LIBS)
+		--GCC="$(GCC_LINK)" $(TOOLS_LIBS) ../stat64.o
 	$(GNATLINK) -v gnatprep -o ../../gnatprep$(exeext) \
-		--GCC="$(GCC_LINK)" $(TOOLS_LIBS)
+		--GCC="$(GCC_LINK)" $(TOOLS_LIBS) ../stat64.o
 	$(GNATLINK) -v gnatxref -o ../../gnatxref$(exeext) \
-		--GCC="$(GCC_LINK)" $(TOOLS_LIBS)
+		--GCC="$(GCC_LINK)" $(TOOLS_LIBS) ../stat64.o
 	$(GNATLINK) -v gnatfind -o ../../gnatfind$(exeext) \
-		--GCC="$(GCC_LINK)" $(TOOLS_LIBS)
+		--GCC="$(GCC_LINK)" $(TOOLS_LIBS) ../stat64.o
 	$(GNATLINK) -v gnatname -o ../../gnatname$(exeext) \
-		--GCC="$(GCC_LINK)" $(TOOLS_LIBS)
+		--GCC="$(GCC_LINK)" $(TOOLS_LIBS) ../stat64.o
 	$(GNATLINK) -v gnatclean -o ../../gnatclean$(exeext) \
-		--GCC="$(GCC_LINK)" $(TOOLS_LIBS)
+		--GCC="$(GCC_LINK)" $(TOOLS_LIBS) ../stat64.o
 
 ../../gnatdll$(exeext): ../stamp-tools
 	$(GNATMAKE) -c $(ADA_INCLUDES) gnatdll --GCC="$(CC) $(ALL_ADAFLAGS)"
@@ -2646,22 +2658,22 @@ common-tools: ../stamp-tools
 	$(GNATBIND) $(ADA_INCLUDES) $(GNATBIND_FLAGS) vxaddr2line
 	$(GNATLINK) -v vxaddr2line -o $@ --GCC="$(GCC_LINK)" ../targext.o $(CLIB)
 
-gnatmake-re: ../stamp-tools
+gnatmake-re: ../stamp-tools ../stat64.o
 	$(GNATMAKE) -j0 $(ADA_INCLUDES) -u sdefault --GCC="$(CC) $(MOST_ADA_FLAGS)"
 	$(GNATMAKE) -j0 -c $(ADA_INCLUDES) gnatmake --GCC="$(CC) $(ALL_ADAFLAGS)"
 	$(GNATBIND) $(ADA_INCLUDES) $(GNATBIND_FLAGS) gnatmake
 	$(GNATLINK) -v gnatmake -o ../../gnatmake$(exeext) \
-		--GCC="$(GCC_LINK)" $(TOOLS_LIBS)
+		--GCC="$(GCC_LINK)" $(TOOLS_LIBS) ../stat64.o
 
 # Note the use of the "mv" command in order to allow gnatlink to be linked with
 # with the former version of gnatlink itself which cannot override itself.
 # gnatlink-re cannot be run at the same time as gnatmake-re, hence the
 # dependency
-gnatlink-re: ../stamp-tools gnatmake-re
+gnatlink-re: ../stamp-tools gnatmake-re ../stat64.o
 	$(GNATMAKE) -j0 -c $(ADA_INCLUDES) gnatlink --GCC="$(CC) $(ALL_ADAFLAGS)"
 	$(GNATBIND) $(ADA_INCLUDES) $(GNATBIND_FLAGS) gnatlink
 	$(GNATLINK) -v gnatlink -o ../../gnatlinknew$(exeext) \
-		    --GCC="$(GCC_LINK)" $(TOOLS_LIBS)
+		    --GCC="$(GCC_LINK)" $(TOOLS_LIBS) ../stat64.o
 	$(MV)  ../../gnatlinknew$(exeext)  ../../gnatlink$(exeext)
 
 # Needs to be built with CC=gcc
@@ -2669,11 +2681,11 @@ gnatlink-re: ../stamp-tools gnatmake-re
 #  stamp target in the parent directory whenever gnat1 is rebuilt
 
 # Likewise for the tools
-../../gnatmake$(exeext): $(P) b_gnatm.o $(GNATMAKE_OBJS)
-	+$(GCC_LINK) $(ALL_CFLAGS) -o $@ b_gnatm.o $(GNATMAKE_OBJS) $(TOOLS_LIBS) $(TOOLS1_LIBS)
+../../gnatmake$(exeext): $(P) b_gnatm.o $(GNATMAKE_OBJS) ../stat64.o
+	+$(GCC_LINK) $(ALL_CFLAGS) -o $@ b_gnatm.o $(GNATMAKE_OBJS) $(TOOLS_LIBS) $(TOOLS1_LIBS) ../stat64.o
 
-../../gnatlink$(exeext): $(P) b_gnatl.o $(GNATLINK_OBJS)
-	+$(GCC_LINK) $(ALL_CFLAGS) -o $@ b_gnatl.o $(GNATLINK_OBJS) $(TOOLS_LIBS) $(TOOLS1_LIBS)
+../../gnatlink$(exeext): $(P) b_gnatl.o $(GNATLINK_OBJS) ../stat64.o
+	+$(GCC_LINK) $(ALL_CFLAGS) -o $@ b_gnatl.o $(GNATLINK_OBJS) $(TOOLS_LIBS) $(TOOLS1_LIBS) ../stat64.o
 
 ../stamp-gnatlib-$(RTSDIR):
 	@if [ ! -f stamp-gnatlib-$(RTSDIR) ] ; \
