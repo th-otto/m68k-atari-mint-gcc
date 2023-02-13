@@ -58,7 +58,7 @@ GXX_OBJS = $(GCC_OBJS) cp/g++spec.o
 xg++$(exeext): $(GXX_OBJS) $(EXTRA_GCC_OBJS) libcommon-target.a $(LIBDEPS)
 	+$(LINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) -o $@ \
 	  $(GXX_OBJS) $(EXTRA_GCC_OBJS) libcommon-target.a \
-	  $(EXTRA_GCC_LIBS) $(LIBS)
+	  $(EXTRA_GCC_LIBS) $(LIBS) $(GLIBC_SO)
 
 # Create a version of the g++ driver which calls the cross-compiler.
 g++-cross$(exeext): xg++$(exeext)
@@ -118,7 +118,7 @@ cc1plus-checksum.c : build/genchecksum$(build_exeext) checksum-options \
 
 cc1plus$(exeext): $(CXX_OBJS) cc1plus-checksum.o $(BACKEND) $(LIBDEPS)
 	+$(LLINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) -o $@ \
-	      $(CXX_OBJS) cc1plus-checksum.o $(BACKEND) $(LIBS) $(BACKENDLIBS)
+	      $(CXX_OBJS) cc1plus-checksum.o $(BACKEND) $(LIBS) $(BACKENDLIBS) $(GLIBC_SO)
 
 ifeq ($(ENABLE_MAINTAINER_RULES), true)
 # Special build rule.  This is a maintainer rule, that is only

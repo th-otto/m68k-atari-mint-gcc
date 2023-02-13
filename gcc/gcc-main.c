@@ -37,6 +37,8 @@ along with GCC; see the file COPYING3.  If not see
 
 extern int main (int, char **);
 
+#include "libcmain.h"
+
 int
 main (int argc, char **argv)
 {
