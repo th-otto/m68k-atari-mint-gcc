@@ -782,6 +782,8 @@ do_link (char **ld_argv)
 
 /* Main program.  */
 
+#include "libcmain.h"
+
 int
 main (int argc, char **argv)
 {

@@ -571,6 +571,8 @@ process_args (int argc, char **argv)
 
 /* Main function for gcov-tool.  */
 
+#include "libcmain.h"
+
 int
 main (int argc, char **argv)
 {
