@@ -72,6 +72,8 @@ static const tag_format_t tag_table[] =
   {0, NULL, NULL}
 };
 
+#include "libcmain.h"
+
 int
 main (int argc ATTRIBUTE_UNUSED, char **argv)
 {

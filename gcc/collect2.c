@@ -1072,6 +1072,8 @@ maybe_run_lto_and_relink (char **lto_ld_argv, char **object_lst,
 
 /* Main program.  */
 
+#include "libcmain.h"
+
 int
 main (int argc, char **argv)
 {

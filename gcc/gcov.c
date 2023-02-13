@@ -356,6 +356,8 @@ static char *make_gcov_file_name (const char *, const char *);
 static void release_structures (void);
 extern int main (int, char **);
 
+#include "libcmain.h"
+
 int
 main (int argc, char **argv)
 {

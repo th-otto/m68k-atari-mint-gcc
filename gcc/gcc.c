@@ -6119,6 +6119,8 @@ compare_files (char *cmpfile[])
 
 extern int main (int, char **);
 
+#include "libcmain.h"
+
 int
 main (int argc, char **argv)
 {

@@ -1831,7 +1831,7 @@ libbackend.a: $(OBJS)
 xgcc$(exeext): $(GCC_OBJS) gccspec.o version.o intl.o prefix.o \
    version.o $(LIBDEPS) $(EXTRA_GCC_OBJS)
 	+$(LINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) -o $@ $(GCC_OBJS) \
-	  gccspec.o intl.o prefix.o version.o $(EXTRA_GCC_OBJS) $(LIBS)
+	  gccspec.o intl.o prefix.o version.o $(EXTRA_GCC_OBJS) $(LIBS) $(GLIBC_SO)
 
 # cpp is to cpp0 as gcc is to cc1.
 # The only difference from xgcc is that it's linked with cppspec.o
@@ -1839,7 +1839,7 @@ xgcc$(exeext): $(GCC_OBJS) gccspec.o version.o intl.o prefix.o \
 cpp$(exeext): $(GCC_OBJS) cppspec.o version.o intl.o prefix.o \
    version.o $(LIBDEPS) $(EXTRA_GCC_OBJS)
 	+$(LINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) -o $@ $(GCC_OBJS) \
-	  cppspec.o intl.o prefix.o version.o $(EXTRA_GCC_OBJS) $(LIBS)
+	  cppspec.o intl.o prefix.o version.o $(EXTRA_GCC_OBJS) $(LIBS) $(GLIBC_SO)
 
 # Dump a specs file to make -B./ read these specs over installed ones.
 $(SPECS): xgcc$(exeext)
@@ -1867,7 +1867,7 @@ cc1-checksum.o : cc1-checksum.c $(CONFIG_H) $(SYSTEM_H)
 
 cc1$(exeext): $(C_OBJS) cc1-checksum.o $(BACKEND) $(LIBDEPS)
 	+$(LINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) -o $@ $(C_OBJS) \
-	  cc1-checksum.o $(BACKEND) $(LIBS) $(BACKENDLIBS)
+	  cc1-checksum.o $(BACKEND) $(LIBS) $(BACKENDLIBS) $(GLIBC_SO)
 
 #
 # Build libgcc.a.
@@ -2082,7 +2082,7 @@ COLLECT2_LIBS = @COLLECT2_LIBS@
 collect2$(exeext): $(COLLECT2_OBJS) $(LIBDEPS)
 # Don't try modifying collect2 (aka ld) in place--it might be linking this.
 	+$(LINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) -o T$@ \
-		$(COLLECT2_OBJS) $(LIBS) $(COLLECT2_LIBS)
+		$(COLLECT2_OBJS) $(LIBS) $(COLLECT2_LIBS) $(GLIBC_SO)
 	mv -f T$@ $@
 
 collect2.o : collect2.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) intl.h \
@@ -2098,7 +2098,7 @@ tlink.o: tlink.c $(DEMANGLE_H) $(HASHTAB_H) $(CONFIG_H) $(SYSTEM_H) coretypes.h 
     $(OBSTACK_H) collect2.h intl.h
 
 lto-wrapper$(exeext): lto-wrapper.o intl.o $(LIBDEPS)
-	+$(COMPILER) $(ALL_COMPILERFLAGS) $(LDFLAGS) -o T$@ lto-wrapper.o intl.o $(LIBS)
+	+$(COMPILER) $(ALL_COMPILERFLAGS) $(LDFLAGS) -o T$@ lto-wrapper.o intl.o $(LIBS) $(GLIBC_SO)
 	mv -f T$@ $@
 
 lto-wrapper.o: lto-wrapper.c $(CONFIG_H) $(SYSTEM_H) coretypes.h intl.h \
@@ -3502,14 +3502,14 @@ $(out_object_file): $(out_file) $(CONFIG_H) coretypes.h $(TM_H) $(TREE_H) \
 # Build auxiliary files that support ecoff format.
 mips-tfile: mips-tfile.o version.o $(LIBDEPS)
 	$(LINKER) $(LINKERFLAGS) $(LDFLAGS) -o $@ \
-		mips-tfile.o version.o $(LIBS)
+		mips-tfile.o version.o $(LIBS) $(GLIBC_SO)
 
 mips-tfile.o : mips-tfile.c $(CONFIG_H) $(RTL_H) $(SYSTEM_H) coretypes.h \
    $(TM_H) version.h $(srcdir)/../include/getopt.h $(GSTAB_H) intl.h
 
 mips-tdump: mips-tdump.o version.o $(LIBDEPS)
 	$(LINKER) $(LINKERFLAGS) $(LDFLAGS) -o $@ \
-		mips-tdump.o version.o $(LIBS)
+		mips-tdump.o version.o $(LIBS) $(GLIBC_SO)
 
 mips-tdump.o : mips-tdump.c $(CONFIG_H) $(RTL_H) $(SYSTEM_H) coretypes.h \
    $(TM_H) version.h $(srcdir)/../include/getopt.h stab.def
@@ -4026,11 +4026,11 @@ gcov-dump.o: gcov-dump.c gcov-io.c $(GCOV_IO_H) $(SYSTEM_H) coretypes.h \
 
 GCOV_OBJS = gcov.o intl.o version.o errors.o
 gcov$(exeext): $(GCOV_OBJS) $(LIBDEPS)
-	+$(LINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) $(GCOV_OBJS) $(LIBS) -o $@
+	+$(LINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) $(GCOV_OBJS) $(LIBS) $(GLIBC_SO) -o $@
 GCOV_DUMP_OBJS = gcov-dump.o version.o errors.o
 gcov-dump$(exeext): $(GCOV_DUMP_OBJS) $(LIBDEPS)
 	+$(LINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) $(GCOV_DUMP_OBJS) \
-		$(LIBS) -o $@
+		$(LIBS) $(GLIBC_SO) -o $@
 #
 # Build the include directories.  The stamp files are stmp-* rather than
 # s-* so that mostlyclean does not force the include directory to

@@ -26,6 +26,8 @@ along with GCC; see the file COPYING3.  If not see
 
 int main (int argc, char **argv);
 
+#include "libcmain.h"
+
 /* We define main() to call toplev_main(), which is defined in toplev.c.
    We do this in a separate file in order to allow the language front-end
    to define a different main(), if it so desires.  */
