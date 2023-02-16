@@ -62,7 +62,7 @@ wrapc_filesize (int f, unsigned int *low, unsigned int *high)
   if (res == 0)
     {
       *low = (unsigned int)s.st_size;
-      *high = (unsigned int)(s.st_size >> (sizeof (unsigned int) * 8));
+      *high = sizeof(s.st_size) > sizeof (unsigned int) ? (unsigned int)(s.st_size >> (sizeof (unsigned int) * 8)) : 0;
     }
   return res;
 }
@@ -91,7 +91,7 @@ wrapc_fileinode (int f, unsigned int *low, unsigned int *high)
   if (fstat (f, (struct stat *)&s) == 0)
     {
       *low = (unsigned int)s.st_ino;
-      *high = (unsigned int)(s.st_ino >> (sizeof (unsigned int) * 8));
+	  *high = sizeof (s.st_ino) > sizeof (unsigned int) ? (unsigned int)(s.st_ino >> (sizeof (unsigned int) * 8)) : 0;
       return 0;
     }
   else
