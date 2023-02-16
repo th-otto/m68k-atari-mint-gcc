@@ -152,7 +152,7 @@ END CloseDumpDecl ;
 
 PROCEDURE AddRuleTextDump (rule: String) ;
 BEGIN
-
+   rule := rule;
 END AddRuleTextDump ;
 
 
@@ -233,7 +233,7 @@ END AddRuleScopeDump ;
 
 PROCEDURE AddRuleFilenameDump (rule: String) ;
 BEGIN
-
+   rule := rule;
 END AddRuleFilenameDump ;
 
 

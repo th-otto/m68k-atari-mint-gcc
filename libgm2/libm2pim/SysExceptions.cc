@@ -126,6 +126,15 @@ static void (*systemProc) (void *);
 static void (*coroutineProc) (void *);
 static void (*exceptionProc) (void *);
 
+#ifdef __MINT__
+#define NO_SIGINFO
+typedef struct _siginfo_t siginfo_t;
+#ifndef SA_SIGINFO
+#define SA_SIGINFO 0
+#endif
+#endif
+
+#ifndef NO_SIGINFO
 static void
 sigbusDespatcher (int signum, siginfo_t *info, void *ucontext)
 {
@@ -141,7 +150,9 @@ sigbusDespatcher (int signum, siginfo_t *info, void *ucontext)
       perror ("not expecting to arrive here with this signal");
     }
 }
+#endif
 
+#ifndef NO_SIGINFO
 static void
 sigfpeDespatcher (int signum, siginfo_t *info, void *ucontext)
 {
@@ -175,6 +186,7 @@ sigfpeDespatcher (int signum, siginfo_t *info, void *ucontext)
       perror ("not expecting to arrive here with this signal");
     }
 }
+#endif
 
 extern "C" void
 EXPORT(InitExceptionHandlers) (
@@ -204,21 +216,27 @@ EXPORT(InitExceptionHandlers) (
   coroutineProc = coroutine;
   exceptionProc = exception;
 
+#ifndef NO_SIGINFO
   sigbus.sa_sigaction = sigbusDespatcher;
+#endif
   sigbus.sa_flags = (SA_SIGINFO);
   sigemptyset (&sigbus.sa_mask);
 
   if (sigaction (SIGBUS, &sigbus, &old) != 0)
     perror ("unable to install the sigbus signal handler");
 
+#ifndef NO_SIGINFO
   sigsegv.sa_sigaction = sigbusDespatcher;
+#endif
   sigsegv.sa_flags = (SA_SIGINFO);
   sigemptyset (&sigsegv.sa_mask);
 
   if (sigaction (SIGSEGV, &sigsegv, &old) != 0)
     perror ("unable to install the sigsegv signal handler");
 
+#ifndef NO_SIGINFO
   sigfpe.sa_sigaction = sigfpeDespatcher;
+#endif
   sigfpe.sa_flags = (SA_SIGINFO);
   sigemptyset (&sigfpe.sa_mask);
 

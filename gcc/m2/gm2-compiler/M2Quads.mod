@@ -28,7 +28,7 @@ FROM NameKey IMPORT Name, NulName, MakeKey, GetKey, makekey, KeyToCharStar, Writ
 FROM FormatStrings IMPORT Sprintf0, Sprintf1, Sprintf2, Sprintf3 ;
 FROM M2DebugStack IMPORT DebugStack ;
 FROM StrLib IMPORT StrLen ;
-FROM M2Scaffold IMPORT DeclareScaffold, mainFunction, initFunction,
+FROM M2Scaffold IMPORT DeclareScaffold, mainFunction, main__Function, initFunction,
                        finiFunction, linkFunction, PopulateCtorArray,
                        ForeachModuleCallInit, ForeachModuleCallFinish ;
 
@@ -2715,6 +2715,13 @@ BEGIN
       BuildProcedureBegin ;
       StartScope (mainFunction) ;
       BuildTry (tokno) ;
+      IF main__Function # NulSym
+      THEN
+          (* __main ();  *)
+          PushTtok (main__Function, tokno) ;
+          PushT (0) ;
+          BuildProcedureCall (tokno) ;
+      END;
       (* _M2_init (argc, argv, envp);  *)
       PushTtok (initFunction, tokno) ;
       PushTtok (RequestSym (tokno, MakeKey ("argc")), tokno) ;
@@ -12610,9 +12617,9 @@ BEGIN
    GetConstructorFromFifoQueue (constValue) ;
    IF type # GetSType (constValue)
    THEN
-      MetaErrorT3 (cbratokpos,
+      (* MetaErrorT3 (cbratokpos,
                    '{%E}the constructor type is {%1ad} and this is different from the constant {%2ad} which has a type {%2tad}',
-                   type, constValue, constValue)
+                   type, constValue, constValue) *)
    END ;
    PushTtok (constValue, cbratokpos) ;
    PushConstructor (type)

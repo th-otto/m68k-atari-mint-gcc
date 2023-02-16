@@ -97,7 +97,7 @@ EXPORT(filesize) (int f, unsigned int *low, unsigned int *high)
   if (res == 0)
     {
       *low = (unsigned int)s.st_size;
-      *high = (unsigned int)(s.st_size >> (sizeof (unsigned int) * 8));
+      *high = sizeof(s.st_size) > sizeof (unsigned int) ? (unsigned int)(s.st_size >> (sizeof (unsigned int) * 8)) : 0;
     }
   return res;
 #else
@@ -133,10 +133,7 @@ EXPORT(fileinode) (int f, unsigned int *low, unsigned int *high)
   if (fstat (f, (struct stat *)&s) == 0)
     {
       *low = (unsigned int)s.st_ino;
-      if ((sizeof (s.st_ino) == (sizeof (unsigned int))))
-	*high = 0;
-      else
-	*high = (unsigned int)(s.st_ino >> (sizeof (unsigned int) * 8));
+      *high = sizeof (s.st_ino) > sizeof (unsigned int) ? (unsigned int)(s.st_ino >> (sizeof (unsigned int) * 8)) : 0;
       return 0;
     }
   else
@@ -223,7 +220,7 @@ EXPORT(signbitl) (long double r)
 
   /* signbit is a macro which tests its argument against sizeof(float),
      sizeof(double).  */
-  return signbitl (r);
+  return signbit (r);
 #else
   return false;
 #endif
@@ -236,7 +233,7 @@ EXPORT(signbitf) (float r)
 
   /* signbit is a macro which tests its argument against sizeof(float),
      sizeof(double).  */
-  return signbitf (r);
+  return signbit (r);
 #else
   return false;
 #endif

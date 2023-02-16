@@ -81,7 +81,7 @@ VAR
    ctorGlobals   : List ;
    ctorArrayType : CARDINAL ;
    initialized   : BOOLEAN ;
-
+   needs__main: BOOLEAN ;
 
 (* The dynamic scaffold takes the form:
 
@@ -592,6 +592,11 @@ BEGIN
       DeclareArgEnvParams (tokenno, initFunction) ;
       DeclareArgEnvParams (tokenno, finiFunction) ;
 
+      IF needs__main
+      THEN
+          main__Function := MakeProcedure (tokenno, MakeKey ("__main")) ;
+          PutMonoName (main__Function, TRUE)
+      END;
       mainFunction := MakeProcedure (tokenno, MakeKey ("main")) ;
       PutMonoName (mainFunction, TRUE) ;
       StartScope (mainFunction) ;
@@ -632,11 +637,18 @@ BEGIN
 END DeclareScaffold ;
 
 
+PROCEDURE SetNeedsMain();
+BEGIN
+   needs__main := TRUE
+END SetNeedsMain ;
+
 BEGIN
    initialized := FALSE ;
+   needs__main := FALSE ;
    finiFunction := NulSym ;
    initFunction := NulSym ;
    mainFunction := NulSym ;
+   main__Function := NulSym ;
    linkFunction := NulSym ;
    ctorArray := NulSym ;
    ctorGlobals := NIL ;
