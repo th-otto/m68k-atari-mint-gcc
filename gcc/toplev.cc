@@ -1044,6 +1044,8 @@ internal_error_function (diagnostic_context *, const char *, va_list *)
   emergency_dump_function ();
 }
 
+const char *toplev_argv0;
+
 /* Initialization of the front end environment, before command line
    options are parsed.  Signal handlers, internationalization etc.
    ARGV0 is main's argv[0].  */
@@ -1052,6 +1054,7 @@ general_init (const char *argv0, bool init_signals, unique_argv original_argv)
 {
   const char *p;
 
+  toplev_argv0 = argv0;
   p = argv0 + strlen (argv0);
   while (p != argv0 && !IS_DIR_SEPARATOR (p[-1]))
     --p;

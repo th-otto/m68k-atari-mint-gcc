@@ -50,22 +50,21 @@ along with GNU Modula-2; see the file COPYING3.  If not see
 /* gen_gm2_libexec returns a string containing libexec /
    DEFAULT_TARGET_MACHINE string / DEFAULT_TARGET_MACHINE.  */
 
+extern const char *toplev_argv0;
+
 static char *
-gen_gm2_libexec (const char *libexec)
+gen_gm2_libexec (void)
 {
-  int l = strlen (libexec) + 1 + strlen (DEFAULT_TARGET_MACHINE) + 1
-          + strlen (DEFAULT_TARGET_VERSION) + 1;
+  int l = strlen (toplev_argv0) + 1;
   char *s = (char *)xmalloc (l);
-  char dir_sep[2];
+  char *p;
 
-  dir_sep[0] = DIR_SEPARATOR;
-  dir_sep[1] = (char)0;
-
-  strcpy (s, libexec);
-  strcat (s, dir_sep);
-  strcat (s, DEFAULT_TARGET_MACHINE);
-  strcat (s, dir_sep);
-  strcat (s, DEFAULT_TARGET_VERSION);
+  strcpy (s, toplev_argv0);
+  p = strrchr(s, DIR_SEPARATOR);
+  if (p)
+    *p = '\0';
+  else
+    *s = '\0';
   return s;
 }
 
@@ -77,19 +76,19 @@ m2configure_FullPathCPP (void)
   if (M2Options_GetCpp ())
     {
       char *path = (char *) M2Options_GetB ();
+      char dir_sep[2];
 
       if (path == NULL)
-	path = gen_gm2_libexec (STANDARD_LIBEXEC_PREFIX);
+	path = gen_gm2_libexec ();
 
       if (strcmp (path, "") == 0)
 	return xstrdup (CPPPROGRAM);
 
       char *full = (char *)xmalloc (strlen (path) + 1 + strlen (CPPPROGRAM) + 1);
       strcpy (full, path);
-      char *sep = (char *)alloca (2);
-      sep[0] = DIR_SEPARATOR;
-      sep[1] = (char)0;
-      strcat (full, sep);
+      dir_sep[0] = DIR_SEPARATOR;
+      dir_sep[1] = (char)0;
+      strcat (full, dir_sep);
       strcat (full, CPPPROGRAM);
       return full;
     }

@@ -27,6 +27,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #include "config.h"
 #include <unistd.h>
 #include <pthread.h>
+#undef system
 #include <sys/select.h>
 #include <stdlib.h>
 #include <m2rts.h>
@@ -74,8 +75,10 @@ typedef struct threadCB_s
   pthread_t p;
   int tid;   /* The thread id.  */
   unsigned int interruptLevel;
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_cond_t run_counter;  /* Used to block the thread and force
 				    a context switch.  */
+#endif
   int value;    /* Count 0 or 1.  */
   bool waiting; /* Is this thread waiting on the run_counter?  */
 } threadCB;
@@ -83,7 +86,9 @@ typedef struct threadCB_s
 
 typedef struct threadSem_s
 {
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_cond_t counter;
+#endif
   bool waiting;
   int sem_value;
 } threadSem;
@@ -94,8 +99,10 @@ static unsigned int nSemaphores = 0;
 static threadSem **semArray = NULL;
 
 /* These are used to lock the above module data structures.  */
+#ifndef GCC_GTHR_SINGLE_H
 static __gthread_mutex_t lock;  /* This is the only mutex for
 				   the whole module.  */
+#endif
 static bool initialized = false;
 
 extern "C" int EXPORT(init) (void);
@@ -119,7 +126,9 @@ M2EXPORT(fini) (int argc, char *argv[], char *envp[])
 static void
 initSem (threadSem *sem, int value)
 {
+#ifndef GCC_GTHR_SINGLE_H
   __GTHREAD_COND_INIT_FUNCTION (&sem->counter);
+#endif
   sem->waiting = false;
   sem->sem_value = value;
 }
@@ -127,27 +136,40 @@ initSem (threadSem *sem, int value)
 static void
 waitSem (threadSem *sem)
 {
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_lock (&lock);
+#endif
   if (sem->sem_value == 0)
     {
       sem->waiting = true;
+#ifndef GCC_GTHR_SINGLE_H
       __gthread_cond_wait (&sem->counter, &lock);
+#endif
       sem->waiting = false;
     }
   else
     sem->sem_value--;
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_unlock (&lock);
+#endif
 }
 
 static void
 signalSem (threadSem *sem)
 {
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_lock (&lock);
+#endif
   if (sem->waiting)
+  {
+#ifndef GCC_GTHR_SINGLE_H
     __gthread_cond_signal (&sem->counter);
-  else
+#endif
+  } else
     sem->sem_value++;
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_unlock (&lock);
+#endif
 }
 
 extern "C" void
@@ -217,9 +239,13 @@ EXPORT(initSemaphore) (int value)
   tprintf ("initSemaphore (%d) called\n", value);
   EXPORT(init) ();
   tprintf ("about to access lock\n");
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_lock (&lock);
+#endif
   sid = initSemaphore (value);
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_unlock (&lock);
+#endif
   return sid;
 }
 
@@ -241,10 +267,14 @@ EXPORT(currentThread) (void)
   int tid;
 
   EXPORT(init) ();
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_lock (&lock);
+#endif
   tid = currentThread ();
   tprintf ("currentThread %d\n", tid);
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_unlock (&lock);
+#endif
   return tid;
 }
 
@@ -254,12 +284,16 @@ extern "C" unsigned int
 EXPORT(currentInterruptLevel) (void)
 {
   EXPORT(init) ();
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_lock (&lock);
+#endif
   int current = currentThread ();
   tprintf ("currentInterruptLevel %d\n",
            threadArray[current].interruptLevel);
   int level = threadArray[current].interruptLevel;
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_unlock (&lock);
+#endif
   return level;
 }
 
@@ -270,12 +304,16 @@ extern "C" unsigned int
 EXPORT(turnInterrupts) (unsigned int newLevel)
 {
   EXPORT(init) ();
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_lock (&lock);
+#endif
   int current = currentThread ();
   unsigned int old = threadArray[current].interruptLevel;
   tprintf ("turnInterrupts from %d to %d\n", old, newLevel);
   threadArray[current].interruptLevel = newLevel;
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_unlock (&lock);
+#endif
   return old;
 }
 
@@ -292,7 +330,9 @@ execThread (void *t)
   threadCB *tp = (threadCB *)t;
 
   tprintf ("exec thread tid = %d coming to life\n", tp->tid);
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_lock (&lock);
+#endif
   tprintf ("exec thread tid = %d  function = 0x%p  arg = 0x%p\n", tp->tid,
            tp->proc, t);
   /* Has the thread been signalled?  */
@@ -302,7 +342,9 @@ execThread (void *t)
       tprintf ("%s: forcing thread tid = %d to wait\n",
 	       __FUNCTION__, tp->tid);
       tp->waiting = true;  /* We are waiting.  */
+#ifndef GCC_GTHR_SINGLE_H
       __gthread_cond_wait (&tp->run_counter, &lock);
+#endif
       tp->waiting = false; /* Running again.  */
     }
   else
@@ -314,7 +356,9 @@ execThread (void *t)
     }
   tprintf ("  running exec thread [%d]  function = 0x%p  arg = 0x%p\n", tp->tid,
            tp->proc, t);
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_unlock (&lock);
+#endif
   tp->proc (); /* Now execute user procedure.  */
 #if 0
   m2iso_M2RTS_CoroutineException ( __FILE__, __LINE__, __COLUMN__, __FUNCTION__, "coroutine finishing");
@@ -360,7 +404,9 @@ initThread (void (*proc) (void), unsigned int stackSize,
   threadArray[tid].proc = proc;
   threadArray[tid].tid = tid;
   /* Initialize the thread run_counter used to force a context switch.  */
+#ifndef GCC_GTHR_SINGLE_H
   __GTHREAD_COND_INIT_FUNCTION (&threadArray[tid].run_counter);
+#endif
   threadArray[tid].interruptLevel = interrupt;
   threadArray[tid].waiting = false;     /* The thread is running.  */
   threadArray[tid].value = 0;  /* No signal has been seen yet.  */
@@ -398,9 +444,13 @@ EXPORT(initThread) (void (*proc) (void), unsigned int stackSize,
   int tid;
 
   EXPORT(init) ();
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_lock (&lock);
+#endif
   tid = initThread (proc, stackSize, interrupt);
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_unlock (&lock);
+#endif
   return tid;
 }
 
@@ -411,7 +461,9 @@ EXPORT(initThread) (void (*proc) (void), unsigned int stackSize,
 extern "C" void
 EXPORT(transfer) (int *p1, int p2)
 {
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_lock (&lock);
+#endif
   {
     int current = currentThread ();
     if (!initialized)
@@ -434,7 +486,9 @@ EXPORT(transfer) (int *p1, int p2)
 	  {
 	    /* p2 is blocked on the condition variable, release it.  */
 	    tprintf ("p1 = %d cond_signal to p2 (%d)\n", current, p2);
+#ifndef GCC_GTHR_SINGLE_H
 	  __gthread_cond_signal (&threadArray[p2].run_counter);
+#endif
 	  tprintf ("after p1 = %d cond_signal to p2 (%d)\n", current, p2);
 	  }
 	else
@@ -451,7 +505,9 @@ EXPORT(transfer) (int *p1, int p2)
 	  {
 	    /* Record we are about to wait on the condition variable.  */
 	    threadArray[old].waiting = true;
+#ifndef GCC_GTHR_SINGLE_H
 	    __gthread_cond_wait (&threadArray[old].run_counter, &lock);
+#endif
 	    threadArray[old].waiting = false;
 	    /* We are running again.  */
 	  }
@@ -470,7 +526,9 @@ EXPORT(transfer) (int *p1, int p2)
 			     __FILE__, __FUNCTION__, __LINE__);
       }
   }
+#ifndef GCC_GTHR_SINGLE_H
   __gthread_mutex_unlock (&lock);
+#endif
 }
 
 extern "C" int
@@ -490,8 +548,10 @@ EXPORT(init) (void)
       initialized = true;
 
       tprintf ("RTco initialized\n");
+#ifndef GCC_GTHR_SINGLE_H
       __GTHREAD_MUTEX_INIT_FUNCTION (&lock);
       __gthread_mutex_lock (&lock);
+#endif
       /* Create initial thread container.  */
 #if defined(POOL)
       threadArray = (threadCB *)malloc (sizeof (threadCB) * THREAD_POOL);
@@ -501,14 +561,18 @@ EXPORT(init) (void)
       int tid = newThread ();  /* For the current initial thread.  */
       threadArray[tid].p = pthread_self ();
       threadArray[tid].tid = tid;
+#ifndef GCC_GTHR_SINGLE_H
       __GTHREAD_COND_INIT_FUNCTION (&threadArray[tid].run_counter);
+#endif
       threadArray[tid].interruptLevel = 0;
       /* The line below shouldn't be necessary as we are already running.  */
       threadArray[tid].proc = never;
       threadArray[tid].waiting = false;   /* We are running.  */
       threadArray[tid].value = 0;   /* No signal from anyone yet.  */
       tprintf ("RTco initialized completed\n");
+#ifndef GCC_GTHR_SINGLE_H
       __gthread_mutex_unlock (&lock);
+#endif
     }
   return 0;
 }

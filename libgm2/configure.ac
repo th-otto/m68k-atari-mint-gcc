@@ -354,6 +354,7 @@ case ${host} in
   *-*-solaris2*) M2_HOST_OS=solaris ;;
   *-*-aix*)      M2_HOST_OS=aix ;;
   *-*-gnu*)      M2_HOST_OS=hurd ;;
+  *-*-mint*)     M2_HOST_OS=mint ;;
 esac
 
 M2_TARGET_OS=unknown
@@ -367,6 +368,7 @@ case ${target} in
   *-*-solaris2*) M2_TARGET_OS=solaris ;;
   *-*-aix*)      M2_TARGET_OS=aix ;;
   *-*-gnu*)      M2_TARGET_OS=hurd ;;
+  *-*-mint*)     M2_TARGET_OS=mint ;;
 esac
 
 # M2_HOST_OS=unknown
