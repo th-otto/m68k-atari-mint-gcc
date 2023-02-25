@@ -914,11 +914,14 @@ carg (double complex z)
 #define HAVE_CARGL 1
 long double cargl (long double complex z);
 
+#ifndef __mcoldfire__
+/* ??? gives internal compiler error? */
 long double
 cargl (long double complex z)
 {
   return atan2l (IMAGPART (z), REALPART (z));
 }
+#endif
 #endif
 
 
@@ -1145,7 +1148,7 @@ csqrtf (float complex z)
       else
         {
           s = sqrtf (0.5 * d - 0.5 * re);
-          r = fabsf ((0.5 * im) / s);
+	  r = fabsf ((float)((0.5 * im) / s));
         }
 
       COMPLEX_ASSIGN (v, r, copysignf (s, im));
