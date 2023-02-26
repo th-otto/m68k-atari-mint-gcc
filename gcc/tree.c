@@ -10952,6 +10952,7 @@ build_call_expr_internal_loc_array (location_t loc, internal_fn ifn,
     CALL_EXPR_ARG (t, i) = args[i];
   SET_EXPR_LOCATION (t, loc);
   CALL_EXPR_IFN (t) = ifn;
+  process_call_operands (t);
   return t;
 }
 
@@ -11433,7 +11434,6 @@ walk_tree_1 (tree *tp, walk_tree_fn func, void *data,
     case INTEGER_CST:
     case REAL_CST:
     case FIXED_CST:
-    case VECTOR_CST:
     case STRING_CST:
     case BLOCK:
     case PLACEHOLDER_EXPR:
@@ -11462,6 +11462,18 @@ walk_tree_1 (tree *tp, walk_tree_fn func, void *data,
 
 	/* Now walk the first one as a tail call.  */
 	WALK_SUBTREE_TAIL (TREE_VEC_ELT (*tp, 0));
+      }
+
+    case VECTOR_CST:
+      {
+	unsigned len = vector_cst_encoded_nelts (*tp);
+	if (len == 0)
+	  break;
+	/* Walk all elements but the first.  */
+	while (--len)
+	  WALK_SUBTREE (VECTOR_CST_ENCODED_ELT (*tp, len));
+	/* Now walk the first one as a tail call.  */
+	WALK_SUBTREE_TAIL (VECTOR_CST_ENCODED_ELT (*tp, 0));
       }
 
     case COMPLEX_CST:

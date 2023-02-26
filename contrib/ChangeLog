@@ -1,3 +1,95 @@
+2021-05-14  Release Manager
+
+	* GCC 8.5.0 released.
+
+2021-04-14  Martin Liska  <mliska@suse.cz>
+
+	* gcc-changelog/git_commit.py: Sync with master.
+	* gcc-changelog/git_email.py: Likewise.
+	* gcc-changelog/git_update_version.py: Likewise.
+	* gcc-changelog/setup.cfg: Likewise.
+	* gcc-changelog/test_email.py: Likewise.
+	* gcc-changelog/test_patches.txt: Likewise.
+
+2021-03-19  Matthias Klose  <doko@ubuntu.com>
+
+	Backported from master:
+	2021-03-19  Matthias Klose  <doko@ubuntu.com>
+
+	* texi2pod.pl: Substitute @tie{} with a space for the man pages.
+
+2021-01-07  Martin Liska  <mliska@suse.cz>
+
+	* gcc-changelog/git_commit.py: Sync from master.
+	* gcc-changelog/git_email.py: Likewise.
+	* gcc-changelog/git_repository.py: Likewise.
+	* gcc-changelog/test_email.py: Likewise.
+	* gcc-changelog/test_patches.txt: Likewise.
+
+2020-11-25  Martin Liska  <mliska@suse.cz>
+
+	* gcc-changelog/git_commit.py: Use revert_regex instead
+	of string prefix.  Convert sets to literals.
+
+2020-11-06  Martin Liska  <mliska@suse.cz>
+
+	* gcc-changelog/git_commit.py: Sync.
+	* gcc-changelog/git_email.py: Likewise.
+	* gcc-changelog/git_repository.py: Likewise.
+	* gcc-changelog/test_email.py: Likewise.
+	* gcc-changelog/test_patches.txt: Likewise.
+	* gcc-changelog/setup.cfg: New file.
+
+2020-07-29  Martin Liska  <mliska@suse.cz>
+
+	* git-backport.py: fix how are ChangeLog paths combined.
+
+2020-07-23  Martin Liska  <mliska@suse.cz>
+
+	Backported from master:
+	2020-07-23  Martin Liska  <mliska@suse.cz>
+
+	* gcc-changelog/git_commit.py: When reverting a backport,
+	we should print only Revert header.
+
+2020-07-23  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2020-07-17  Jonathan Wakely  <jwakely@redhat.com>
+
+	* gcc-changelog/git_update_version.py: Fix typo.
+
+2020-07-08  Alexandre Oliva  <oliva@adacore.com>
+
+	Backported from master:
+	2020-07-07  Alexandre Oliva  <oliva@adacore.com>
+		    Martin Liska  <mliska@suse.cz>
+
+	* gcc-changelog/git_commit.py: Support CASE and COND.
+	* gcc-changelog/test_patches.txt: Add test.
+	* gcc-changelog/test_email.py: Add test.
+
+2020-07-02  Martin Liska  <mliska@suse.cz>
+
+	* gcc-changelog/git_check_commit.py: New file.
+	* gcc-changelog/git_commit.py: New file.
+	* gcc-changelog/git_email.py: New file.
+	* gcc-changelog/git_repository.py: New file.
+	* gcc-changelog/git_update_version.py: New file.
+	* gcc-changelog/test_email.py: New file.
+	* gcc-changelog/test_patches.txt: New file.
+
+2020-05-29  Martin Liska  <mliska@suse.cz>
+
+	* git-backport.py: The script did 'git co HEAD~' when
+	there was no modified ChangeLog file in a successful
+	git cherry pick.
+	Run cherry-pick --continue without editor.
+
+2020-05-27  Martin Liska  <mliska@suse.cz>
+
+	* git-backport.py: New file.
+
 2020-03-04  Release Manager
 
 	* GCC 8.4.0 released.

@@ -4087,6 +4087,7 @@ lower_rec_input_clauses (tree clauses, gimple_seq *ilist, gimple_seq *dlist,
 		  atmp = builtin_decl_explicit (BUILT_IN_ALLOCA_WITH_ALIGN);
 		  stmt = gimple_build_call (atmp, 2, x,
 					    size_int (DECL_ALIGN (var)));
+		  cfun->calls_alloca = 1;
 		  tmp = create_tmp_var_raw (ptr_type_node);
 		  gimple_add_tmp_var (tmp);
 		  gimple_call_set_lhs (stmt, tmp);
@@ -8611,9 +8612,10 @@ lower_omp_target (gimple_stmt_iterator *gsi_p, omp_context *ctx)
       gimple_seq_add_seq (&new_body, join_seq);
 
       if (offloaded)
-	new_body = maybe_catch_exception (new_body);
-
-      gimple_seq_add_stmt (&new_body, gimple_build_omp_return (false));
+	{
+	  new_body = maybe_catch_exception (new_body);
+	  gimple_seq_add_stmt (&new_body, gimple_build_omp_return (false));
+	}
       gimple_omp_set_body (stmt, new_body);
     }
 

@@ -531,11 +531,11 @@ init_vectorized_lexer (void)
   search_line_fast = impl;
 }
 
-#elif defined(_ARCH_PWR8) && defined(__ALTIVEC__)
+#elif (GCC_VERSION >= 4005) && defined(_ARCH_PWR8) && defined(__ALTIVEC__)
 
 /* A vection of the fast scanner using AltiVec vectorized byte compares
    and VSX unaligned loads (when VSX is available).  This is otherwise
-   the same as the pre-GCC 5 version.  */
+   the same as the AltiVec version.  */
 
 ATTRIBUTE_NO_SANITIZE_UNDEFINED
 static const uchar *
@@ -3453,6 +3453,7 @@ cpp_avoid_paste (cpp_reader *pfile, const cpp_token *token1,
     case CPP_DEREF:	return c == '*';
     case CPP_DOT:	return c == '.' || c == '%' || b == CPP_NUMBER;
     case CPP_HASH:	return c == '#' || c == '%'; /* Digraph form.  */
+    case CPP_PRAGMA:
     case CPP_NAME:	return ((b == CPP_NUMBER
 				 && name_p (pfile, &token2->val.str))
 				|| b == CPP_NAME

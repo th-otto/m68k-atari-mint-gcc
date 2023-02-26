@@ -8967,7 +8967,7 @@ rs6000_legitimize_address (rtx x, rtx oldx ATTRIBUTE_UNUSED,
 	low_int = 0;
       high_int = INTVAL (XEXP (x, 1)) - low_int;
       sum = force_operand (gen_rtx_PLUS (Pmode, XEXP (x, 0),
-					 GEN_INT (high_int)), 0);
+					 gen_int_mode (high_int, Pmode)), 0);
       return plus_constant (Pmode, sum, low_int);
     }
   else if (GET_CODE (x) == PLUS
@@ -17275,7 +17275,7 @@ rs6000_init_builtins (void)
   V2SF_type_node = build_vector_type (float_type_node, 2);
   V2DI_type_node = rs6000_vector_type (TARGET_POWERPC64 ? "__vector long"
 				       : "__vector long long",
-				       intDI_type_node, 2);
+				       long_long_integer_type_node, 2);
   V2DF_type_node = rs6000_vector_type ("__vector double", double_type_node, 2);
   V4SI_type_node = rs6000_vector_type ("__vector signed int",
 				       intSI_type_node, 4);
@@ -17294,7 +17294,7 @@ rs6000_init_builtins (void)
   unsigned_V2DI_type_node = rs6000_vector_type (TARGET_POWERPC64
 				       ? "__vector unsigned long"
 				       : "__vector unsigned long long",
-				       unsigned_intDI_type_node, 2);
+				       long_long_unsigned_type_node, 2);
 
   opaque_V2SF_type_node = build_opaque_vector_type (float_type_node, 2);
   opaque_V2SI_type_node = build_opaque_vector_type (intSI_type_node, 2);
@@ -17513,10 +17513,28 @@ rs6000_init_builtins (void)
   def_builtin ("__builtin_cpu_is", ftype, RS6000_BUILTIN_CPU_IS);
   def_builtin ("__builtin_cpu_supports", ftype, RS6000_BUILTIN_CPU_SUPPORTS);
 
-  /* AIX libm provides clog as __clog.  */
-  if (TARGET_XCOFF &&
-      (tdecl = builtin_decl_explicit (BUILT_IN_CLOG)) != NULL_TREE)
-    set_user_assembler_name (tdecl, "__clog");
+  if (TARGET_XCOFF)
+    {
+      /* AIX libm provides clog as __clog.  */
+      if ((tdecl = builtin_decl_explicit (BUILT_IN_CLOG)) != NULL_TREE)
+	set_user_assembler_name (tdecl, "__clog");
+
+      /* When long double is 64 bit, some long double builtins of libc
+	 functions (like __builtin_frexpl) must call the double version
+	 (frexp) not the long double version (frexpl) that expects a 128 bit
+	 argument.  */
+      if (! TARGET_LONG_DOUBLE_128)
+	{
+	  if ((tdecl = builtin_decl_explicit (BUILT_IN_FMODL)) != NULL_TREE)
+	    set_user_assembler_name (tdecl, "fmod");
+	  if ((tdecl = builtin_decl_explicit (BUILT_IN_FREXPL)) != NULL_TREE)
+	    set_user_assembler_name (tdecl, "frexp");
+	  if ((tdecl = builtin_decl_explicit (BUILT_IN_LDEXPL)) != NULL_TREE)
+	    set_user_assembler_name (tdecl, "ldexp");
+	  if ((tdecl = builtin_decl_explicit (BUILT_IN_MODFL)) != NULL_TREE)
+	    set_user_assembler_name (tdecl, "modf");
+	}
+    }
 
 #ifdef SUBTARGET_INIT_BUILTINS
   SUBTARGET_INIT_BUILTINS;
@@ -17999,6 +18017,22 @@ altivec_init_builtins (void)
 	mode1 = VOIDmode;
       else
 	{
+	  /* PR95952:  Gracefully skip builtins that do not have the icode properly
+	  set, but do have the builtin mask set.  This has occurred in older gcc
+	  builds with older binutils support when binutils refuses code generation
+	  for instructions that it does not support.  This was exposed by changes
+	  allowing all builtins being initialized for better #pragma support.  */
+	  if (d->icode == CODE_FOR_nothing && d->mask)
+	    {
+	      HOST_WIDE_INT builtin_mask = rs6000_builtin_mask;
+	      if (TARGET_DEBUG_BUILTIN)
+		{
+		  fprintf (stderr, "altivec predicate builtin %s skipped", d->name);
+		  fprintf (stderr, " (icode:%d, mask:%lx, builtin_mask:0x%lx\n",
+			   d->icode, d->mask, builtin_mask);
+		}
+	      continue;
+	    }
 	  /* Cannot define builtin if the instruction is disabled.  */
 	  gcc_assert (d->icode != CODE_FOR_nothing);
 	  mode1 = insn_data[d->icode].operand[1].mode;
@@ -39676,7 +39710,9 @@ rs6000_atomic_assign_expand_fenv (tree *hold, tree *clear, tree *update)
 
       tree fenv_var = create_tmp_var_raw (double_type_node);
       TREE_ADDRESSABLE (fenv_var) = 1;
-      tree fenv_addr = build1 (ADDR_EXPR, double_ptr_type_node, fenv_var);
+      tree fenv_addr = build1 (ADDR_EXPR, double_ptr_type_node,
+			       build4 (TARGET_EXPR, double_type_node, fenv_var,
+				       void_node, NULL_TREE, NULL_TREE));
 
       *hold = build_call_expr (atomic_hold_decl, 1, fenv_addr);
       *clear = build_call_expr (atomic_clear_decl, 0);
@@ -39699,12 +39735,13 @@ rs6000_atomic_assign_expand_fenv (tree *hold, tree *clear, tree *update)
 
   /* Mask to clear everything except for the rounding modes and non-IEEE
      arithmetic flag.  */
-  const unsigned HOST_WIDE_INT hold_exception_mask =
-    HOST_WIDE_INT_C (0xffffffff00000007);
+  const unsigned HOST_WIDE_INT hold_exception_mask
+    = HOST_WIDE_INT_C (0xffffffff00000007);
 
   tree fenv_var = create_tmp_var_raw (double_type_node);
 
-  tree hold_mffs = build2 (MODIFY_EXPR, void_type_node, fenv_var, call_mffs);
+  tree hold_mffs = build4 (TARGET_EXPR, double_type_node, fenv_var, call_mffs,
+			   NULL_TREE, NULL_TREE);
 
   tree fenv_llu = build1 (VIEW_CONVERT_EXPR, uint64_type_node, fenv_var);
   tree fenv_llu_and = build2 (BIT_AND_EXPR, uint64_type_node, fenv_llu,
@@ -39728,12 +39765,13 @@ rs6000_atomic_assign_expand_fenv (tree *hold, tree *clear, tree *update)
 
   /* Mask to clear everything except for the rounding modes and non-IEEE
      arithmetic flag.  */
-  const unsigned HOST_WIDE_INT clear_exception_mask =
-    HOST_WIDE_INT_C (0xffffffff00000000);
+  const unsigned HOST_WIDE_INT clear_exception_mask
+    = HOST_WIDE_INT_C (0xffffffff00000000);
 
   tree fenv_clear = create_tmp_var_raw (double_type_node);
 
-  tree clear_mffs = build2 (MODIFY_EXPR, void_type_node, fenv_clear, call_mffs);
+  tree clear_mffs = build4 (TARGET_EXPR, double_type_node, fenv_clear,
+			    call_mffs, NULL_TREE, NULL_TREE);
 
   tree fenv_clean_llu = build1 (VIEW_CONVERT_EXPR, uint64_type_node, fenv_clear);
   tree fenv_clear_llu_and = build2 (BIT_AND_EXPR, uint64_type_node,
@@ -39758,13 +39796,14 @@ rs6000_atomic_assign_expand_fenv (tree *hold, tree *clear, tree *update)
                                 (*(uint64_t*)fenv_var 0x1ff80fff);
      __builtin_mtfsf (0xff, fenv_update);  */
 
-  const unsigned HOST_WIDE_INT update_exception_mask =
-    HOST_WIDE_INT_C (0xffffffff1fffff00);
-  const unsigned HOST_WIDE_INT new_exception_mask =
-    HOST_WIDE_INT_C (0x1ff80fff);
+  const unsigned HOST_WIDE_INT update_exception_mask
+    = HOST_WIDE_INT_C (0xffffffff1fffff00);
+  const unsigned HOST_WIDE_INT new_exception_mask
+    = HOST_WIDE_INT_C (0x1ff80fff);
 
   tree old_fenv = create_tmp_var_raw (double_type_node);
-  tree update_mffs = build2 (MODIFY_EXPR, void_type_node, old_fenv, call_mffs);
+  tree update_mffs = build4 (TARGET_EXPR, double_type_node, old_fenv,
+			     call_mffs, NULL_TREE, NULL_TREE);
 
   tree old_llu = build1 (VIEW_CONVERT_EXPR, uint64_type_node, old_fenv);
   tree old_llu_and = build2 (BIT_AND_EXPR, uint64_type_node, old_llu,

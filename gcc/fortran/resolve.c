@@ -1746,8 +1746,10 @@ gfc_resolve_intrinsic (gfc_symbol *sym, locus *loc)
   gfc_intrinsic_sym* isym = NULL;
   const char* symstd;
 
-  if (sym->formal)
+  if (sym->resolve_symbol_called >= 2)
     return true;
+
+  sym->resolve_symbol_called = 2;
 
   /* Already resolved.  */
   if (sym->from_intmod && sym->ts.type != BT_UNKNOWN)
@@ -8729,7 +8731,7 @@ resolve_assoc_var (gfc_symbol* sym, bool resolve_target)
 	  as = NULL;
 	  sym->ts = *ts;
 	  sym->ts.type = BT_CLASS;
-	  attr = CLASS_DATA (sym)->attr;
+	  attr = CLASS_DATA (sym) ? CLASS_DATA (sym)->attr : sym->attr;
 	  attr.class_ok = 0;
 	  attr.associate_var = 1;
 	  attr.dimension = attr.codimension = 0;
@@ -12590,8 +12592,10 @@ resolve_fl_procedure (gfc_symbol *sym, int mp_flag)
     {
       if (sym->attr.proc_pointer)
 	{
+	  const char* name = (sym->attr.result ? sym->ns->proc_name->name
+					       : sym->name);
 	  gfc_error ("Procedure pointer %qs at %L shall not be elemental",
-		     sym->name, &sym->declared_at);
+		     name, &sym->declared_at);
 	  return false;
 	}
       if (sym->attr.dummy)
@@ -12678,7 +12682,7 @@ resolve_fl_procedure (gfc_symbol *sym, int mp_flag)
       if (sym->attr.subroutine && sym->attr.result)
 	{
 	  gfc_error ("PROCEDURE attribute conflicts with RESULT attribute "
-		     "in %qs at %L", sym->name, &sym->declared_at);
+		     "in %qs at %L", sym->ns->proc_name->name, &sym->declared_at);
 	  return false;
 	}
       if (sym->attr.external && sym->attr.function && !sym->attr.module_procedure
@@ -14601,9 +14605,9 @@ resolve_symbol (gfc_symbol *sym)
   gfc_array_spec *as;
   bool saved_specification_expr;
 
-  if (sym->resolved)
+  if (sym->resolve_symbol_called >= 1)
     return;
-  sym->resolved = 1;
+  sym->resolve_symbol_called = 1;
 
   /* No symbol will ever have union type; only components can be unions.
      Union type declaration symbols have type BT_UNKNOWN but flavor FL_UNION
@@ -15344,7 +15348,7 @@ resolve_symbol (gfc_symbol *sym)
       if (formal)
 	{
 	  sym->formal_ns = formal->sym->ns;
-          if (sym->ns != formal->sym->ns)
+	  if (sym->formal_ns && sym->ns != formal->sym->ns)
 	    sym->formal_ns->refs++;
 	}
     }

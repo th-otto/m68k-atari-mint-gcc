@@ -1,3 +1,279 @@
+2021-05-14  Release Manager
+
+	* GCC 8.5.0 released.
+
+2021-04-30  Jason Merrill  <jason@redhat.com>
+
+	Backported from master:
+	2021-04-30  Jason Merrill  <jason@redhat.com>
+
+	PR c++/95719
+	* call.c (build_over_call): Look up the overrider in base_binfo.
+	* class.c (lookup_vfn_in_binfo): Look through BINFO_PRIMARY_P.
+
+2021-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-04-20  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/99833
+	* pt.c (extract_locals_r): When handling DECL_EXPR of a structured
+	binding, add to data.internal also all corresponding structured
+	binding decls.
+
+2021-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-03-30  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/99790
+	* cp-gimplify.c (cp_gimplify_expr): Handle PTRMEM_CST.
+
+2021-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-03-30  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/99745
+	* decl2.c (grokbitfield): Diagnose bitfields containing bare parameter
+	packs and don't set DECL_BIT_FIELD_REPRESENTATIVE in that case.
+
+2021-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-03-30  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/99650
+	* decl.c (cp_finish_decomp): Diagnose void initializers when
+	using tuple_element and get.
+
+2021-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-03-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/99613
+	* decl.c (expand_static_init): For thread guards, call __cxa_atexit
+	before calling __cxa_guard_release rather than after it.  Formatting
+	fixes.
+
+2021-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-03-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/82959
+	* call.c (op_is_ordered): Handle TRUTH_ANDIF_EXPR, TRUTH_ORIF_EXPR
+	and COMPOUND_EXPR.
+
+2021-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-03-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/95451
+	* lambda.c (is_lambda_ignored_entity): Before checking for
+	LAMBDA_FUNCTION_P, use OVL_FIRST.  Drop FUNCTION_DECL check.
+
+2021-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-03-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR sanitizer/99106
+	* init.c (build_zero_init_1): For flexible array members just return
+	NULL_TREE instead of returning empty CONSTRUCTOR with non-complete
+	ARRAY_TYPE.
+
+2021-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-03-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/99033
+	* init.c (build_zero_init_1): Handle zero initialiation of
+	flexible array members like initialization of [0] arrays.
+	Use integer_minus_onep instead of comparison to integer_minus_one_node
+	and integer_zerop instead of comparison against size_zero_node.
+	Formatting fixes.
+
+2021-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-03-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/97878
+	* decl.c (check_array_initializer): For structured bindings, require
+	the array type to be complete.
+
+2021-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-01-29  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/33661
+	PR c++/98847
+	* decl.c (cp_finish_decl): For register vars with asmspec in templates
+	call set_user_assembler_name and set DECL_HARD_REGISTER.
+	* pt.c (tsubst_expr): When instantiating DECL_HARD_REGISTER vars,
+	pass asmspec_tree to cp_finish_decl.
+
+2021-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-01-29  Jakub Jelinek  <jakub@redhat.com>
+
+	PR sanitizer/95693
+	* init.c (build_zero_init_1): Revert the 2018-03-06 change to
+	return build_zero_cst for reference types.
+	* typeck2.c (process_init_constructor_record): Instead call
+	build_zero_cst here during error recovery instead of build_zero_init.
+
+2021-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-11-12  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/97663
+	* parser.c (cp_parser_init_declarator): Don't try to parse
+	C++17 deduction guides if there are any type specifiers even when
+	type is NULL.
+
+2021-04-21  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2020-10-07  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/88115
+	PR libstdc++/97273
+	* tree.c (cp_tree_equal) <case ALIGNOF_EXPR>: Return false if
+	ALIGNOF_EXPR_STD_P differ.
+
+2020-12-16  Nathan Sidwell  <nathan@acm.org>
+
+	* parser.c (cp_parser_elaborated_type_specifier): Test
+	BOUND_TEMPLATE_TEMPLATE_PARM before checking for instantiation.
+
+2020-12-09  Jason Merrill  <jason@redhat.com>
+
+	PR c++/91953
+	* constexpr.c (potential_constant_expression_1) [PARM_DECL]: Allow
+	empty class type.
+
+2020-11-25  Thomas Schwinge  <thomas@codesourcery.com>
+
+	Backported from master:
+	2020-11-25  Thomas Schwinge  <thomas@codesourcery.com>
+
+	* pt.c (tsubst_omp_clauses): Handle 'OMP_CLAUSE__CACHE_'.
+	(tsubst_expr): Handle 'OACC_CACHE'.
+
+2020-11-24  Jason Merrill  <jason@redhat.com>
+
+	PR c++/95158
+	* class.c (lookup_vfn_in_binfo): New.
+	* call.c (build_over_call): Use it.
+	(build_new_method_call_1): Don't set LOOKUP_NONVIRTUAL.
+	* cp-tree.h (resolves_to_fixed_type_p): Add default argument.
+	(lookup_vfn_in_binfo): Declare.
+
+2020-09-17  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-05-28  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/95328
+	* decl.c (cp_finish_decomp): Call complete_type before checking
+	COMPLETE_TYPE_P.
+
+2020-09-17  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-05-07  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/94951
+	* typeck.c (cp_strict_aliasing_warning): New function.
+	(cp_build_indirect_ref_1, build_reinterpret_cast_1): Use
+	it instead of strict_aliasing_warning.
+
+2020-09-17  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-04-24  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/94742
+	* semantics.c (finish_call_expr): When looking if all overloads
+	are noreturn, use STRIP_TEMPLATE to look through TEMPLATE_DECLs.
+
+2020-09-17  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-04-16  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/94571
+	* parser.c (cp_parser_simple_declaration): Fix up a pasto in
+	diagnostics.
+
+2020-09-17  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-04-08  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/94325
+	* decl.c (begin_destructor_body): For CLASSTYPE_VBASECLASSES class
+	dtors, if CLASSTYPE_PRIMARY_BINFO is non-NULL, but not BINFO_VIRTUAL_P,
+	look at CLASSTYPE_PRIMARY_BINFO of its BINFO_TYPE if it is not
+	BINFO_VIRTUAL_P, and so on.
+
+2020-09-17  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-04-07  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/93931
+	* parser.c (cp_parser_omp_var_list_no_open): Call process_outer_var_ref
+	on outer_automatic_var_p decls.
+	* cp-gimplify.c (cxx_omp_disregard_value_expr): Return true also for
+	capture proxy decls.
+
+2020-09-17  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-04-07  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/90995
+	* parser.c (cp_parser_enum_specifier): Use temp_override for
+	parser->colon_corrects_to_scope_p, replace goto out with return.
+	If scoped enum or enum with underlying type is not followed by
+	{ or ;, call cp_parser_commit_to_tentative_parse before calling
+	cp_parser_error and make sure to return error_mark_node instead of
+	NULL_TREE.  Formatting fixes.
+
+2020-05-25  Jason Merrill  <jason@redhat.com>
+
+	PR c++/90749
+	* init.c (get_nsdmi): Don't push_to_top_level for a local class.
+
+2020-05-25  Jason Merrill  <jason@redhat.com>
+
+	PR c++/91529
+	* decl.c (cp_finish_decl): Also clear TREE_READONLY if
+	-fmerge-all-constants.
+
+2020-05-25  Jason Merrill  <jason@redhat.com>
+
+	PR c++/93822
+	* pt.c (tsubst_decl): Make sure DECL_VALUE_EXPR continues to have
+	the same type as the variable.
+
+2020-05-04  Marek Polacek  <polacek@redhat.com>
+
+	Backported from mainline
+	2019-06-12  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/90736 - bogus error with alignof.
+	* constexpr.c (adjust_temp_type): Use cv_unqualified type.
+
 2020-04-04  Jason Merrill  <jason@redhat.com>
 
 	PR c++/91377

@@ -1,3 +1,103 @@
+2021-05-14  Release Manager
+
+	* GCC 8.5.0 released.
+
+2021-04-26  Michael Meissner  <meissner@linux.ibm.com>
+
+	PR target/98952
+	* config/rs6000/tramp.S (__trampoline_setup, elfv1 #ifdef): Fix
+	trampoline size comparison in 32-bit by reversing test and
+	combining load immediate with compare.  Fix backported from trunk
+	change on 4/23, 886b6c1e8af502b69e3f318b9830b73b88215878.
+	(__trampoline_setup, elfv2 #ifdef): Fix trampoline size comparison
+	in 32-bit by reversing test and combining load immediate with
+	compare.
+
+2021-01-13  Samuel Thibault  <samuel.thibault@gnu.org>
+
+	Backported from master:
+	2021-01-13  Samuel Thibault  <samuel.thibault@gnu.org>
+
+	* config/i386/gnu-unwind.h (x86_gnu_fallback_frame_state): Add the
+	posix siginfo case to struct handler_args. Detect between legacy
+	and siginfo from the second parameter, which is a small sigcode in
+	the legacy case, and a pointer in the siginfo case.
+
+2020-11-25  Szabolcs Nagy  <szabolcs.nagy@arm.com>
+
+	Backported from master:
+	2020-07-13  Szabolcs Nagy  <szabolcs.nagy@arm.com>
+
+	PR target/94891
+	* config/aarch64/aarch64-unwind.h (MD_POST_EXTRACT_ROOT_ADDR): Remove.
+	(MD_POST_FROB_EH_HANDLER_ADDR): Remove.
+	(MD_POST_EXTRACT_FRAME_ADDR): Rename to ...
+	(MD_DEMANGLE_RETURN_ADDR): This.
+	(aarch64_post_extract_frame_addr): Rename to ...
+	(aarch64_demangle_return_addr): This.
+	(aarch64_post_frob_eh_handler_addr): Remove.
+	* unwind-dw2.c (uw_update_context): Demangle return address.
+	(uw_frob_return_addr): Remove.
+
+2020-08-07  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-08-03  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/96402
+	* config/aarch64/lse.S (__aarch64_cas16_acq_rel): Use x2, x3 instead
+	of x(tmp0), x(tmp1) in STXP arguments.
+
+2020-06-17  Samuel Thibault  <samuel.thibault@gnu.org>
+
+	Backported from master:
+	2020-06-17  Samuel Thibault  <samuel.thibault@gnu.org>
+
+	* config.host (md_unwind_header) <i[34567]86-*-gnu*>: Set to
+	'i386/gnu-unwind.h'
+	* config/i386/gnu-unwind.h: New file.
+
+2020-05-29  Kyrylo Tkachov  <kyrylo.tkachov@arm.com>
+
+	* config/aarch64/lse-init.c (init_have_lse_atomics): Use __getauxval
+	instead of getauxval.
+	(AT_HWCAP): Define.
+	(HWCAP_ATOMICS): Define.
+	Guard detection on __gnu_linux__.
+
+2020-05-29  Dong JianQiang  <dongjianqiang2@huawei.com>
+
+	PR gcov-profile/95332
+	* libgcov-util.c (read_gcda_file): Call gcov_magic.
+	* libgcov.h (gcov_magic): Disable GCC poison.
+
+2020-05-20  H.J. Lu  <hongjiu.lu@intel.com>
+
+	Backport from master
+	2020-05-20  H.J. Lu  <hongjiu.lu@intel.com>
+
+	PR target/91695
+	* config/i386/cpuinfo.c (get_available_features): Fix VPCLMULQDQ
+	check.
+
+2020-05-19  H.J. Lu  <hongjiu.lu@intel.com>
+
+	Backport from master
+	2020-05-19  H.J. Lu  <hongjiu.lu@intel.com>
+
+	PR target/95220
+	* config/i386/cpuinfo.c (get_available_features): Fix
+	FEATURE_GFNI check.
+
+2020-05-14  Szabolcs Nagy  <szabolcs.nagy@arm.com>
+
+	Backport from mainline.
+	2020-04-21  Szabolcs Nagy  <szabolcs.nagy@arm.com>
+
+	PR target/94514
+	* config/aarch64/aarch64-unwind.h (aarch64_frob_update_context):
+	Update context->flags accroding to the frame state.
+
 2020-04-16  Andre Vieira  <andre.simoesdiasvieira@arm.com>
 
 	Backport from mainline

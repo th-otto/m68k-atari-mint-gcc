@@ -1,3 +1,24 @@
+2021-05-14  Release Manager
+
+	* GCC 8.5.0 released.
+
+2021-05-07  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-05-07  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/100450
+	* lex.c (cpp_avoid_paste): Handle token1 CPP_PRAGMA like CPP_NAME.
+
+2021-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-10-05  Jakub Jelinek  <jakub@redhat.com>
+
+	PR bootstrap/97163
+	* lex.c (search_line_fast): Only use _ARCH_PWR8 Altivec version
+	for GCC >= 4.5.
+
 2020-03-04  Release Manager
 
 	* GCC 8.4.0 released.

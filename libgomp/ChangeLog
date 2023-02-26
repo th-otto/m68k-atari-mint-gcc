@@ -1,3 +1,97 @@
+2021-05-14  Release Manager
+
+	* GCC 8.5.0 released.
+
+2021-05-06  Roman Zhuykov  <zhroma@ispras.ru>
+
+	Backported from master:
+	2021-04-30  Roman Zhuykov  <zhroma@ispras.ru>
+
+	* testsuite/libgomp.oacc-c-c++-common/atomic_capture-3.c: New test.
+
+2021-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-01-06  Jakub Jelinek  <jakub@redhat.com>
+
+	* testsuite/libgomp.c/task-6.c: New test.
+
+2021-03-25  Thomas Schwinge  <thomas@codesourcery.com>
+
+	Backported from master:
+	2021-03-25  Thomas Schwinge  <thomas@codesourcery.com>
+
+	* plugin/plugin-hsa.c (init_enviroment_variables): Don't prepend
+	the 'HSA_RUNTIME_LIB' path to 'libhsa-runtime64.so'.
+	* plugin/configfrag.ac (HSA_RUNTIME_LIB): Clean up.
+	* config.h.in: Regenerate.
+	* configure: Likewise.
+
+2021-01-14  Thomas Schwinge  <thomas@codesourcery.com>
+
+	Backported from master:
+	2021-01-14  Thomas Schwinge  <thomas@codesourcery.com>
+
+	PR libgomp/65099
+	* plugin/configfrag.ac (PLUGIN_NVPTX): Restrict to supported
+	configurations.
+	* configure: Regenerate.
+	* plugin/plugin-nvptx.c (nvptx_get_num_devices): Remove 64-bit
+	check.
+
+2020-11-25  Thomas Schwinge  <thomas@codesourcery.com>
+
+	Backported from master:
+	2020-11-25  Thomas Schwinge  <thomas@codesourcery.com>
+
+	* testsuite/libgomp.oacc-c++/cache-1.C: New.
+	* testsuite/libgomp.oacc-c-c++-common/cache-1.c: Update.
+
+2020-11-02  Thomas Schwinge  <thomas@codesourcery.com>
+
+	Backported from master:
+	2020-11-02  Thomas Schwinge  <thomas@codesourcery.com>
+
+	PR testsuite/80219
+	PR testsuite/85303
+	* testsuite/lib/libgomp.exp (libgomp_init): Set
+	'gcc_warning_prefix', 'gcc_error_prefix'.
+
+2020-09-17  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-08-08  Jakub Jelinek  <jakub@redhat.com>
+		    Tobias Burnus  <tobias@codesourcery.com>
+
+	PR fortran/93553
+	* testsuite/libgomp.fortran/pr93553.f90: New test.
+
+2020-09-17  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-04-07  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/93931
+	* testsuite/libgomp.c++/pr93931.C: New test.
+
+2020-09-17  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-03-17  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/93566
+	* testsuite/libgomp.c/pr93566.c: New test.
+
+2020-06-04  Thomas Schwinge  <thomas@codesourcery.com>
+
+	* testsuite/libgomp.oacc-fortran/error_stop-1.f: Initialize before
+	the checkpoint.
+	* testsuite/libgomp.oacc-fortran/error_stop-2.f: Likewise.
+	* testsuite/libgomp.oacc-fortran/error_stop-3.f: Likewise.
+	* testsuite/libgomp.oacc-fortran/stop-1.f: Likewise.
+	* testsuite/libgomp.oacc-fortran/stop-2.f: Likewise.
+	* testsuite/libgomp.oacc-fortran/stop-3.f: Likewise.
+
 2020-03-04  Release Manager
 
 	* GCC 8.4.0 released.

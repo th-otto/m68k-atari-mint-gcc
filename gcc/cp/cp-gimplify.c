@@ -839,6 +839,14 @@ cp_gimplify_expr (tree *expr_p, gimple_seq *pre_p, gimple_seq *post_p)
 	}
       break;
 
+    case PTRMEM_CST:
+      *expr_p = cplus_expand_constant (*expr_p);
+      if (TREE_CODE (*expr_p) == PTRMEM_CST)
+	ret = GS_ERROR;
+      else
+	ret = GS_OK;
+      break;
+
     case RETURN_EXPR:
       if (TREE_OPERAND (*expr_p, 0)
 	  && (TREE_CODE (TREE_OPERAND (*expr_p, 0)) == INIT_EXPR
@@ -2101,12 +2109,17 @@ cxx_omp_finish_clause (tree c, gimple_seq *)
 bool
 cxx_omp_disregard_value_expr (tree decl, bool shared)
 {
-  return !shared
-	 && VAR_P (decl)
-	 && DECL_HAS_VALUE_EXPR_P (decl)
-	 && DECL_ARTIFICIAL (decl)
-	 && DECL_LANG_SPECIFIC (decl)
-	 && DECL_OMP_PRIVATIZED_MEMBER (decl);
+  if (shared)
+    return false;
+  if (VAR_P (decl)
+      && DECL_HAS_VALUE_EXPR_P (decl)
+      && DECL_ARTIFICIAL (decl)
+      && DECL_LANG_SPECIFIC (decl)
+      && DECL_OMP_PRIVATIZED_MEMBER (decl))
+    return true;
+  if (VAR_P (decl) && DECL_CONTEXT (decl) && is_capture_proxy (decl))
+    return true;
+  return false;
 }
 
 /* Fold expression X which is used as an rvalue if RVAL is true.  */

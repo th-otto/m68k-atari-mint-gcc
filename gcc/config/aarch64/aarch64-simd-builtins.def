@@ -155,7 +155,7 @@
   BUILTIN_VQN (TERNOP, raddhn2, 0)
   BUILTIN_VQN (TERNOP, rsubhn2, 0)
 
-  BUILTIN_VSQN_HSDI (UNOP, sqmovun, 0)
+  BUILTIN_VSQN_HSDI (UNOPUS, sqmovun, 0)
   /* Implemented by aarch64_<sur>qmovn<mode>.  */
   BUILTIN_VSQN_HSDI (UNOP, sqmovn, 0)
   BUILTIN_VSQN_HSDI (UNOP, uqmovn, 0)
@@ -216,6 +216,25 @@
   BUILTIN_VB (QUADOPU_LANE, udot_lane, 0)
   BUILTIN_VB (QUADOP_LANE, sdot_laneq, 0)
   BUILTIN_VB (QUADOPU_LANE, udot_laneq, 0)
+
+  /* Implemented by aarch64_fcadd<rot><mode>.   */
+  BUILTIN_VHSDF (BINOP, fcadd90, 0)
+  BUILTIN_VHSDF (BINOP, fcadd270, 0)
+
+  /* Implemented by aarch64_fcmla{_lane}{q}<rot><mode>.   */
+  BUILTIN_VHSDF (TERNOP, fcmla0, 0)
+  BUILTIN_VHSDF (TERNOP, fcmla90, 0)
+  BUILTIN_VHSDF (TERNOP, fcmla180, 0)
+  BUILTIN_VHSDF (TERNOP, fcmla270, 0)
+  BUILTIN_VHSDF (QUADOP_LANE_PAIR, fcmla_lane0, 0)
+  BUILTIN_VHSDF (QUADOP_LANE_PAIR, fcmla_lane90, 0)
+  BUILTIN_VHSDF (QUADOP_LANE_PAIR, fcmla_lane180, 0)
+  BUILTIN_VHSDF (QUADOP_LANE_PAIR, fcmla_lane270, 0)
+
+  BUILTIN_VQ_HSF (QUADOP_LANE_PAIR, fcmlaq_lane0, 0)
+  BUILTIN_VQ_HSF (QUADOP_LANE_PAIR, fcmlaq_lane90, 0)
+  BUILTIN_VQ_HSF (QUADOP_LANE_PAIR, fcmlaq_lane180, 0)
+  BUILTIN_VQ_HSF (QUADOP_LANE_PAIR, fcmlaq_lane270, 0)
 
   BUILTIN_VDQ_I (SHIFTIMM, ashr, 3)
   VAR1 (SHIFTIMM, ashr_simd, 0, di)
@@ -295,12 +314,11 @@
   BUILTIN_VHSDF (UNOP, nearbyint, 2)
   BUILTIN_VHSDF (UNOP, rint, 2)
   BUILTIN_VHSDF (UNOP, round, 2)
-  BUILTIN_VHSDF_DF (UNOP, frintn, 2)
+  BUILTIN_VHSDF_HSDF (UNOP, frintn, 2)
 
   VAR1 (UNOP, btrunc, 2, hf)
   VAR1 (UNOP, ceil, 2, hf)
   VAR1 (UNOP, floor, 2, hf)
-  VAR1 (UNOP, frintn, 2, hf)
   VAR1 (UNOP, nearbyint, 2, hf)
   VAR1 (UNOP, rint, 2, hf)
   VAR1 (UNOP, round, 2, hf)
@@ -444,6 +462,21 @@
   /* Implemented by aarch64_st1<VALL_F16:mode>.  */
   BUILTIN_VALL_F16 (STORE1, st1, 0)
   VAR1(STORE1P, st1, 0, v2di)
+
+  /* Implemented by aarch64_ld1x3<VALLDIF:mode>.  */
+  BUILTIN_VALLDIF (LOADSTRUCT, ld1x3, 0)
+
+  /* Implemented by aarch64_ld1x4<VALLDIF:mode>.  */
+  BUILTIN_VALLDIF (LOADSTRUCT, ld1x4, 0)
+
+  /* Implemented by aarch64_st1x2<VALLDIF:mode>.  */
+  BUILTIN_VALLDIF (STORESTRUCT, st1x2, 0)
+
+  /* Implemented by aarch64_st1x3<VALLDIF:mode>.  */
+  BUILTIN_VALLDIF (STORESTRUCT, st1x3, 0)
+
+  /* Implemented by aarch64_st1x4<VALLDIF:mode>.  */
+  BUILTIN_VALLDIF (STORESTRUCT, st1x4, 0)
 
   /* Implemented by fma<mode>4.  */
   BUILTIN_VHSDF (TERNOP, fma, 4)
@@ -599,14 +632,16 @@
   VAR1 (BINOPU, crypto_sha512su0q, 0, v2di)
   /* Implemented by aarch64_crypto_sha512su1qv2di.  */
   VAR1 (TERNOPU, crypto_sha512su1q, 0, v2di)
-  /* Implemented by aarch64_eor3qv8hi.  */
-  VAR1 (TERNOPU, eor3q, 0, v8hi)
+  /* Implemented by eor3q<mode>4.  */
+  BUILTIN_VQ_I (TERNOPU, eor3q, 4)
+  BUILTIN_VQ_I (TERNOP, eor3q, 4)
   /* Implemented by aarch64_rax1qv2di.  */
   VAR1 (BINOPU, rax1q, 0, v2di)
   /* Implemented by aarch64_xarqv2di.  */
   VAR1 (TERNOPUI, xarq, 0, v2di)
-  /* Implemented by aarch64_bcaxqv8hi.  */
-  VAR1 (TERNOPU, bcaxq, 0, v8hi)
+  /* Implemented by bcaxq<mode>4.  */
+  BUILTIN_VQ_I (TERNOPU, bcaxq, 4)
+  BUILTIN_VQ_I (TERNOP, bcaxq, 4)
 
   /* Implemented by aarch64_fml<f16mac1>l<f16quad>_low<mode>.  */
   VAR1 (TERNOP, fmlal_low, 0, v2sf)

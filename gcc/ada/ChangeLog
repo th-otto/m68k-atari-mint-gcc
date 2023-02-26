@@ -1,3 +1,29 @@
+2021-05-14  Release Manager
+
+	* GCC 8.5.0 released.
+
+2021-03-10  Mikael Pettersson  <mikpelinux@gmail.com>
+
+	PR bootstrap/94918
+	* raise-gcc.c: On Cygwin include mingw32.h to prevent
+	windows.h from including x86intrin.h or emmintrin.h.
+
+2020-12-10  Ed Schonberg  <schonberg@adacore.com>
+
+	PR ada/98230
+	* exp_attr.adb (Expand_N_Attribute_Reference, case Mod): Use base
+	type of argument to obtain static bound and required size.
+
+2020-06-23  Eric Botcazou  <ebotcazou@gcc.gnu.org>
+
+	* gcc-interface/trans.c (gnat_to_gnu) <N_Allocator>: Minor tweaks.
+	Call Has_Constrained_Partial_View on base type of designated type.
+
+2020-05-04  Mikael Pettersson  <mikpelinux@gmail.com>
+
+	PR bootstrap/94918
+	* mingw32.h: Prevent windows.h from including emmintrin.h on Cygwin64.
+
 2020-03-04  Release Manager
 
 	* GCC 8.4.0 released.

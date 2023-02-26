@@ -157,6 +157,7 @@ extern unsigned aarch64_architecture_version;
 #define AARCH64_FL_SM4	      (1 << 17)  /* Has ARMv8.4-A SM3 and SM4.  */
 #define AARCH64_FL_SHA3	      (1 << 18)  /* Has ARMv8.4-a SHA3 and SHA512.  */
 #define AARCH64_FL_F16FML     (1 << 19)  /* Has ARMv8.4-a FP16 extensions.  */
+#define AARCH64_FL_RNG        (1 << 23)  /* ARMv8.5-A Random Number Insns.  */
 
 /* Has FP and SIMD.  */
 #define AARCH64_FL_FPSIMD     (AARCH64_FL_FP | AARCH64_FL_SIMD)
@@ -196,6 +197,7 @@ extern unsigned aarch64_architecture_version;
 #define AARCH64_ISA_SM4	           (aarch64_isa_flags & AARCH64_FL_SM4)
 #define AARCH64_ISA_SHA3	   (aarch64_isa_flags & AARCH64_FL_SHA3)
 #define AARCH64_ISA_F16FML	   (aarch64_isa_flags & AARCH64_FL_F16FML)
+#define AARCH64_ISA_RNG		   (aarch64_isa_flags & AARCH64_FL_RNG)
 
 /* Crypto is an optional extension to AdvSIMD.  */
 #define TARGET_CRYPTO (TARGET_SIMD && AARCH64_ISA_CRYPTO)
@@ -233,6 +235,15 @@ extern unsigned aarch64_architecture_version;
 
 /* ARMv8.3-A features.  */
 #define TARGET_ARMV8_3	(AARCH64_ISA_V8_3)
+
+/* Javascript conversion instruction from Armv8.3-a.  */
+#define TARGET_JSCVT	(TARGET_FLOAT && AARCH64_ISA_V8_3)
+
+/* Random number instructions from Armv8.5-a.  */
+#define TARGET_RNG (AARCH64_ISA_RNG)
+
+/* Armv8.3-a Complex number extension to AdvSIMD extensions.  */
+#define TARGET_COMPLEX (TARGET_SIMD && TARGET_ARMV8_3)
 
 /* Make sure this is always defined so we don't have to check for ifdefs
    but rather use normal ifs.  */
@@ -918,7 +929,7 @@ typedef struct
 #define PROFILE_HOOK(LABEL)						\
   {									\
     rtx fun, lr;							\
-    lr = get_hard_reg_initial_val (Pmode, LR_REGNUM);			\
+    lr = aarch64_return_addr_rtx ();					\
     fun = gen_rtx_SYMBOL_REF (Pmode, MCOUNT_NAME);			\
     emit_library_call (fun, LCT_NORMAL, VOIDmode, lr, Pmode);		\
   }
@@ -986,12 +997,14 @@ extern enum aarch64_code_model aarch64_cmodel;
 #define ENDIAN_LANE_N(NUNITS, N) \
   (BYTES_BIG_ENDIAN ? NUNITS - 1 - N : N)
 
-/* Support for a configure-time default CPU, etc.  We currently support
-   --with-arch and --with-cpu.  Both are ignored if either is specified
-   explicitly on the command line at run time.  */
+/* Support for configure-time --with-arch, --with-cpu and --with-tune.
+   --with-arch and --with-cpu are ignored if either -mcpu or -march is used.
+   --with-tune is ignored if either -mtune or -mcpu is used (but is not
+   affected by -march).  */
 #define OPTION_DEFAULT_SPECS				\
   {"arch", "%{!march=*:%{!mcpu=*:-march=%(VALUE)}}" },	\
-  {"cpu",  "%{!march=*:%{!mcpu=*:-mcpu=%(VALUE)}}" },
+  {"cpu",  "%{!march=*:%{!mcpu=*:-mcpu=%(VALUE)}}" },   \
+  {"tune", "%{!mcpu=*:%{!mtune=*:-mtune=%(VALUE)}}"},
 
 #define MCPU_TO_MARCH_SPEC \
    " %{mcpu=*:-march=%:rewrite_mcpu(%{mcpu=*:%*})}"

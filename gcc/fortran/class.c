@@ -903,12 +903,18 @@ finalize_component (gfc_expr *expr, gfc_symbol *derived, gfc_component *comp,
 {
   gfc_expr *e;
   gfc_ref *ref;
+  gfc_was_finalized *f;
 
   if (!comp_is_finalizable (comp))
     return;
 
-  if (comp->finalized)
-    return;
+  /* If this expression with this component has been finalized
+     already in this namespace, there is nothing to do.  */
+  for (f = sub_ns->was_finalized; f; f = f->next)
+    {
+      if (f->e == expr && f->c == comp)
+	return;
+    }
 
   e = gfc_copy_expr (expr);
   if (!e->ref)
@@ -998,6 +1004,7 @@ finalize_component (gfc_expr *expr, gfc_symbol *derived, gfc_component *comp,
 	}
       else
 	(*code) = cond;
+
     }
   else if (comp->ts.type == BT_DERIVED
 	    && comp->ts.u.derived->f2k_derived
@@ -1037,7 +1044,13 @@ finalize_component (gfc_expr *expr, gfc_symbol *derived, gfc_component *comp,
 			    sub_ns);
       gfc_free_expr (e);
     }
-  comp->finalized = true;
+
+  /* Record that this was finalized already in this namespace.  */
+  f = sub_ns->was_finalized;
+  sub_ns->was_finalized = XCNEW (gfc_was_finalized);
+  sub_ns->was_finalized->e = expr;
+  sub_ns->was_finalized->c = comp;
+  sub_ns->was_finalized->next = f;
 }
 
 

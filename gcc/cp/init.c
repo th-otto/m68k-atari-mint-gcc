@@ -245,9 +245,12 @@ build_zero_init_1 (tree type, tree nelts, bool static_storage_p,
 
       /* Iterate over the array elements, building initializations.  */
       if (nelts)
-	max_index = fold_build2_loc (input_location,
-				 MINUS_EXPR, TREE_TYPE (nelts),
-				 nelts, integer_one_node);
+	max_index = fold_build2_loc (input_location, MINUS_EXPR,
+				     TREE_TYPE (nelts), nelts,
+				     build_one_cst (TREE_TYPE (nelts)));
+      /* Treat flexible array members like [0] arrays.  */
+      else if (TYPE_DOMAIN (type) == NULL_TREE)
+	return NULL_TREE;
       else
 	max_index = array_type_nelts (type);
 
@@ -259,20 +262,19 @@ build_zero_init_1 (tree type, tree nelts, bool static_storage_p,
 
       /* A zero-sized array, which is accepted as an extension, will
 	 have an upper bound of -1.  */
-      if (!tree_int_cst_equal (max_index, integer_minus_one_node))
+      if (!integer_minus_onep (max_index))
 	{
 	  constructor_elt ce;
 
 	  /* If this is a one element array, we just use a regular init.  */
-	  if (tree_int_cst_equal (size_zero_node, max_index))
+	  if (integer_zerop (max_index))
 	    ce.index = size_zero_node;
 	  else
 	    ce.index = build2 (RANGE_EXPR, sizetype, size_zero_node,
-				max_index);
+			       max_index);
 
-	  ce.value = build_zero_init_1 (TREE_TYPE (type),
-					 /*nelts=*/NULL_TREE,
-					 static_storage_p, NULL_TREE);
+	  ce.value = build_zero_init_1 (TREE_TYPE (type), /*nelts=*/NULL_TREE,
+					static_storage_p, NULL_TREE);
 	  if (ce.value)
 	    {
 	      vec_alloc (v, 1);
@@ -286,10 +288,7 @@ build_zero_init_1 (tree type, tree nelts, bool static_storage_p,
   else if (VECTOR_TYPE_P (type))
     init = build_zero_cst (type);
   else
-    {
-      gcc_assert (TREE_CODE (type) == REFERENCE_TYPE);
-      init = build_zero_cst (type);
-    }
+    gcc_assert (TREE_CODE (type) == REFERENCE_TYPE);
 
   /* In all cases, the initializer is a constant.  */
   if (init)
@@ -587,16 +586,18 @@ get_nsdmi (tree member, bool in_ctor, tsubst_flags_t complain)
 	  DECL_INSTANTIATING_NSDMI_P (member) = 1;
 
 	  bool pushed = false;
-	  if (!currently_open_class (DECL_CONTEXT (member)))
+	  tree ctx = DECL_CONTEXT (member);
+	  if (!currently_open_class (ctx)
+	      && !LOCAL_CLASS_P (ctx))
 	    {
 	      push_to_top_level ();
-	      push_nested_class (DECL_CONTEXT (member));
+	      push_nested_class (ctx);
 	      pushed = true;
 	    }
 
 	  gcc_checking_assert (!processing_template_decl);
 
-	  inject_this_parameter (DECL_CONTEXT (member), TYPE_UNQUALIFIED);
+	  inject_this_parameter (ctx, TYPE_UNQUALIFIED);
 
 	  start_lambda_scope (member);
 

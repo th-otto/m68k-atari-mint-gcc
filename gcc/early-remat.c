@@ -1069,7 +1069,7 @@ early_remat::sort_candidates (void)
 
   m_candidates.qsort (compare_candidates);
 
-  delete postorder_index;
+  delete[] postorder_index;
 }
 
 /* Commit to the current candidate indices and initialize cross-references.  */
@@ -1995,7 +1995,7 @@ early_remat::process_block (basic_block bb)
 	}
 
       /* Now process definitions.  */
-      if (next_def && insn == next_def->insn)
+      while (next_def && insn == next_def->insn)
 	{
 	  unsigned int gen = canon_candidate (next_candidate);
 

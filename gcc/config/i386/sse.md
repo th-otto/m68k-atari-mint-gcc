@@ -7673,7 +7673,8 @@
 })
 
 (define_insn "vec_extract_lo_<mode><mask_name>"
-  [(set (match_operand:<ssehalfvecmode> 0 "nonimmediate_operand" "=v,v,m")
+  [(set (match_operand:<ssehalfvecmode> 0 "<store_mask_predicate>"
+					  "=v,v,<store_mask_constraint>")
 	(vec_select:<ssehalfvecmode>
 	  (match_operand:V16FI 1 "<store_mask_predicate>"
 				 "v,<store_mask_constraint>,v")
@@ -7730,7 +7731,8 @@
 })
 
 (define_insn "vec_extract_lo_<mode><mask_name>"
-  [(set (match_operand:<ssehalfvecmode> 0 "<store_mask_predicate>" "=v,v,m")
+  [(set (match_operand:<ssehalfvecmode> 0 "<store_mask_predicate>"
+					  "=v,v,<store_mask_constraint>")
 	(vec_select:<ssehalfvecmode>
 	  (match_operand:VI8F_256 1 "<store_mask_predicate>"
 				    "v,<store_mask_constraint>,v")
@@ -7740,7 +7742,7 @@
    && (<mask_applied> || !(MEM_P (operands[0]) && MEM_P (operands[1])))"
 {
   if (<mask_applied>)
-    return "vextract<shuffletype>64x2\t{$0x0, %1, %0%{%3%}|%0%{%3%}, %1, 0x0}";
+    return "vextract<shuffletype>64x2\t{$0x0, %1, %0<mask_operand2>|%0<mask_operand2>, %1, 0x0}";
   else
     return "#";
 }
@@ -14494,22 +14496,6 @@
 	    (vec_concat:V4HI
 	      (vec_concat:V2HI
 		(ssse3_plusminus:HI
-		  (vec_select:HI (match_dup 1) (parallel [(const_int 8)]))
-		  (vec_select:HI (match_dup 1) (parallel [(const_int 9)])))
-		(ssse3_plusminus:HI
-		  (vec_select:HI (match_dup 1) (parallel [(const_int 10)]))
-		  (vec_select:HI (match_dup 1) (parallel [(const_int 11)]))))
-	      (vec_concat:V2HI
-		(ssse3_plusminus:HI
-		  (vec_select:HI (match_dup 1) (parallel [(const_int 12)]))
-		  (vec_select:HI (match_dup 1) (parallel [(const_int 13)])))
-		(ssse3_plusminus:HI
-		  (vec_select:HI (match_dup 1) (parallel [(const_int 14)]))
-		  (vec_select:HI (match_dup 1) (parallel [(const_int 15)]))))))
-	  (vec_concat:V8HI
-	    (vec_concat:V4HI
-	      (vec_concat:V2HI
-		(ssse3_plusminus:HI
 		  (vec_select:HI
 		    (match_operand:V16HI 2 "nonimmediate_operand" "xm")
 		    (parallel [(const_int 0)]))
@@ -14523,7 +14509,23 @@
 		  (vec_select:HI (match_dup 2) (parallel [(const_int 5)])))
 		(ssse3_plusminus:HI
 		  (vec_select:HI (match_dup 2) (parallel [(const_int 6)]))
-		  (vec_select:HI (match_dup 2) (parallel [(const_int 7)])))))
+		  (vec_select:HI (match_dup 2) (parallel [(const_int 7)]))))))
+	  (vec_concat:V8HI
+	    (vec_concat:V4HI
+	      (vec_concat:V2HI
+		(ssse3_plusminus:HI
+		  (vec_select:HI (match_dup 1) (parallel [(const_int 8)]))
+		  (vec_select:HI (match_dup 1) (parallel [(const_int 9)])))
+		(ssse3_plusminus:HI
+		  (vec_select:HI (match_dup 1) (parallel [(const_int 10)]))
+		  (vec_select:HI (match_dup 1) (parallel [(const_int 11)]))))
+	      (vec_concat:V2HI
+		(ssse3_plusminus:HI
+		  (vec_select:HI (match_dup 1) (parallel [(const_int 12)]))
+		  (vec_select:HI (match_dup 1) (parallel [(const_int 13)])))
+		(ssse3_plusminus:HI
+		  (vec_select:HI (match_dup 1) (parallel [(const_int 14)]))
+		  (vec_select:HI (match_dup 1) (parallel [(const_int 15)])))))
 	    (vec_concat:V4HI
 	      (vec_concat:V2HI
 		(ssse3_plusminus:HI
@@ -14639,21 +14641,21 @@
 		(vec_select:SI (match_dup 1) (parallel [(const_int 3)]))))
 	    (vec_concat:V2SI
 	      (plusminus:SI
-		(vec_select:SI (match_dup 1) (parallel [(const_int 4)]))
-		(vec_select:SI (match_dup 1) (parallel [(const_int 5)])))
-	      (plusminus:SI
-		(vec_select:SI (match_dup 1) (parallel [(const_int 6)]))
-		(vec_select:SI (match_dup 1) (parallel [(const_int 7)])))))
-	  (vec_concat:V4SI
-	    (vec_concat:V2SI
-	      (plusminus:SI
 		(vec_select:SI
 		  (match_operand:V8SI 2 "nonimmediate_operand" "xm")
 		  (parallel [(const_int 0)]))
 		(vec_select:SI (match_dup 2) (parallel [(const_int 1)])))
 	      (plusminus:SI
 		(vec_select:SI (match_dup 2) (parallel [(const_int 2)]))
-		(vec_select:SI (match_dup 2) (parallel [(const_int 3)]))))
+		(vec_select:SI (match_dup 2) (parallel [(const_int 3)])))))
+	  (vec_concat:V4SI
+	    (vec_concat:V2SI
+	      (plusminus:SI
+		(vec_select:SI (match_dup 1) (parallel [(const_int 4)]))
+		(vec_select:SI (match_dup 1) (parallel [(const_int 5)])))
+	      (plusminus:SI
+		(vec_select:SI (match_dup 1) (parallel [(const_int 6)]))
+		(vec_select:SI (match_dup 1) (parallel [(const_int 7)]))))
 	    (vec_concat:V2SI
 	      (plusminus:SI
 		(vec_select:SI (match_dup 2) (parallel [(const_int 4)]))

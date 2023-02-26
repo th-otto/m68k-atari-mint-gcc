@@ -1898,6 +1898,9 @@ simplify_parameter_variable (gfc_expr *p, int type)
 
   e->rank = p->rank;
 
+  if (e->ts.type == BT_CHARACTER && p->ts.u.cl)
+    e->ts = p->ts;
+
   /* Do not copy subobject refs for constant.  */
   if (e->expr_type != EXPR_CONSTANT && p->ref != NULL)
     e->ref = gfc_copy_ref (p->ref);
@@ -3895,11 +3898,8 @@ gfc_check_pointer_assign (gfc_expr *lvalue, gfc_expr *rvalue, bool is_init_expr)
   if (rvalue->expr_type == EXPR_NULL)
     return true;
 
-  /* A function may also return subref arrray pointer.  */
-
-  if ((rvalue->expr_type == EXPR_VARIABLE && is_subref_array (rvalue))
-      || rvalue->expr_type == EXPR_FUNCTION)
-      lvalue->symtree->n.sym->attr.subref_array_pointer = 1;
+  if (rvalue->expr_type == EXPR_VARIABLE && is_subref_array (rvalue))
+    lvalue->symtree->n.sym->attr.subref_array_pointer = 1;
 
   attr = gfc_expr_attr (rvalue);
 

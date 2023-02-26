@@ -3197,7 +3197,9 @@ esac
 case ${target} in
 *-*-linux*android*|*-*-linux*uclibc*|*-*-linux*musl*)
         ;;
-*-*-linux*)
+*-*-kfreebsd*-gnu | *-*-kopensolaris*-gnu)
+        ;;
+*-*-linux* | *-*-gnu*)
 	case ${target} in
 	aarch64*-* | arm*-* | i[34567]86-* | powerpc*-* | s390*-* | sparc*-* | x86_64-*)
 		default_gnu_indirect_function=yes
@@ -3726,9 +3728,17 @@ fi
 supported_defaults=
 case "${target}" in
 	aarch64*-*-*)
-		supported_defaults="abi cpu arch"
-		for which in cpu arch; do
-
+		supported_defaults="abi cpu cpu_64 arch arch_64 tune tune_64"
+		if test x$with_cpu_64 != x && test x$with_cpu = x; then
+			with_cpu=$with_cpu_64
+		fi
+		if test x$with_arch_64 != x && test x$with_arch = x; then
+			with_arch=$with_arch_64
+		fi
+		if test x$with_tune_64 != x && test x$with_tune = x; then
+			with_tune=$with_tune_64
+		fi
+		for which in cpu arch tune; do
 			eval "val=\$with_$which"
 			base_val=`echo $val | sed -e 's/\+.*//'`
 			ext_val=`echo $val | sed -e 's/[a-z0-9.-]\+//'`
@@ -3765,6 +3775,12 @@ case "${target}" in
 				  ${srcdir}/config/aarch64/$def | \
 				  sed -e 's/^[^,]*,[ 	]*//' | \
 				  sed -e 's/,.*$//'`
+			  fi
+
+			  # Disallow extensions in --with-tune=cortex-a53+crc.
+			  if [ $which = tune ] && [ x"$ext_val" != x ]; then
+			    echo "Architecture extensions not supported in --with-$which=$val" 1>&2
+			    exit 1
 			  fi
 
 			  while [ x"$ext_val" != x ]
@@ -3816,8 +3832,13 @@ case "${target}" in
 			  fi
 			  true
 			else
-			  echo "Unknown $which used in --with-$which=$val" 1>&2
-			  exit 1
+			  # Allow --with-$which=native.
+			  if [ "$val" = native ]; then
+			    true
+			  else
+			    echo "Unknown $which used in --with-$which=$val" 1>&2
+			    exit 1
+			  fi
 			fi
 		done
 		;;

@@ -105,6 +105,7 @@
     UNSPEC_CRC32X
     UNSPEC_FCVTZS
     UNSPEC_FCVTZU
+    UNSPEC_FJCVTZS
     UNSPEC_URECPE
     UNSPEC_FRECPE
     UNSPEC_FRECPS
@@ -200,6 +201,8 @@
     UNSPECV_SET_FPSR		; Represent assign of FPSR content.
     UNSPECV_BLOCKAGE		; Represent a blockage
     UNSPECV_PROBE_STACK_RANGE	; Represent stack range probing.
+    UNSPEC_RNDR			; Represent RNDR
+    UNSPEC_RNDRRS		; Represent RNDRRS
   ]
 )
 
@@ -983,10 +986,19 @@
     if (GET_CODE (operands[0]) == MEM && operands[1] != const0_rtx)
       operands[1] = force_reg (<MODE>mode, operands[1]);
 
-    /* FIXME: RR we still need to fix up what we are doing with
-       symbol_refs and other types of constants.  */
-    if (CONSTANT_P (operands[1])
-        && !CONST_INT_P (operands[1]))
+    /* Lower moves of symbolic constants into individual instructions.
+       Doing this now is sometimes necessary for correctness, since some
+       sequences require temporary pseudo registers.  Lowering now is also
+       often better for optimization, since more RTL passes get the
+       chance to optimize the individual instructions.
+
+       When called after RA, also split multi-instruction moves into
+       smaller pieces now, since we can't be sure that sure that there
+       will be a following split pass.  */
+    if (CONST_INT_P (operands[1])
+	? (reload_completed
+	   && !aarch64_mov_imm_operand (operands[1], <MODE>mode))
+	: CONSTANT_P (operands[1]))
      {
        aarch64_expand_mov_immediate (operands[0], operands[1]);
        DONE;
@@ -5885,6 +5897,16 @@
   [(set_attr "length" "0")]
 )
 
+(define_insn "aarch64_fjcvtzs"
+  [(set (match_operand:SI 0 "register_operand" "=r")
+	(unspec:SI [(match_operand:DF 1 "register_operand" "w")]
+		   UNSPEC_FJCVTZS))
+   (clobber (reg:CC CC_REGNUM))]
+  "TARGET_JSCVT"
+  "fjcvtzs\\t%w0, %d1"
+  [(set_attr "type" "f_cvtf2i")]
+)
+
 ;; Pointer authentication patterns are always provided.  In architecture
 ;; revisions prior to ARMv8.3-A these HINT instructions operate as NOPs.
 ;; This lets the user write portable software which authenticates pointers
@@ -5982,35 +6004,30 @@
    (match_operand 2)]
   ""
 {
-  rtx result;
   machine_mode mode = GET_MODE (operands[0]);
 
-  result = gen_reg_rtx(mode);
-
   emit_insn ((mode == DImode
-	      ? gen_stack_protect_test_di
-	      : gen_stack_protect_test_si) (result,
-					    operands[0],
-					    operands[1]));
+	     ? gen_stack_protect_test_di
+	     : gen_stack_protect_test_si) (operands[0], operands[1]));
 
-  if (mode == DImode)
-    emit_jump_insn (gen_cbranchdi4 (gen_rtx_EQ (VOIDmode, result, const0_rtx),
-				    result, const0_rtx, operands[2]));
-  else
-    emit_jump_insn (gen_cbranchsi4 (gen_rtx_EQ (VOIDmode, result, const0_rtx),
-				    result, const0_rtx, operands[2]));
+  rtx cc_reg = gen_rtx_REG (CCmode, CC_REGNUM);
+  emit_jump_insn (gen_condjump (gen_rtx_EQ (VOIDmode, cc_reg, const0_rtx),
+				cc_reg, operands[2]));
   DONE;
 })
 
+;; DO NOT SPLIT THIS PATTERN.  It is important for security reasons that the
+;; canary value does not live beyond the end of this sequence.
 (define_insn "stack_protect_test_<mode>"
-  [(set (match_operand:PTR 0 "register_operand" "=r")
-	(unspec:PTR [(match_operand:PTR 1 "memory_operand" "m")
-		     (match_operand:PTR 2 "memory_operand" "m")]
-	 UNSPEC_SP_TEST))
+  [(set (reg:CC CC_REGNUM)
+	(unspec:CC [(match_operand:PTR 0 "memory_operand" "m")
+		    (match_operand:PTR 1 "memory_operand" "m")]
+		   UNSPEC_SP_TEST))
+   (clobber (match_scratch:PTR 2 "=&r"))
    (clobber (match_scratch:PTR 3 "=&r"))]
   ""
-  "ldr\t%<w>3, %1\;ldr\t%<w>0, %2\;eor\t%<w>0, %<w>3, %<w>0"
-  [(set_attr "length" "12")
+  "ldr\t%<w>2, %0\;ldr\t%<w>3, %1\;subs\t%<w>2, %<w>2, %<w>3\;mov\t%3, 0"
+  [(set_attr "length" "16")
    (set_attr "type" "multiple")])
 
 ;; Write Floating-point Control Register.
@@ -6086,6 +6103,26 @@
   [(parallel [(set (match_operand 0)
 		   (match_operand 1))
 	      (clobber (reg:CC CC_REGNUM))])])
+
+(define_insn "aarch64_rndr"
+  [(set (match_operand:DI 0 "register_operand" "=r")
+	(unspec_volatile:DI [(const_int 0)] UNSPEC_RNDR))
+   (set (reg:CC_Z CC_REGNUM)
+	(unspec_volatile:CC_Z [(const_int 0)] UNSPEC_RNDR))]
+  "TARGET_RNG"
+  "mrs\t%0, RNDR"
+  [(set_attr "type" "mrs")]
+)
+
+(define_insn "aarch64_rndrrs"
+  [(set (match_operand:DI 0 "register_operand" "=r")
+	(unspec_volatile:DI [(const_int 0)] UNSPEC_RNDRRS))
+   (set (reg:CC_Z CC_REGNUM)
+	(unspec_volatile:CC_Z [(const_int 0)] UNSPEC_RNDRRS))]
+  "TARGET_RNG"
+  "mrs\t%0, RNDRRS"
+  [(set_attr "type" "mrs")]
+)
 
 ;; AdvSIMD Stuff
 (include "aarch64-simd.md")

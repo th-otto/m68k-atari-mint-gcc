@@ -116,6 +116,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "params.h"
 #include "tree-vectorizer.h"
 #include "tree-eh.h"
+#include "tree-affine.h"
 
 
 #define MAX_DATAREFS_NUM \
@@ -1001,7 +1002,7 @@ generate_memset_builtin (struct loop *loop, partition *partition)
   nb_bytes = rewrite_to_non_trapping_overflow (builtin->size);
   nb_bytes = force_gimple_operand_gsi (&gsi, nb_bytes, true, NULL_TREE,
 				       false, GSI_CONTINUE_LINKING);
-  mem = builtin->dst_base;
+  mem = rewrite_to_non_trapping_overflow (builtin->dst_base);
   mem = force_gimple_operand_gsi (&gsi, mem, true, NULL_TREE,
 				  false, GSI_CONTINUE_LINKING);
 
@@ -1053,13 +1054,25 @@ generate_memcpy_builtin (struct loop *loop, partition *partition)
   nb_bytes = rewrite_to_non_trapping_overflow (builtin->size);
   nb_bytes = force_gimple_operand_gsi (&gsi, nb_bytes, true, NULL_TREE,
 				       false, GSI_CONTINUE_LINKING);
-  dest = builtin->dst_base;
-  src = builtin->src_base;
+  dest = rewrite_to_non_trapping_overflow (builtin->dst_base);
+  src = rewrite_to_non_trapping_overflow (builtin->src_base);
   if (partition->kind == PKIND_MEMCPY
       || ! ptr_derefs_may_alias_p (dest, src))
     kind = BUILT_IN_MEMCPY;
   else
     kind = BUILT_IN_MEMMOVE;
+  /* Try harder if we're copying a constant size.  */
+  if (kind == BUILT_IN_MEMMOVE && poly_int_tree_p (nb_bytes))
+    {
+      aff_tree asrc, adest;
+      tree_to_aff_combination (src, ptr_type_node, &asrc);
+      tree_to_aff_combination (dest, ptr_type_node, &adest);
+      aff_combination_scale (&adest, -1);
+      aff_combination_add (&asrc, &adest);
+      if (aff_comb_cannot_overlap_p (&asrc, wi::to_poly_widest (nb_bytes),
+				     wi::to_poly_widest (nb_bytes)))
+	kind = BUILT_IN_MEMCPY;
+    }
 
   dest = force_gimple_operand_gsi (&gsi, dest, true, NULL_TREE,
 				   false, GSI_CONTINUE_LINKING);
@@ -1591,11 +1604,11 @@ classify_builtin_ldst (loop_p loop, struct graph *rdg, partition *partition,
   /* Now check that if there is a dependence.  */
   ddr_p ddr = get_data_dependence (rdg, src_dr, dst_dr);
 
-  /* Classify as memcpy if no dependence between load and store.  */
+  /* Classify as memmove if no dependence between load and store.  */
   if (DDR_ARE_DEPENDENT (ddr) == chrec_known)
     {
       partition->builtin = alloc_builtin (dst_dr, src_dr, base, src_base, size);
-      partition->kind = PKIND_MEMCPY;
+      partition->kind = PKIND_MEMMOVE;
       return;
     }
 
@@ -1919,7 +1932,8 @@ pg_add_dependence_edges (struct graph *rdg, int dir,
 		this_dir = -this_dir;
 
 	      /* Known dependences can still be unordered througout the
-		 iteration space, see gcc.dg/tree-ssa/ldist-16.c.  */
+		 iteration space, see gcc.dg/tree-ssa/ldist-16.c and
+		 gcc.dg/tree-ssa/pr94969.c.  */
 	      if (DDR_NUM_DIST_VECTS (ddr) != 1)
 		this_dir = 2;
 	      /* If the overlap is exact preserve stmt order.  */

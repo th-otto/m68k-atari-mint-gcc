@@ -390,6 +390,7 @@
    UNSPEC_VSX_SIGN_EXTEND
    UNSPEC_VSX_XVCVSPSXWS
    UNSPEC_VSX_XVCVSPSXDS
+   UNSPEC_VSX_XVCVSPHP
    UNSPEC_VSX_VSLO
    UNSPEC_VSX_EXTRACT
    UNSPEC_VSX_SXEXPDP
@@ -2255,6 +2256,15 @@
   "TARGET_P9_VECTOR"
   "xvcvhpsp %x0,%x1"
   [(set_attr "type" "vecfloat")])
+
+;; Generate xvcvsphp
+(define_insn "vsx_xvcvsphp"
+  [(set (match_operand:V4SI 0 "register_operand" "=wa")
+	(unspec:V4SI [(match_operand:V4SF 1 "vsx_register_operand" "wa")]
+		     UNSPEC_VSX_XVCVSPHP))]
+  "TARGET_P9_VECTOR"
+  "xvcvsphp %x0,%x1"
+[(set_attr "type" "vecfloat")])
 
 ;; xscvdpsp used for splat'ing a scalar to V4SF, knowing that the internal SF
 ;; format of scalars is actually DF.
@@ -4809,8 +4819,8 @@
   rtx cmp_result = gen_reg_rtx (<MODE>mode);
   rtx not_result = gen_reg_rtx (<MODE>mode);
 
-  emit_insn (gen_vcmpnez<VSX_EXTRACT_WIDTH> (cmp_result, operands[1],
-					     operands[2]));
+  emit_insn (gen_vcmpne<VSX_EXTRACT_WIDTH> (cmp_result, operands[1],
+					    operands[2]));
   emit_insn (gen_one_cmpl<mode>2 (not_result, cmp_result));
 
   sh = GET_MODE_SIZE (GET_MODE_INNER (<MODE>mode)) / 2;

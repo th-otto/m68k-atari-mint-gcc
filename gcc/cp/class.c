@@ -2395,6 +2395,24 @@ get_vcall_index (tree fn, tree type)
   gcc_unreachable ();
 }
 
+/* Given a DECL_VINDEX of a virtual function found in BINFO, return the final
+   overrider at that index in the vtable.  This should only be used when we
+   know that BINFO is correct for the dynamic type of the object.  */
+
+tree
+lookup_vfn_in_binfo (tree idx, tree binfo)
+{
+  int ix = tree_to_shwi (idx);
+  if (TARGET_VTABLE_USES_DESCRIPTORS)
+    ix /= MAX (TARGET_VTABLE_USES_DESCRIPTORS, 1);
+  while (BINFO_PRIMARY_P (binfo))
+    /* BINFO_VIRTUALS in a primary base isn't accurate, find the derived
+       class that actually owns the vtable.  */
+    binfo = BINFO_INHERITANCE_CHAIN (binfo);
+  tree virtuals = BINFO_VIRTUALS (binfo);
+  return TREE_VALUE (chain_index (ix, virtuals));
+}
+
 /* Update an entry in the vtable for BINFO, which is in the hierarchy
    dominated by T.  FN is the old function; VIRTUALS points to the
    corresponding position in the new BINFO_VIRTUALS list.  IX is the index

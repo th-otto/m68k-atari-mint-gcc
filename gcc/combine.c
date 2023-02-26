@@ -1486,6 +1486,7 @@ combine_instructions (rtx_insn *f, unsigned int nregs)
 	      if ((set = single_set (temp)) != 0
 		  && (note = find_reg_equal_equiv_note (temp)) != 0
 		  && (note = XEXP (note, 0), GET_CODE (note)) != EXPR_LIST
+		  && ! side_effects_p (SET_SRC (set))
 		  /* Avoid using a register that may already been marked
 		     dead by an earlier instruction.  */
 		  && ! unmentioned_reg_p (note, SET_SRC (set))
@@ -7348,11 +7349,15 @@ expand_compound_operation (rtx x)
 				  mode, tem, modewidth - len);
     }
   else if (unsignedp && len < HOST_BITS_PER_WIDE_INT)
-    tem = simplify_and_const_int (NULL_RTX, mode,
-				  simplify_shift_const (NULL_RTX, LSHIFTRT,
-							mode, XEXP (x, 0),
-							pos),
-				  (HOST_WIDE_INT_1U << len) - 1);
+    {
+      tem = simplify_shift_const (NULL_RTX, LSHIFTRT, inner_mode,
+				  XEXP (x, 0), pos);
+      tem = gen_lowpart (mode, tem);
+      if (!tem || GET_CODE (tem) == CLOBBER)
+	return x;
+      tem = simplify_and_const_int (NULL_RTX, mode, tem,
+				    (HOST_WIDE_INT_1U << len) - 1);
+    }
   else
     /* Any other cases we can't handle.  */
     return x;
@@ -10073,7 +10078,7 @@ simplify_and_const_int_1 (scalar_int_mode mode, rtx varop,
   constop &= nonzero;
 
   /* If we don't have any bits left, return zero.  */
-  if (constop == 0)
+  if (constop == 0 && !side_effects_p (varop))
     return const0_rtx;
 
   /* If VAROP is a NEG of something known to be zero or 1 and CONSTOP is
@@ -10904,8 +10909,11 @@ simplify_shift_const_1 (enum rtx_code code, machine_mode result_mode,
 		break;
 	      /* For ((int) (cstLL >> count)) >> cst2 just give up.  Queuing
 		 up outer sign extension (often left and right shift) is
-		 hardly more efficient than the original.  See PR70429.  */
-	      if (code == ASHIFTRT && int_mode != int_result_mode)
+		 hardly more efficient than the original.  See PR70429.
+		 Similarly punt for rotates with different modes.
+		 See PR97386.  */
+	      if ((code == ASHIFTRT || code == ROTATE)
+		  && int_mode != int_result_mode)
 		break;
 
 	      rtx count_rtx = gen_int_shift_amount (int_result_mode, count);

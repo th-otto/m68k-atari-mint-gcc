@@ -1,3 +1,215 @@
+2021-05-14  Release Manager
+
+	* GCC 8.5.0 released.
+
+2021-04-02  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-04-01  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/99840
+	* simplify.c (gfc_simplify_transpose): Properly initialize
+	resulting shape.
+
+2021-01-28  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-01-28  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/86470
+	* trans.c (gfc_call_malloc): Allocate area of size 1 if passed
+	size is NULL (as documented).
+
+2020-12-23  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2020-12-17  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/98307
+	* trans-stmt.c (check_forall_dependencies): Extend dependency
+	check to allocatable components of derived types.
+
+2020-12-11  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2020-11-29  Harald Anlauf  <anlauf@gmx.de>
+
+	* expr.c (simplify_parameter_variable): Fix up character length
+	after copying an array-valued expression.
+
+2020-09-28  Mark Eggleston  <markeggleston@gcc.gnu.org>
+
+	Revert:
+	2020-09-27  Steven G. Kargl  <kargl@gcc.gnu.org>
+		    Mark Eggleston  <markeggleston@gcc.gnu.org>
+
+	PR fortran/95614
+	* decl.c (gfc_get_common): Use gfc_match_common_name instead
+	of match_common_name.
+	* decl.c (gfc_bind_idents): Use gfc_match_common_name instead
+	of match_common_name.
+	* match.c : Rename match_common_name to gfc_match_common_name.
+	* match.c (gfc_match_common): Use gfc_match_common_name instead
+	of match_common_name.
+	* match.h : Rename match_common_name to gfc_match_common_name.
+	* resolve.c (resolve_common_vars): Check each symbol in a
+	common block has a global symbol.  If there is a global symbol
+	issue an error if the symbol type is known as is not a common
+	block name.
+
+2020-09-27  Mark Eggleston  <markeggleston@gcc.gnu.org>
+
+	Backported from master:
+	2020-09-27  Steven G. Kargl  <kargl@gcc.gnu.org>
+		    Mark Eggleston  <markeggleston@gcc.gnu.org>
+
+	PR fortran/95614
+	* decl.c (gfc_get_common): Use gfc_match_common_name instead
+	of match_common_name.
+	* decl.c (gfc_bind_idents): Use gfc_match_common_name instead
+	of match_common_name.
+	* match.c : Rename match_common_name to gfc_match_common_name.
+	* match.c (gfc_match_common): Use gfc_match_common_name instead
+	of match_common_name.
+	* match.h : Rename match_common_name to gfc_match_common_name.
+	* resolve.c (resolve_common_vars): Check each symbol in a
+	common block has a global symbol.  If there is a global symbol
+	issue an error if the symbol type is known as is not a common
+	block name.
+
+2020-09-19  Tobias Burnus  <tobias@codesourcery.com>
+
+	Backported from master:
+	2020-09-17  Tobias Burnus  <tobias@codesourcery.com>
+
+	PR fortran/96041
+	PR fortran/93423
+	* decl.c (gfc_match_submod_proc): Avoid later double-free
+	in the error case.
+
+2020-09-19  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2020-07-02  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/93423
+	* resolve.c (resolve_symbol): Avoid NULL pointer dereference.
+
+2020-07-23  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2020-07-21  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/89574
+	* trans-decl.c (gfc_get_extern_function_decl): Check whether a
+	symbol belongs to a different module.
+
+2020-07-05  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2020-06-30  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/88379
+	* resolve.c (resolve_assoc_var): Avoid NULL pointer dereference.
+
+2020-07-02  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2020-06-29  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/71706
+	* trans-stmt.c (gfc_trans_sync): Do proper kind conversion in
+	bounds-checking code.
+
+2020-07-01  Mark Eggleston  <markeggleston@gcc.gnu.org>
+
+	Backported from master:
+	2020-07-01  Steven G. Kargl  <kargl@gcc.gnu.org>
+		    Mark Eggleston  <markeggleston@gcc.gnu.org>
+
+	PR fortran/95829
+	* decl.c (gfc_match_decl_type_spec): Compare with "* ) " instead
+	of "*)".
+
+2020-06-24  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/95689
+	* interface.c (check_sym_interfaces): Enlarge temporary buffer,
+	and add check on length on mangled name to prevent overflow.
+
+2020-06-23  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2020-06-20  Harald Anlauf  <anlauf@gmx.de>
+
+	PR fortran/95689
+	* interface.c (check_sym_interfaces): Enlarge temporary buffer,
+	and add check on length on mangled name to prevent overflow.
+
+2020-06-14  Thomas Koenig  <tkoenig@gcc.gnu.org>
+
+	PR fortran/94109
+	* class.c (finalize_component): Return early if finalization has
+	already happened for expression and component within namespace.
+	* gfortran.h (gfc_was_finalized): New type.
+	(gfc_namespace): Add member was_finalzed.
+	(gfc_expr): Remove finalized.
+	* symbol.c (gfc_free_namespace): Free was_finalized.
+
+2020-06-01  Thomas Koenig  <tkoenig@gcc.gnu.org>
+
+	PR fortran/94361
+	* class.c (finalize_component): Use expr->finalized instead of
+	comp->finalized.
+	* gfortran.h (gfc_component): Remove finalized member.
+	(gfc_expr): Add it here instead.
+
+2020-05-28  Tobias Burnus  <tobias@codesourcery.com>
+	    Mark Eggleston  <markeggleston@gnu.gcc.org>
+
+	PR fortran/50392
+	* trans-decl.c (gfc_get_symbol_decl): Remove unnecessary block
+	delimiters.  Add auxiliary variables if a label is assigned to
+	a return variable. (gfc_gat_fake_result): If the symbol has an
+	assign attribute set declaration from the symbol's backend
+	declaration.
+
+2020-05-20  Mark Eggleston  <markeggleston@gcc.gnu.org>
+
+	Backport from master
+	2020-05-20  Mark Eggleston  <markeggleston@gcc.gnu.org>
+
+	PR fortran/39695
+	* resolve.c (resolve_fl_procedure): Set name depending on
+	whether the result attribute is set.  For PROCEDURE/RESULT
+	conflict use the name in sym->ns->proc_name->name.
+	* symbol.c (gfc_add_type): Add check for function and result
+	attributes use sym->ns->proc_name->name if both are set.
+	Where the symbol cannot have a type use the name in
+	sym->ns->proc_name->name.
+
+2020-05-11  Mark Eggleston  <markeggleston@gcc.gnu.org>
+
+	Backported from mainline
+	2020-05-11  Janus Weil  <janus@gcc.gnu.org>
+		    Dominique d'Humieres  <dominiq@lps.ens.fr>
+
+	PR fortran/59107
+	* gfortran.h: Rename field resolved as resolve_symbol_called
+	and assign two 2 bits instead of 1.
+	* interface.c (gfc_find_typebound_dtio_proc): Use new field name.
+	* resolve.c (gfc_resolve_intrinsic): Replace check of the formal
+	field with resolve_symbol_called is at least 2, if it is not
+	set the field to 2.  (resolve_symbol): Use new field name and
+	check whether it is at least 1, if it is not set the field to 1.
+
+2020-04-27  Thomas Koenig  <tkoenig@gcc.gnu.org>
+
+	PR fortran/93956
+	PR fortran/94788
+	* expr.c (gfc_check_pointer_assign): Revert patch for PR 93956.
+	* interface.c: Likewise.
+
 2020-04-24  Thomas Koenig  <tkoenig@gcc.gnu.org>
 
 	Backport from trunk.

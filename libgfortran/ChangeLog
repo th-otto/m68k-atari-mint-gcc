@@ -1,3 +1,96 @@
+2021-05-14  Release Manager
+
+	* GCC 8.5.0 released.
+
+2021-03-07  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-03-05  Harald Anlauf  <anlauf@gmx.de>
+
+	PR libfortran/99218
+	* m4/matmul_internal.m4: Invoke tuned matmul only for rank(b)>1.
+	* generated/matmul_c10.c: Regenerated.
+	* generated/matmul_c16.c: Likewise.
+	* generated/matmul_c4.c: Likewise.
+	* generated/matmul_c8.c: Likewise.
+	* generated/matmul_i1.c: Likewise.
+	* generated/matmul_i16.c: Likewise.
+	* generated/matmul_i2.c: Likewise.
+	* generated/matmul_i4.c: Likewise.
+	* generated/matmul_i8.c: Likewise.
+	* generated/matmul_r10.c: Likewise.
+	* generated/matmul_r16.c: Likewise.
+	* generated/matmul_r4.c: Likewise.
+	* generated/matmul_r8.c: Likewise.
+	* generated/matmulavx128_c10.c: Likewise.
+	* generated/matmulavx128_c16.c: Likewise.
+	* generated/matmulavx128_c4.c: Likewise.
+	* generated/matmulavx128_c8.c: Likewise.
+	* generated/matmulavx128_i1.c: Likewise.
+	* generated/matmulavx128_i16.c: Likewise.
+	* generated/matmulavx128_i2.c: Likewise.
+	* generated/matmulavx128_i4.c: Likewise.
+	* generated/matmulavx128_i8.c: Likewise.
+	* generated/matmulavx128_r10.c: Likewise.
+	* generated/matmulavx128_r16.c: Likewise.
+	* generated/matmulavx128_r4.c: Likewise.
+	* generated/matmulavx128_r8.c: Likewise.
+
+2020-10-24  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2020-10-18  Harald Anlauf  <anlauf@gmx.de>
+
+	* m4/matmul_internal.m4: Move check for rank-1 times rank-2 before
+	checks on strides for rank-2 times rank-2.
+	* generated/matmul_c10.c: Regenerated.
+	* generated/matmul_c16.c: Likewise.
+	* generated/matmul_c4.c: Likewise.
+	* generated/matmul_c8.c: Likewise.
+	* generated/matmul_i1.c: Likewise.
+	* generated/matmul_i16.c: Likewise.
+	* generated/matmul_i2.c: Likewise.
+	* generated/matmul_i4.c: Likewise.
+	* generated/matmul_i8.c: Likewise.
+	* generated/matmul_r10.c: Likewise.
+	* generated/matmul_r16.c: Likewise.
+	* generated/matmul_r4.c: Likewise.
+	* generated/matmul_r8.c: Likewise.
+	* generated/matmulavx128_c10.c: Likewise.
+	* generated/matmulavx128_c16.c: Likewise.
+	* generated/matmulavx128_c4.c: Likewise.
+	* generated/matmulavx128_c8.c: Likewise.
+	* generated/matmulavx128_i1.c: Likewise.
+	* generated/matmulavx128_i16.c: Likewise.
+	* generated/matmulavx128_i2.c: Likewise.
+	* generated/matmulavx128_i4.c: Likewise.
+	* generated/matmulavx128_i8.c: Likewise.
+	* generated/matmulavx128_r10.c: Likewise.
+	* generated/matmulavx128_r16.c: Likewise.
+	* generated/matmulavx128_r4.c: Likewise.
+	* generated/matmulavx128_r8.c: Likewise.
+
+2020-09-09  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2020-09-03  Harald Anlauf  <anlauf@gmx.de>
+
+	* m4/iall.m4: Initial value for result should be -1.
+	* generated/iall_i1.c (miall_i1): Generated.
+	* generated/iall_i16.c (miall_i16): Likewise.
+	* generated/iall_i2.c (miall_i2): Likewise.
+	* generated/iall_i4.c (miall_i4): Likewise.
+	* generated/iall_i8.c (miall_i8): Likewise.
+
+2020-07-25  Dominique d'Humieres  <dhumieres.dominique@free.fr>
+
+	Backported from master:
+	2020-07-24  Dominique d'Humieres  <dhumieres.dominique@free.fr>
+
+	PR fortran/93592
+	* io/write_float.def (build_float_string): Do not reset
+	  nbefore for FMT_F and FMT_EN.
+
 2020-04-19  Uroš Bizjak  <ubizjak@gmail.com>
 
 	* config/fpu-387.h (local_feraiseexcept) [__SSE_MATH__]:

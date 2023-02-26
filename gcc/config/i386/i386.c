@@ -3385,9 +3385,9 @@ ix86_option_override_internal (bool main_args_p,
     | PTA_AVX512VBMI | PTA_AVX512IFMA | PTA_SHA;
   const wide_int_bitmask PTA_ICELAKE_CLIENT = PTA_CANNONLAKE | PTA_AVX512VNNI
     | PTA_GFNI | PTA_VAES | PTA_AVX512VBMI2 | PTA_VPCLMULQDQ | PTA_AVX512BITALG
-    | PTA_RDPID | PTA_CLWB | PTA_AVX512VPOPCNTDQ;
+    | PTA_RDPID | PTA_AVX512VPOPCNTDQ;
   const wide_int_bitmask PTA_ICELAKE_SERVER = PTA_ICELAKE_CLIENT | PTA_PCONFIG
-    | PTA_WBNOINVD;
+    | PTA_WBNOINVD | PTA_CLWB;
   const wide_int_bitmask PTA_KNL = PTA_BROADWELL | PTA_AVX512PF | PTA_AVX512ER
     | PTA_AVX512F | PTA_AVX512CD;
   const wide_int_bitmask PTA_BONNELL = PTA_CORE2 | PTA_MOVBE;
@@ -12528,10 +12528,12 @@ ix86_update_stack_boundary (void)
 static rtx
 ix86_get_drap_rtx (void)
 {
-  /* We must use DRAP if there are outgoing arguments on stack and
+  /* We must use DRAP if there are outgoing arguments on stack or
+     the stack pointer register is clobbered by asm statment and
      ACCUMULATE_OUTGOING_ARGS is false.  */
   if (ix86_force_drap
-      || (cfun->machine->outgoing_args_on_stack
+      || ((cfun->machine->outgoing_args_on_stack
+	   || crtl->sp_is_clobbered_by_asm)
 	  && !ACCUMULATE_OUTGOING_ARGS))
     crtl->need_drap = true;
 
@@ -28515,7 +28517,17 @@ ix86_expand_call (rtx retval, rtx fnaddr, rtx callarg1,
 	    }
 	  else if (!TARGET_PECOFF && !TARGET_MACHO)
 	    {
-	      if (TARGET_64BIT)
+	      if (TARGET_64BIT
+		  && ix86_cmodel == CM_LARGE_PIC
+		  && DEFAULT_ABI != MS_ABI)
+		{
+		  fnaddr = gen_rtx_UNSPEC (Pmode, gen_rtvec (1, addr),
+					   UNSPEC_GOT);
+		  fnaddr = gen_rtx_CONST (Pmode, fnaddr);
+		  fnaddr = force_reg (Pmode, fnaddr);
+		  fnaddr = gen_rtx_PLUS (Pmode, pic_offset_table_rtx, fnaddr);
+		}
+	      else if (TARGET_64BIT)
 		{
 		  fnaddr = gen_rtx_UNSPEC (Pmode,
 					   gen_rtvec (1, addr),
@@ -45611,7 +45623,7 @@ ix86_expand_rint (rtx operand0, rtx operand1)
         return copysign (xa, operand1);
    */
   machine_mode mode = GET_MODE (operand0);
-  rtx res, xa, TWO52, two52, mask;
+  rtx res, xa, TWO52, mask;
   rtx_code_label *label;
 
   res = gen_reg_rtx (mode);
@@ -45624,16 +45636,18 @@ ix86_expand_rint (rtx operand0, rtx operand1)
   TWO52 = ix86_gen_TWO52 (mode);
   label = ix86_expand_sse_compare_and_jump (UNLE, TWO52, xa, false);
 
-  two52 = TWO52;
   if (flag_rounding_math)
     {
-      two52 = gen_reg_rtx (mode);
-      ix86_sse_copysign_to_positive (two52, TWO52, res, mask);
+      ix86_sse_copysign_to_positive (TWO52, TWO52, res, mask);
       xa = res;
     }
 
-  xa = expand_simple_binop (mode, PLUS, xa, two52, NULL_RTX, 0, OPTAB_DIRECT);
-  xa = expand_simple_binop (mode, MINUS, xa, two52, xa, 0, OPTAB_DIRECT);
+  xa = expand_simple_binop (mode, PLUS, xa, TWO52, NULL_RTX, 0, OPTAB_DIRECT);
+  xa = expand_simple_binop (mode, MINUS, xa, TWO52, xa, 0, OPTAB_DIRECT);
+
+  /* Remove the sign with FE_DOWNWARD, where x - x = -0.0.  */
+  if (HONOR_SIGNED_ZEROS (mode) && flag_rounding_math)
+    xa = ix86_expand_sse_fabs (xa, NULL);
 
   ix86_sse_copysign_to_positive (res, xa, res, mask);
 
@@ -45654,12 +45668,14 @@ ix86_expand_floorceildf_32 (rtx operand0, rtx operand1, bool do_floor)
           return x;
         xa = xa + TWO52 - TWO52;
         x2 = copysign (xa, x);
+
      Compensate.  Floor:
         if (x2 > x)
           x2 -= 1;
      Compensate.  Ceil:
         if (x2 < x)
           x2 += 1;
+
 	if (HONOR_SIGNED_ZEROS (mode))
 	  x2 = copysign (x2, x);
 	return x2;
@@ -45696,8 +45712,14 @@ ix86_expand_floorceildf_32 (rtx operand0, rtx operand1, bool do_floor)
   emit_insn (gen_rtx_SET (tmp, gen_rtx_AND (mode, one, tmp)));
   tmp = expand_simple_binop (mode, do_floor ? MINUS : PLUS,
 			     xa, tmp, NULL_RTX, 0, OPTAB_DIRECT);
-  if (!do_floor && HONOR_SIGNED_ZEROS (mode))
-    ix86_sse_copysign_to_positive (tmp, tmp, res, mask);
+  if (HONOR_SIGNED_ZEROS (mode))
+    {
+      /* Remove the sign with FE_DOWNWARD, where x - x = -0.0.  */
+      if (do_floor && flag_rounding_math)
+	tmp = ix86_expand_sse_fabs (tmp, NULL);
+
+      ix86_sse_copysign_to_positive (tmp, tmp, res, mask);
+    }
   emit_move_insn (res, tmp);
 
   emit_label (label);
@@ -45716,12 +45738,14 @@ ix86_expand_floorceil (rtx operand0, rtx operand1, bool do_floor)
         if (!isless (xa, TWO52))
           return x;
 	x2 = (double)(long)x;
+
      Compensate.  Floor:
 	if (x2 > x)
 	  x2 -= 1;
      Compensate.  Ceil:
 	if (x2 < x)
 	  x2 += 1;
+
 	if (HONOR_SIGNED_ZEROS (mode))
 	  return copysign (x2, x);
 	return x2;
@@ -45756,10 +45780,15 @@ ix86_expand_floorceil (rtx operand0, rtx operand1, bool do_floor)
   emit_insn (gen_rtx_SET (tmp, gen_rtx_AND (mode, one, tmp)));
   tmp = expand_simple_binop (mode, do_floor ? MINUS : PLUS,
 			     xa, tmp, NULL_RTX, 0, OPTAB_DIRECT);
-  emit_move_insn (res, tmp);
-
   if (HONOR_SIGNED_ZEROS (mode))
-    ix86_sse_copysign_to_positive (res, res, force_reg (mode, operand1), mask);
+    {
+      /* Remove the sign with FE_DOWNWARD, where x - x = -0.0.  */
+      if (do_floor && flag_rounding_math)
+	tmp = ix86_expand_sse_fabs (tmp, NULL);
+
+      ix86_sse_copysign_to_positive (tmp, tmp, res, mask);
+    }
+  emit_move_insn (res, tmp);
 
   emit_label (label);
   LABEL_NUSES (label) = 1;
@@ -45890,7 +45919,7 @@ void
 ix86_expand_truncdf_32 (rtx operand0, rtx operand1)
 {
   machine_mode mode = GET_MODE (operand0);
-  rtx xa, mask, TWO52, one, res, smask, tmp;
+  rtx xa, xa2, TWO52, tmp, one, res, mask;
   rtx_code_label *label;
 
   /* C code for SSE variant we expand below.
@@ -45913,28 +45942,29 @@ ix86_expand_truncdf_32 (rtx operand0, rtx operand1)
   emit_move_insn (res, operand1);
 
   /* xa = abs (operand1) */
-  xa = ix86_expand_sse_fabs (res, &smask);
+  xa = ix86_expand_sse_fabs (res, &mask);
 
   /* if (!isless (xa, TWO52)) goto label; */
   label = ix86_expand_sse_compare_and_jump (UNLE, TWO52, xa, false);
 
-  /* res = xa + TWO52 - TWO52; */
-  tmp = expand_simple_binop (mode, PLUS, xa, TWO52, NULL_RTX, 0, OPTAB_DIRECT);
-  tmp = expand_simple_binop (mode, MINUS, tmp, TWO52, tmp, 0, OPTAB_DIRECT);
-  emit_move_insn (res, tmp);
+  /* xa2 = xa + TWO52 - TWO52; */
+  xa2 = expand_simple_binop (mode, PLUS, xa, TWO52, NULL_RTX, 0, OPTAB_DIRECT);
+  xa2 = expand_simple_binop (mode, MINUS, xa2, TWO52, xa2, 0, OPTAB_DIRECT);
 
   /* generate 1.0 */
   one = force_reg (mode, const_double_from_real_value (dconst1, mode));
 
-  /* Compensate: res = xa2 - (res > xa ? 1 : 0)  */
-  mask = ix86_expand_sse_compare_mask (UNGT, res, xa, false);
-  emit_insn (gen_rtx_SET (mask, gen_rtx_AND (mode, mask, one)));
+  /* Compensate: xa2 = xa2 - (xa2 > xa ? 1 : 0)  */
+  tmp = ix86_expand_sse_compare_mask (UNGT, xa2, xa, false);
+  emit_insn (gen_rtx_SET (tmp, gen_rtx_AND (mode, one, tmp)));
   tmp = expand_simple_binop (mode, MINUS,
-			     res, mask, NULL_RTX, 0, OPTAB_DIRECT);
-  emit_move_insn (res, tmp);
+			     xa2, tmp, NULL_RTX, 0, OPTAB_DIRECT);
+  /* Remove the sign with FE_DOWNWARD, where x - x = -0.0.  */
+  if (HONOR_SIGNED_ZEROS (mode) && flag_rounding_math)
+    tmp = ix86_expand_sse_fabs (tmp, NULL);
 
-  /* res = copysign (res, operand1) */
-  ix86_sse_copysign_to_positive (res, res, force_reg (mode, operand1), smask);
+  /* res = copysign (xa2, operand1) */
+  ix86_sse_copysign_to_positive (res, tmp, res, mask);
 
   emit_label (label);
   LABEL_NUSES (label) = 1;
@@ -46771,7 +46801,7 @@ expand_vec_perm_pshufb (struct expand_vec_perm_d *d)
 	      /* vpshufb only works intra lanes, it is not
 		 possible to shuffle bytes in between the lanes.  */
 	      for (i = 0; i < nelt; ++i)
-		if ((d->perm[i] ^ i) & (nelt / 4))
+		if ((d->perm[i] ^ i) & (3 * nelt / 4))
 		  return false;
 	    }
 	}
@@ -50355,7 +50385,9 @@ ix86_get_mask_mode (poly_uint64 nunits, poly_uint64 vector_size)
   if ((TARGET_AVX512F && vector_size == 64)
       || (TARGET_AVX512VL && (vector_size == 32 || vector_size == 16)))
     {
-      if (elem_size == 4 || elem_size == 8 || TARGET_AVX512BW)
+      if (elem_size == 4
+	  || elem_size == 8
+	  || (TARGET_AVX512BW && (elem_size == 1 || elem_size == 2)))
 	return smallest_int_mode_for_size (nunits);
     }
 
@@ -50988,11 +51020,12 @@ ix86_atomic_assign_expand_fenv (tree *hold, tree *clear, tree *update)
       *clear = build_call_expr (fnclex, 0);
       tree sw_var = create_tmp_var_raw (short_unsigned_type_node);
       tree fnstsw_call = build_call_expr (fnstsw, 0);
-      tree sw_mod = build2 (MODIFY_EXPR, short_unsigned_type_node,
-			    sw_var, fnstsw_call);
+      tree sw_mod = build4 (TARGET_EXPR, short_unsigned_type_node, sw_var,
+			    fnstsw_call, NULL_TREE, NULL_TREE);
       tree exceptions_x87 = fold_convert (integer_type_node, sw_var);
-      tree update_mod = build2 (MODIFY_EXPR, integer_type_node,
-				exceptions_var, exceptions_x87);
+      tree update_mod = build4 (TARGET_EXPR, integer_type_node,
+				exceptions_var, exceptions_x87,
+				NULL_TREE, NULL_TREE);
       *update = build2 (COMPOUND_EXPR, integer_type_node,
 			sw_mod, update_mod);
       tree update_fldenv = build_call_expr (fldenv, 1, fenv_addr);
@@ -51005,15 +51038,17 @@ ix86_atomic_assign_expand_fenv (tree *hold, tree *clear, tree *update)
       tree stmxcsr = ix86_builtins[IX86_BUILTIN_STMXCSR];
       tree ldmxcsr = ix86_builtins[IX86_BUILTIN_LDMXCSR];
       tree stmxcsr_hold_call = build_call_expr (stmxcsr, 0);
-      tree hold_assign_orig = build2 (MODIFY_EXPR, unsigned_type_node,
-				      mxcsr_orig_var, stmxcsr_hold_call);
+      tree hold_assign_orig = build4 (TARGET_EXPR, unsigned_type_node,
+				      mxcsr_orig_var, stmxcsr_hold_call,
+				      NULL_TREE, NULL_TREE);
       tree hold_mod_val = build2 (BIT_IOR_EXPR, unsigned_type_node,
 				  mxcsr_orig_var,
 				  build_int_cst (unsigned_type_node, 0x1f80));
       hold_mod_val = build2 (BIT_AND_EXPR, unsigned_type_node, hold_mod_val,
 			     build_int_cst (unsigned_type_node, 0xffffffc0));
-      tree hold_assign_mod = build2 (MODIFY_EXPR, unsigned_type_node,
-				     mxcsr_mod_var, hold_mod_val);
+      tree hold_assign_mod = build4 (TARGET_EXPR, unsigned_type_node,
+				     mxcsr_mod_var, hold_mod_val,
+				     NULL_TREE, NULL_TREE);
       tree ldmxcsr_hold_call = build_call_expr (ldmxcsr, 1, mxcsr_mod_var);
       tree hold_all = build2 (COMPOUND_EXPR, unsigned_type_node,
 			      hold_assign_orig, hold_assign_mod);
@@ -51042,8 +51077,8 @@ ix86_atomic_assign_expand_fenv (tree *hold, tree *clear, tree *update)
 			    exceptions_assign);
 	}
       else
-	*update = build2 (MODIFY_EXPR, integer_type_node,
-			  exceptions_var, exceptions_sse);
+	*update = build4 (TARGET_EXPR, integer_type_node, exceptions_var,
+			  exceptions_sse, NULL_TREE, NULL_TREE);
       tree ldmxcsr_update_call = build_call_expr (ldmxcsr, 1, mxcsr_orig_var);
       *update = build2 (COMPOUND_EXPR, void_type_node, *update,
 			ldmxcsr_update_call);

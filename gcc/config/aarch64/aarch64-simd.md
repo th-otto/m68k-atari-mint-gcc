@@ -391,6 +391,81 @@
 }
 )
 
+;; The fcadd and fcmla patterns are made UNSPEC for the explicitly due to the
+;; fact that their usage need to guarantee that the source vectors are
+;; contiguous.  It would be wrong to describe the operation without being able
+;; to describe the permute that is also required, but even if that is done
+;; the permute would have been created as a LOAD_LANES which means the values
+;; in the registers are in the wrong order.
+(define_insn "aarch64_fcadd<rot><mode>"
+  [(set (match_operand:VHSDF 0 "register_operand" "=w")
+	(unspec:VHSDF [(match_operand:VHSDF 1 "register_operand" "w")
+		       (match_operand:VHSDF 2 "register_operand" "w")]
+		       FCADD))]
+  "TARGET_COMPLEX"
+  "fcadd\t%0.<Vtype>, %1.<Vtype>, %2.<Vtype>, #<rot>"
+  [(set_attr "type" "neon_fcadd")]
+)
+
+(define_insn "aarch64_fcmla<rot><mode>"
+  [(set (match_operand:VHSDF 0 "register_operand" "=w")
+	(plus:VHSDF (match_operand:VHSDF 1 "register_operand" "0")
+		    (unspec:VHSDF [(match_operand:VHSDF 2 "register_operand" "w")
+				   (match_operand:VHSDF 3 "register_operand" "w")]
+				   FCMLA)))]
+  "TARGET_COMPLEX"
+  "fcmla\t%0.<Vtype>, %2.<Vtype>, %3.<Vtype>, #<rot>"
+  [(set_attr "type" "neon_fcmla")]
+)
+
+
+(define_insn "aarch64_fcmla_lane<rot><mode>"
+  [(set (match_operand:VHSDF 0 "register_operand" "=w")
+	(plus:VHSDF (match_operand:VHSDF 1 "register_operand" "0")
+		    (unspec:VHSDF [(match_operand:VHSDF 2 "register_operand" "w")
+				   (match_operand:VHSDF 3 "register_operand" "w")
+				   (match_operand:SI 4 "const_int_operand" "n")]
+				   FCMLA)))]
+  "TARGET_COMPLEX"
+{
+  operands[4] = aarch64_endian_lane_rtx (<VHALF>mode, INTVAL (operands[4]));
+  return "fcmla\t%0.<Vtype>, %2.<Vtype>, %3.<FCMLA_maybe_lane>, #<rot>";
+}
+  [(set_attr "type" "neon_fcmla")]
+)
+
+(define_insn "aarch64_fcmla_laneq<rot>v4hf"
+  [(set (match_operand:V4HF 0 "register_operand" "=w")
+	(plus:V4HF (match_operand:V4HF 1 "register_operand" "0")
+		   (unspec:V4HF [(match_operand:V4HF 2 "register_operand" "w")
+				 (match_operand:V8HF 3 "register_operand" "w")
+				 (match_operand:SI 4 "const_int_operand" "n")]
+				 FCMLA)))]
+  "TARGET_COMPLEX"
+{
+  operands[4] = aarch64_endian_lane_rtx (V4HFmode, INTVAL (operands[4]));
+  return "fcmla\t%0.4h, %2.4h, %3.h[%4], #<rot>";
+}
+  [(set_attr "type" "neon_fcmla")]
+)
+
+(define_insn "aarch64_fcmlaq_lane<rot><mode>"
+  [(set (match_operand:VQ_HSF 0 "register_operand" "=w")
+	(plus:VQ_HSF (match_operand:VQ_HSF 1 "register_operand" "0")
+		     (unspec:VQ_HSF [(match_operand:VQ_HSF 2 "register_operand" "w")
+				     (match_operand:<VHALF> 3 "register_operand" "w")
+				     (match_operand:SI 4 "const_int_operand" "n")]
+				     FCMLA)))]
+  "TARGET_COMPLEX"
+{
+  int nunits = GET_MODE_NUNITS (<VHALF>mode).to_constant ();
+  operands[4]
+    = gen_int_mode (ENDIAN_LANE_N (nunits / 2, INTVAL (operands[4])), SImode);
+  return "fcmla\t%0.<Vtype>, %2.<Vtype>, %3.<FCMLA_maybe_lane>, #<rot>";
+}
+  [(set_attr "type" "neon_fcmla")]
+)
+
 ;; These instructions map to the __builtins for the Dot Product operations.
 (define_insn "aarch64_<sur>dot<vsi2qi>"
   [(set (match_operand:VS 0 "register_operand" "=w")
@@ -839,31 +914,17 @@
 						     tmp));
           DONE;
         }
-      else
-        {
-          operands[2] = force_reg (SImode, operands[2]);
-        }
-    }
-  else if (MEM_P (operands[2]))
-    {
-      operands[2] = force_reg (SImode, operands[2]);
     }
 
-  if (REG_P (operands[2]))
-    {
-      rtx tmp = gen_reg_rtx (<MODE>mode);
-      emit_insn (gen_aarch64_simd_dup<mode> (tmp,
-					     convert_to_mode (<VEL>mode,
-							      operands[2],
-							      0)));
-      emit_insn (gen_aarch64_simd_reg_sshl<mode> (operands[0], operands[1],
-						  tmp));
-      DONE;
-    }
-  else
-    FAIL;
-}
-)
+  operands[2] = force_reg (SImode, operands[2]);
+
+  rtx tmp = gen_reg_rtx (<MODE>mode);
+  emit_insn (gen_aarch64_simd_dup<mode> (tmp, convert_to_mode (<VEL>mode,
+							       operands[2],
+							       0)));
+  emit_insn (gen_aarch64_simd_reg_sshl<mode> (operands[0], operands[1], tmp));
+  DONE;
+})
 
 (define_expand "lshr<mode>3"
   [(match_operand:VDQ_I 0 "register_operand" "")
@@ -886,31 +947,19 @@
 						  tmp));
 	  DONE;
 	}
-      else
-        operands[2] = force_reg (SImode, operands[2]);
-    }
-  else if (MEM_P (operands[2]))
-    {
-      operands[2] = force_reg (SImode, operands[2]);
     }
 
-  if (REG_P (operands[2]))
-    {
-      rtx tmp = gen_reg_rtx (SImode);
-      rtx tmp1 = gen_reg_rtx (<MODE>mode);
-      emit_insn (gen_negsi2 (tmp, operands[2]));
-      emit_insn (gen_aarch64_simd_dup<mode> (tmp1,
-					     convert_to_mode (<VEL>mode,
-							      tmp, 0)));
-      emit_insn (gen_aarch64_simd_reg_shl<mode>_unsigned (operands[0],
-							  operands[1],
-							  tmp1));
-      DONE;
-    }
-  else
-    FAIL;
-}
-)
+  operands[2] = force_reg (SImode, operands[2]);
+
+  rtx tmp = gen_reg_rtx (SImode);
+  rtx tmp1 = gen_reg_rtx (<MODE>mode);
+  emit_insn (gen_negsi2 (tmp, operands[2]));
+  emit_insn (gen_aarch64_simd_dup<mode> (tmp1,
+					 convert_to_mode (<VEL>mode, tmp, 0)));
+  emit_insn (gen_aarch64_simd_reg_shl<mode>_unsigned (operands[0], operands[1],
+						      tmp1));
+  DONE;
+})
 
 (define_expand "ashr<mode>3"
   [(match_operand:VDQ_I 0 "register_operand" "")
@@ -933,31 +982,19 @@
 						  tmp));
           DONE;
 	}
-      else
-        operands[2] = force_reg (SImode, operands[2]);
-    }
-  else if (MEM_P (operands[2]))
-    {
-      operands[2] = force_reg (SImode, operands[2]);
     }
 
-  if (REG_P (operands[2]))
-    {
-      rtx tmp = gen_reg_rtx (SImode);
-      rtx tmp1 = gen_reg_rtx (<MODE>mode);
-      emit_insn (gen_negsi2 (tmp, operands[2]));
-      emit_insn (gen_aarch64_simd_dup<mode> (tmp1,
-					     convert_to_mode (<VEL>mode,
-							      tmp, 0)));
-      emit_insn (gen_aarch64_simd_reg_shl<mode>_signed (operands[0],
-							operands[1],
-							tmp1));
-      DONE;
-    }
-  else
-    FAIL;
-}
-)
+  operands[2] = force_reg (SImode, operands[2]);
+
+  rtx tmp = gen_reg_rtx (SImode);
+  rtx tmp1 = gen_reg_rtx (<MODE>mode);
+  emit_insn (gen_negsi2 (tmp, operands[2]));
+  emit_insn (gen_aarch64_simd_dup<mode> (tmp1, convert_to_mode (<VEL>mode,
+								tmp, 0)));
+  emit_insn (gen_aarch64_simd_reg_shl<mode>_signed (operands[0], operands[1],
+						    tmp1));
+  DONE;
+})
 
 (define_expand "vashl<mode>3"
  [(match_operand:VDQ_I 0 "register_operand" "")
@@ -1320,26 +1357,10 @@
 ;; On big-endian this is { zeroes, operand }
 
 (define_insn "move_lo_quad_internal_<mode>"
-  [(set (match_operand:VQ_NO2E 0 "register_operand" "=w,w,w")
-	(vec_concat:VQ_NO2E
+  [(set (match_operand:VQ 0 "register_operand" "=w,w,w")
+	(vec_concat:VQ
 	  (match_operand:<VHALF> 1 "register_operand" "w,r,r")
-	  (vec_duplicate:<VHALF> (const_int 0))))]
-  "TARGET_SIMD && !BYTES_BIG_ENDIAN"
-  "@
-   dup\\t%d0, %1.d[0]
-   fmov\\t%d0, %1
-   dup\\t%d0, %1"
-  [(set_attr "type" "neon_dup<q>,f_mcr,neon_dup<q>")
-   (set_attr "simd" "yes,*,yes")
-   (set_attr "fp" "*,yes,*")
-   (set_attr "length" "4")]
-)
-
-(define_insn "move_lo_quad_internal_<mode>"
-  [(set (match_operand:VQ_2E 0 "register_operand" "=w,w,w")
-	(vec_concat:VQ_2E
-	  (match_operand:<VHALF> 1 "register_operand" "w,r,r")
-	  (const_int 0)))]
+	  (match_operand:<VHALF> 2 "aarch64_simd_or_scalar_imm_zero")))]
   "TARGET_SIMD && !BYTES_BIG_ENDIAN"
   "@
    dup\\t%d0, %1.d[0]
@@ -1352,25 +1373,9 @@
 )
 
 (define_insn "move_lo_quad_internal_be_<mode>"
-  [(set (match_operand:VQ_NO2E 0 "register_operand" "=w,w,w")
-	(vec_concat:VQ_NO2E
-	  (vec_duplicate:<VHALF> (const_int 0))
-	  (match_operand:<VHALF> 1 "register_operand" "w,r,r")))]
-  "TARGET_SIMD && BYTES_BIG_ENDIAN"
-  "@
-   dup\\t%d0, %1.d[0]
-   fmov\\t%d0, %1
-   dup\\t%d0, %1"
-  [(set_attr "type" "neon_dup<q>,f_mcr,neon_dup<q>")
-   (set_attr "simd" "yes,*,yes")
-   (set_attr "fp" "*,yes,*")
-   (set_attr "length" "4")]
-)
-
-(define_insn "move_lo_quad_internal_be_<mode>"
-  [(set (match_operand:VQ_2E 0 "register_operand" "=w,w,w")
-	(vec_concat:VQ_2E
-	  (const_int 0)
+  [(set (match_operand:VQ 0 "register_operand" "=w,w,w")
+	(vec_concat:VQ
+	  (match_operand:<VHALF> 2 "aarch64_simd_or_scalar_imm_zero")
 	  (match_operand:<VHALF> 1 "register_operand" "w,r,r")))]
   "TARGET_SIMD && BYTES_BIG_ENDIAN"
   "@
@@ -1385,13 +1390,14 @@
 
 (define_expand "move_lo_quad_<mode>"
   [(match_operand:VQ 0 "register_operand")
-   (match_operand:VQ 1 "register_operand")]
+   (match_operand:<VHALF> 1 "register_operand")]
   "TARGET_SIMD"
 {
+  rtx zs = CONST0_RTX (<VHALF>mode);
   if (BYTES_BIG_ENDIAN)
-    emit_insn (gen_move_lo_quad_internal_be_<mode> (operands[0], operands[1]));
+    emit_insn (gen_move_lo_quad_internal_be_<mode> (operands[0], operands[1], zs));
   else
-    emit_insn (gen_move_lo_quad_internal_<mode> (operands[0], operands[1]));
+    emit_insn (gen_move_lo_quad_internal_<mode> (operands[0], operands[1], zs));
   DONE;
 }
 )
@@ -5082,6 +5088,114 @@
     }
 })
 
+
+(define_expand "aarch64_ld1x3<VALLDIF:mode>"
+  [(match_operand:CI 0 "register_operand" "=w")
+   (match_operand:DI 1 "register_operand" "r")
+   (unspec:VALLDIF [(const_int 0)] UNSPEC_VSTRUCTDUMMY)]
+  "TARGET_SIMD"
+{
+  rtx mem = gen_rtx_MEM (CImode, operands[1]);
+  emit_insn (gen_aarch64_ld1_x3_<VALLDIF:mode> (operands[0], mem));
+  DONE;
+})
+
+(define_insn "aarch64_ld1_x3_<mode>"
+  [(set (match_operand:CI 0 "register_operand" "=w")
+        (unspec:CI
+	  [(match_operand:CI 1 "aarch64_simd_struct_operand" "Utv")
+	   (unspec:VALLDIF [(const_int 3)] UNSPEC_VSTRUCTDUMMY)] UNSPEC_LD1))]
+  "TARGET_SIMD"
+  "ld1\\t{%S0.<Vtype> - %U0.<Vtype>}, %1"
+  [(set_attr "type" "neon_load1_3reg<q>")]
+)
+
+(define_expand "aarch64_ld1x4<VALLDIF:mode>"
+  [(match_operand:XI 0 "register_operand" "=w")
+   (match_operand:DI 1 "register_operand" "r")
+   (unspec:VALLDIF [(const_int 0)] UNSPEC_VSTRUCTDUMMY)]
+  "TARGET_SIMD"
+{
+  rtx mem = gen_rtx_MEM (XImode, operands[1]);
+  emit_insn (gen_aarch64_ld1_x4_<VALLDIF:mode> (operands[0], mem));
+  DONE;
+})
+
+(define_insn "aarch64_ld1_x4_<mode>"
+  [(set (match_operand:XI 0 "register_operand" "=w")
+	(unspec:XI
+	  [(match_operand:XI 1 "aarch64_simd_struct_operand" "Utv")
+	   (unspec:VALLDIF [(const_int 4)] UNSPEC_VSTRUCTDUMMY)]
+	UNSPEC_LD1))]
+  "TARGET_SIMD"
+  "ld1\\t{%S0.<Vtype> - %V0.<Vtype>}, %1"
+  [(set_attr "type" "neon_load1_4reg<q>")]
+)
+
+(define_expand "aarch64_st1x2<VALLDIF:mode>"
+  [(match_operand:DI 0 "register_operand" "")
+   (match_operand:OI 1 "register_operand" "")
+   (unspec:VALLDIF [(const_int 0)] UNSPEC_VSTRUCTDUMMY)]
+  "TARGET_SIMD"
+{
+  rtx mem = gen_rtx_MEM (OImode, operands[0]);
+  emit_insn (gen_aarch64_st1_x2_<VALLDIF:mode> (mem, operands[1]));
+  DONE;
+})
+
+(define_insn "aarch64_st1_x2_<mode>"
+   [(set (match_operand:OI 0 "aarch64_simd_struct_operand" "=Utv")
+	 (unspec:OI
+	  [(match_operand:OI 1 "register_operand" "w")
+          (unspec:VALLDIF [(const_int 2)] UNSPEC_VSTRUCTDUMMY)] UNSPEC_ST1))]
+  "TARGET_SIMD"
+  "st1\\t{%S1.<Vtype> - %T1.<Vtype>}, %0"
+  [(set_attr "type" "neon_store1_2reg<q>")]
+)
+
+(define_expand "aarch64_st1x3<VALLDIF:mode>"
+  [(match_operand:DI 0 "register_operand" "")
+   (match_operand:CI 1 "register_operand" "")
+   (unspec:VALLDIF [(const_int 0)] UNSPEC_VSTRUCTDUMMY)]
+  "TARGET_SIMD"
+{
+  rtx mem = gen_rtx_MEM (CImode, operands[0]);
+  emit_insn (gen_aarch64_st1_x3_<VALLDIF:mode> (mem, operands[1]));
+  DONE;
+})
+
+(define_insn "aarch64_st1_x3_<mode>"
+   [(set (match_operand:CI 0 "aarch64_simd_struct_operand" "=Utv")
+	(unspec:CI
+         [(match_operand:CI 1 "register_operand" "w")
+	  (unspec:VALLDIF [(const_int 3)] UNSPEC_VSTRUCTDUMMY)] UNSPEC_ST1))]
+  "TARGET_SIMD"
+  "st1\\t{%S1.<Vtype> - %U1.<Vtype>}, %0"
+  [(set_attr "type" "neon_store1_3reg<q>")]
+)
+
+(define_expand "aarch64_st1x4<VALLDIF:mode>"
+  [(match_operand:DI 0 "register_operand" "")
+   (match_operand:XI 1 "register_operand" "")
+   (unspec:VALLDIF [(const_int 0)] UNSPEC_VSTRUCTDUMMY)]
+  "TARGET_SIMD"
+{
+  rtx mem = gen_rtx_MEM (XImode, operands[0]);
+  emit_insn (gen_aarch64_st1_x4_<VALLDIF:mode> (mem, operands[1]));
+  DONE;
+})
+
+(define_insn "aarch64_st1_x4_<mode>"
+  [(set (match_operand:XI 0 "aarch64_simd_struct_operand" "=Utv")
+	(unspec:XI
+	   [(match_operand:XI 1 "register_operand" "w")
+	   (unspec:VALLDIF [(const_int 4)] UNSPEC_VSTRUCTDUMMY)]
+	UNSPEC_ST1))]
+  "TARGET_SIMD"
+  "st1\\t{%S1.<Vtype> - %V1.<Vtype>}, %0"
+  [(set_attr "type" "neon_store1_4reg<q>")]
+)
+
 (define_insn "*aarch64_mov<mode>"
   [(set (match_operand:VSTRUCT 0 "aarch64_simd_nonimmediate_operand" "=w,Utv,w")
 	(match_operand:VSTRUCT 1 "aarch64_simd_general_operand" " w,w,Utv"))]
@@ -5975,13 +6089,13 @@
 
 ;; sha3
 
-(define_insn "aarch64_eor3qv8hi"
-  [(set (match_operand:V8HI 0 "register_operand" "=w")
-	(xor:V8HI
-	 (xor:V8HI
-	  (match_operand:V8HI 2 "register_operand" "%w")
-	  (match_operand:V8HI 3 "register_operand" "w"))
-	 (match_operand:V8HI 1 "register_operand" "w")))]
+(define_insn "eor3q<mode>4"
+  [(set (match_operand:VQ_I 0 "register_operand" "=w")
+	(xor:VQ_I
+	 (xor:VQ_I
+	  (match_operand:VQ_I 2 "register_operand" "w")
+	  (match_operand:VQ_I 3 "register_operand" "w"))
+	 (match_operand:VQ_I 1 "register_operand" "w")))]
   "TARGET_SIMD && TARGET_SHA3"
   "eor3\\t%0.16b, %1.16b, %2.16b, %3.16b"
   [(set_attr "type" "crypto_sha3")]
@@ -6011,13 +6125,13 @@
   [(set_attr "type" "crypto_sha3")]
 )
 
-(define_insn "aarch64_bcaxqv8hi"
-  [(set (match_operand:V8HI 0 "register_operand" "=w")
-	(xor:V8HI
-	 (and:V8HI
-	  (not:V8HI (match_operand:V8HI 3 "register_operand" "w"))
-	  (match_operand:V8HI 2 "register_operand" "w"))
-	 (match_operand:V8HI 1 "register_operand" "w")))]
+(define_insn "bcaxq<mode>4"
+  [(set (match_operand:VQ_I 0 "register_operand" "=w")
+	(xor:VQ_I
+	 (and:VQ_I
+	  (not:VQ_I (match_operand:VQ_I 3 "register_operand" "w"))
+	  (match_operand:VQ_I 2 "register_operand" "w"))
+	 (match_operand:VQ_I 1 "register_operand" "w")))]
   "TARGET_SIMD && TARGET_SHA3"
   "bcax\\t%0.16b, %1.16b, %2.16b, %3.16b"
   [(set_attr "type" "crypto_sha3")]

@@ -56,6 +56,8 @@ static struct vendor_cpu arm_cpu_table[] = {
     {"0xd09", "armv8-a+crc", "cortex-a73"},
     {"0xd05", "armv8.2-a+fp16+dotprod", "cortex-a55"},
     {"0xd0a", "armv8.2-a+fp16+dotprod", "cortex-a75"},
+    {"0xd40", "armv8.4-a+fp16", "neoverse-v1"},
+    {"0xd49", "armv8.4-a+fp16", "neoverse-n2"},
     {"0xc14", "armv7-r", "cortex-r4"},
     {"0xc15", "armv7-r", "cortex-r5"},
     {"0xc17", "armv7-r", "cortex-r7"},
@@ -97,6 +99,7 @@ host_detect_local_cpu (int argc, const char **argv)
   FILE *f = NULL;
   bool arch;
   const struct vendor_cpu *cpu_table = NULL;
+  char *fcpu_info = NULL;
 
   if (argc < 1)
     goto not_found;
@@ -105,7 +108,12 @@ host_detect_local_cpu (int argc, const char **argv)
   if (!arch && strcmp (argv[0], "cpu") != 0 && strcmp (argv[0], "tune"))
     goto not_found;
 
-  f = fopen ("/proc/cpuinfo", "r");
+  fcpu_info = getenv ("GCC_CPUINFO");
+  if (fcpu_info)
+    f = fopen (fcpu_info, "r");
+  else
+    f = fopen ("/proc/cpuinfo", "r");
+
   if (f == NULL)
     goto not_found;
 
