@@ -366,7 +366,7 @@ fs::copy_file(const path& from, const path& to, copy_options option)
 
 bool
 fs::copy_file(const path& from, const path& to, copy_options options,
-	      error_code& ec) noexcept
+	      error_code& ec)
 {
 #ifdef _GLIBCXX_HAVE_SYS_STAT_H
   return do_copy_file(from.c_str(), to.c_str(), copy_file_options(options),
@@ -418,7 +418,7 @@ fs::create_directories(const path& p)
 }
 
 bool
-fs::create_directories(const path& p, error_code& ec) noexcept
+fs::create_directories(const path& p, error_code& ec)
 {
   if (p.empty())
     {
@@ -426,7 +426,7 @@ fs::create_directories(const path& p, error_code& ec) noexcept
       return false;
     }
 
-  file_status st = symlink_status(p, ec);
+  file_status st = status(p, ec);
   if (is_directory(st))
     return false;
   else if (ec && !status_known(st))
@@ -590,7 +590,7 @@ fs::create_hard_link(const path& to, const path& new_hard_link,
   if (CreateHardLinkW(new_hard_link.c_str(), to.c_str(), NULL))
     ec.clear();
   else
-    ec.assign((int)GetLastError(), generic_category());
+    ec.assign((int)GetLastError(), system_category());
 #else
   ec = std::make_error_code(std::errc::not_supported);
 #endif
@@ -993,11 +993,17 @@ fs::path fs::read_symlink(const path& p [[gnu::unused]], error_code& ec)
   path result;
 #if defined(_GLIBCXX_HAVE_READLINK) && defined(_GLIBCXX_HAVE_SYS_STAT_H)
   stat_type st;
-  if (::lstat(p.c_str(), &st))
+  if (posix::lstat(p.c_str(), &st))
     {
       ec.assign(errno, std::generic_category());
       return result;
     }
+  else if (!fs::is_symlink(make_file_status(st)))
+    {
+      ec.assign(EINVAL, std::generic_category());
+      return result;
+    }
+
   std::string buf(st.st_size ? st.st_size + 1 : 128, '\0');
   do
     {
@@ -1056,7 +1062,7 @@ fs::remove(const path& p, error_code& ec) noexcept
 	  return true;
 	}
       else if (!ec)
-	ec.assign((int)GetLastError(), generic_category());
+	ec.assign((int)GetLastError(), system_category());
     }
   else if (status_known(st))
     ec.clear();
@@ -1086,7 +1092,7 @@ fs::remove_all(const path& p)
 }
 
 std::uintmax_t
-fs::remove_all(const path& p, error_code& ec) noexcept
+fs::remove_all(const path& p, error_code& ec)
 {
   const auto s = symlink_status(p, ec);
   if (!status_known(s))

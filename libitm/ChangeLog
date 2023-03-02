@@ -1,3 +1,41 @@
+2022-05-27  Release Manager
+
+	* GCC 9.5.0 released.
+
+2021-06-18  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2021-06-17  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/91488
+	* testsuite/libitm.c++/libstdc++-pr91488.C: New test.
+
+2021-06-01  Release Manager
+
+	* GCC 9.4.0 released.
+
+2021-05-01  Iain Sandoe  <iain@sandoe.co.uk>
+	    Jakub Jelinek   <jakub@redhat.com>
+
+	PR target/97865
+	* configure.tgt: Add dynamic_lookup to XLDFLAGS for Darwin.
+	* configure: Regenerate.
+
+2020-07-16  Szabolcs Nagy  <szabolcs.nagy@arm.com>
+
+	Backported from master:
+	2020-07-09  Szabolcs Nagy  <szabolcs.nagy@arm.com>
+
+	* config/aarch64/sjlj.S: Add BTI marking and related definitions,
+	and add BTI c to function entries.
+
+2020-07-16  Szabolcs Nagy  <szabolcs.nagy@arm.com>
+
+	Backported from master:
+	2020-07-09  Szabolcs Nagy  <szabolcs.nagy@arm.com>
+
+	* config/aarch64/sjlj.S: Add stack note if __FreeBSD__ is defined.
+
 2020-03-12  Release Manager
 
 	* GCC 9.3.0 released.

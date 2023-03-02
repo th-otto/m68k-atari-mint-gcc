@@ -149,8 +149,10 @@ const struct processor_costs *ix86_cost = NULL;
 #define m_ICELAKE_CLIENT (HOST_WIDE_INT_1U<<PROCESSOR_ICELAKE_CLIENT)
 #define m_ICELAKE_SERVER (HOST_WIDE_INT_1U<<PROCESSOR_ICELAKE_SERVER)
 #define m_CASCADELAKE (HOST_WIDE_INT_1U<<PROCESSOR_CASCADELAKE)
+#define m_TIGERLAKE (HOST_WIDE_INT_1U<<PROCESSOR_TIGERLAKE)
 #define m_CORE_AVX512 (m_SKYLAKE_AVX512 | m_CANNONLAKE \
-		       | m_ICELAKE_CLIENT | m_ICELAKE_SERVER | m_CASCADELAKE)
+		       | m_ICELAKE_CLIENT | m_ICELAKE_SERVER \
+		       | m_CASCADELAKE | m_TIGERLAKE)
 #define m_CORE_AVX2 (m_HASWELL | m_SKYLAKE | m_CORE_AVX512)
 #define m_CORE_ALL (m_CORE2 | m_NEHALEM  | m_SANDYBRIDGE | m_CORE_AVX2)
 #define m_GOLDMONT (HOST_WIDE_INT_1U<<PROCESSOR_GOLDMONT)
@@ -894,6 +896,7 @@ static const struct processor_costs *processor_cost_table[] =
   &slm_cost,
   &slm_cost,
   &slm_cost,
+  &skylake_cost,
   &skylake_cost,
   &skylake_cost,
   &skylake_cost,
@@ -4058,6 +4061,15 @@ ix86_option_override_internal (bool main_args_p,
 	if (((processor_alias_table[i].flags & PTA_PTWRITE) != 0)
 	    && !(opts->x_ix86_isa_flags2_explicit & OPTION_MASK_ISA_PTWRITE))
 	  opts->x_ix86_isa_flags2 |= OPTION_MASK_ISA_PTWRITE;
+	if (((processor_alias_table[i].flags & PTA_MOVDIRI) != 0)
+	    && !(opts->x_ix86_isa_flags_explicit & OPTION_MASK_ISA_MOVDIRI))
+	  opts->x_ix86_isa_flags |= OPTION_MASK_ISA_MOVDIRI;
+	if (((processor_alias_table[i].flags & PTA_MOVDIR64B) != 0)
+	    && !(opts->x_ix86_isa_flags2_explicit & OPTION_MASK_ISA_MOVDIR64B))
+	  opts->x_ix86_isa_flags2 |= OPTION_MASK_ISA_MOVDIR64B;
+	if (((processor_alias_table[i].flags & PTA_CLDEMOTE) != 0)
+	    && !(opts->x_ix86_isa_flags2_explicit & OPTION_MASK_ISA_CLDEMOTE))
+	  opts->x_ix86_isa_flags2 |= OPTION_MASK_ISA_CLDEMOTE;
 
 	if ((processor_alias_table[i].flags
 	   & (PTA_PREFETCH_SSE | PTA_SSE)) != 0)
@@ -10210,7 +10222,8 @@ standard_80387_constant_p (rtx x)
   /* For XFmode constants, try to find a special 80387 instruction when
      optimizing for size or on those CPUs that benefit from them.  */
   if (mode == XFmode
-      && (optimize_function_for_size_p (cfun) || TARGET_EXT_80387_CONSTANTS))
+      && (optimize_function_for_size_p (cfun) || TARGET_EXT_80387_CONSTANTS)
+      && !flag_rounding_math)
     {
       int i;
 
@@ -11483,11 +11496,6 @@ ix86_compute_frame_layout (void)
   offset += frame->nregs * UNITS_PER_WORD;
   frame->reg_save_offset = offset;
 
-  /* On SEH target, registers are pushed just before the frame pointer
-     location.  */
-  if (TARGET_SEH)
-    frame->hard_frame_pointer_offset = offset;
-
   /* Calculate the size of the va-arg area (not including padding, if any).  */
   frame->va_arg_size = ix86_varargs_gpr_size + ix86_varargs_fpr_size;
 
@@ -11650,14 +11658,39 @@ ix86_compute_frame_layout (void)
      the unwind data structure.  */
   if (TARGET_SEH)
     {
-      HOST_WIDE_INT diff;
+      /* Force the frame pointer to point at or below the lowest register save
+	 area, see the SEH code in config/i386/winnt.c for the rationale.  */
+      frame->hard_frame_pointer_offset = frame->sse_reg_save_offset;
 
-      /* If we can leave the frame pointer where it is, do so.  Also, returns
-	 the establisher frame for __builtin_frame_address (0).  */
-      diff = frame->stack_pointer_offset - frame->hard_frame_pointer_offset;
-      if (diff <= SEH_MAX_FRAME_SIZE
-	  && (diff > 240 || (diff & 15) != 0)
-	  && !crtl->accesses_prior_frames)
+      /* If we can leave the frame pointer where it is, do so; however return
+	 the establisher frame for __builtin_frame_address (0) or else if the
+	 frame overflows the SEH maximum frame size.
+
+	 Note that the value returned by __builtin_frame_address (0) is quite
+	 constrained, because setjmp is piggybacked on the SEH machinery with
+	 recent versions of MinGW:
+
+	  #    elif defined(__SEH__)
+	  #     if defined(__aarch64__) || defined(_ARM64_)
+	  #      define setjmp(BUF) _setjmp((BUF), __builtin_sponentry())
+	  #     elif (__MINGW_GCC_VERSION < 40702)
+	  #      define setjmp(BUF) _setjmp((BUF), mingw_getsp())
+	  #     else
+	  #      define setjmp(BUF) _setjmp((BUF), __builtin_frame_address (0))
+	  #     endif
+
+	 and the second argument passed to _setjmp, if not null, is forwarded
+	 to the TargetFrame parameter of RtlUnwindEx by longjmp (after it has
+	 built an ExceptionRecord on the fly describing the setjmp buffer).  */
+      const HOST_WIDE_INT diff
+	= frame->stack_pointer_offset - frame->hard_frame_pointer_offset;
+      if (diff <= 255 && !crtl->accesses_prior_frames)
+	{
+	  /* The resulting diff will be a multiple of 16 lower than 255,
+	     i.e. at most 240 as required by the unwind data structure.  */
+	  frame->hard_frame_pointer_offset += (diff & 15);
+	}
+      else if (diff <= SEH_MAX_FRAME_SIZE && !crtl->accesses_prior_frames)
 	{
 	  /* Ideally we'd determine what portion of the local stack frame
 	     (within the constraint of the lowest 240) is most heavily used.
@@ -11666,6 +11699,8 @@ ix86_compute_frame_layout (void)
 	     frame that is addressable with 8-bit offsets.  */
 	  frame->hard_frame_pointer_offset = frame->stack_pointer_offset - 128;
 	}
+      else
+	frame->hard_frame_pointer_offset = frame->hfp_save_offset;
     }
 }
 
@@ -12283,10 +12318,12 @@ ix86_update_stack_boundary (void)
 static rtx
 ix86_get_drap_rtx (void)
 {
-  /* We must use DRAP if there are outgoing arguments on stack and
+  /* We must use DRAP if there are outgoing arguments on stack or
+     the stack pointer register is clobbered by asm statment and
      ACCUMULATE_OUTGOING_ARGS is false.  */
   if (ix86_force_drap
-      || (cfun->machine->outgoing_args_on_stack
+      || ((cfun->machine->outgoing_args_on_stack
+	   || crtl->sp_is_clobbered_by_asm)
 	  && !ACCUMULATE_OUTGOING_ARGS))
     crtl->need_drap = true;
 
@@ -13467,17 +13504,6 @@ ix86_expand_prologue (void)
          slower on all targets.  Also sdb didn't like it.  */
       insn = emit_insn (gen_push (hard_frame_pointer_rtx));
       RTX_FRAME_RELATED_P (insn) = 1;
-
-      /* Push registers now, before setting the frame pointer
-	 on SEH target.  */
-      if (!int_registers_saved
-	  && TARGET_SEH
-	  && !frame.save_regs_using_mov)
-	{
-	  ix86_emit_save_regs ();
-	  int_registers_saved = true;
-	  gcc_assert (m->fs.sp_offset == frame.reg_save_offset);
-	}
 
       if (m->fs.sp_offset == frame.hard_frame_pointer_offset)
 	{
@@ -28454,7 +28480,17 @@ ix86_expand_call (rtx retval, rtx fnaddr, rtx callarg1,
 	    }
 	  else if (!TARGET_PECOFF && !TARGET_MACHO)
 	    {
-	      if (TARGET_64BIT)
+	      if (TARGET_64BIT
+		  && ix86_cmodel == CM_LARGE_PIC
+		  && DEFAULT_ABI != MS_ABI)
+		{
+		  fnaddr = gen_rtx_UNSPEC (Pmode, gen_rtvec (1, addr),
+					   UNSPEC_GOT);
+		  fnaddr = gen_rtx_CONST (Pmode, fnaddr);
+		  fnaddr = force_reg (Pmode, fnaddr);
+		  fnaddr = gen_rtx_PLUS (Pmode, pic_offset_table_rtx, fnaddr);
+		}
+	      else if (TARGET_64BIT)
 		{
 		  fnaddr = gen_rtx_UNSPEC (Pmode,
 					   gen_rtvec (1, addr),
@@ -32007,7 +32043,8 @@ enum processor_model
   M_INTEL_COREI7_ICELAKE_CLIENT,
   M_INTEL_COREI7_ICELAKE_SERVER,
   M_AMDFAM17H_ZNVER2,
-  M_INTEL_COREI7_CASCADELAKE
+  M_INTEL_COREI7_CASCADELAKE,
+  M_INTEL_COREI7_TIGERLAKE,
 };
 
 struct _arch_names_table
@@ -32036,6 +32073,7 @@ static const _arch_names_table arch_names_table[] =
   {"icelake-client", M_INTEL_COREI7_ICELAKE_CLIENT},
   {"icelake-server", M_INTEL_COREI7_ICELAKE_SERVER},
   {"cascadelake", M_INTEL_COREI7_CASCADELAKE},
+  {"tigerlake", M_INTEL_COREI7_TIGERLAKE},
   {"bonnell", M_INTEL_BONNELL},
   {"silvermont", M_INTEL_SILVERMONT},
   {"goldmont", M_INTEL_GOLDMONT},
@@ -32226,6 +32264,9 @@ get_builtin_code_for_version (tree decl, tree *predicate_list)
 	      arg_str = "cascadelake";
 	      priority = P_PROC_AVX512F;
 	      break;
+	    case PROCESSOR_TIGERLAKE:
+	      arg_str = "tigerlake";
+	      priority = P_PROC_AVX512F;
 	    case PROCESSOR_BONNELL:
 	      arg_str = "bonnell";
 	      priority = P_PROC_SSSE3;
@@ -33761,6 +33802,8 @@ ix86_gimple_fold_builtin (gimple_stmt_iterator *gsi)
 
     do_shift:
       gcc_assert (n_args >= 2);
+      if (!gimple_call_lhs (stmt))
+	break;
       arg0 = gimple_call_arg (stmt, 0);
       arg1 = gimple_call_arg (stmt, 1);
       if (n_args > 2)
@@ -37552,6 +37595,9 @@ rdseed_step:
       return target;
 
     case IX86_BUILTIN_READ_FLAGS:
+      if (ignore)
+	return const0_rtx;
+
       emit_insn (gen_push (gen_rtx_REG (word_mode, FLAGS_REG)));
 
       if (optimize
@@ -43330,9 +43376,9 @@ quarter:
 	      else
 		{
 		  word = expand_simple_binop (word_mode, ASHIFT, word, shift,
-					      word, 1, OPTAB_LIB_WIDEN);
+					      NULL_RTX, 1, OPTAB_LIB_WIDEN);
 		  word = expand_simple_binop (word_mode, IOR, word, elt,
-					      word, 1, OPTAB_LIB_WIDEN);
+					      NULL_RTX, 1, OPTAB_LIB_WIDEN);
 		}
 	    }
 
@@ -43385,11 +43431,15 @@ ix86_expand_vector_init (bool mmx_ok, rtx target, rtx vals)
       if (GET_MODE_NUNITS (GET_MODE (x)) * 2 == n_elts)
 	{
 	  rtx ops[2] = { XVECEXP (vals, 0, 0), XVECEXP (vals, 0, 1) };
-	  if (inner_mode == QImode || inner_mode == HImode)
+	  if (inner_mode == QImode
+	      || inner_mode == HImode
+	      || inner_mode == TImode)
 	    {
 	      unsigned int n_bits = n_elts * GET_MODE_SIZE (inner_mode);
-	      mode = mode_for_vector (SImode, n_bits / 4).require ();
-	      inner_mode = mode_for_vector (SImode, n_bits / 8).require ();
+	      scalar_mode elt_mode = inner_mode == TImode ? DImode : SImode;
+	      n_bits /= GET_MODE_SIZE (elt_mode);
+	      mode = mode_for_vector (elt_mode, n_bits).require ();
+	      inner_mode = mode_for_vector (elt_mode, n_bits / 2).require ();
 	      ops[0] = gen_lowpart (inner_mode, ops[0]);
 	      ops[1] = gen_lowpart (inner_mode, ops[1]);
 	      subtarget = gen_reg_rtx (mode);
@@ -44413,40 +44463,18 @@ ix86_md_asm_adjust (vec<rtx> &outputs, vec<rtx> &/*inputs*/,
 	  continue;
 	}
 
-      if (dest_mode == DImode && !TARGET_64BIT)
-	dest_mode = SImode;
-
-      if (dest_mode != QImode)
-	{
-	  rtx destqi = gen_reg_rtx (QImode);
-	  emit_insn (gen_rtx_SET (destqi, x));
-
-	  if (TARGET_ZERO_EXTEND_WITH_AND
-	      && optimize_function_for_speed_p (cfun))
-	    {
-	      x = force_reg (dest_mode, const0_rtx);
-
-	      emit_insn (gen_movstrictqi (gen_lowpart (QImode, x), destqi));
-	    }
-	  else
-	    {
-	      x = gen_rtx_ZERO_EXTEND (dest_mode, destqi);
-	      if (dest_mode == GET_MODE (dest)
-		  && !register_operand (dest, GET_MODE (dest)))
-		x = force_reg (dest_mode, x);
-	    }
-	}
-
-      if (dest_mode != GET_MODE (dest))
-	{
-	  rtx tmp = gen_reg_rtx (SImode);
-
-	  emit_insn (gen_rtx_SET (tmp, x));
-	  emit_insn (gen_zero_extendsidi2 (dest, tmp));
-	}
-      else
+      if (dest_mode == QImode)
 	emit_insn (gen_rtx_SET (dest, x));
+      else
+	{
+	  rtx reg = gen_reg_rtx (QImode);
+	  emit_insn (gen_rtx_SET (reg, x));
+
+	  reg = convert_to_mode (dest_mode, reg, 1);
+	  emit_move_insn (dest, reg);
+	}
     }
+
   rtx_insn *seq = get_insns ();
   end_sequence ();
 
@@ -44811,6 +44839,11 @@ void ix86_emit_i387_log1p (rtx op0, rtx op1)
   rtx res = gen_reg_rtx (XFmode);
   rtx cst, cstln2, cst1;
   rtx_insn *insn;
+
+  /* The emit_jump call emits pending stack adjust, make sure it is emitted
+     before the conditional jump, otherwise the stack adjustment will be
+     only conditional.  */
+  do_pending_stack_adjust ();
 
   cst = const_double_from_real_value
     (REAL_VALUE_ATOF ("0.29289321881345247561810596348408353", XFmode), XFmode);
@@ -45479,7 +45512,7 @@ ix86_expand_rint (rtx operand0, rtx operand1)
         return copysign (xa, operand1);
    */
   machine_mode mode = GET_MODE (operand0);
-  rtx res, xa, TWO52, two52, mask;
+  rtx res, xa, TWO52, mask;
   rtx_code_label *label;
 
   res = gen_reg_rtx (mode);
@@ -45492,16 +45525,18 @@ ix86_expand_rint (rtx operand0, rtx operand1)
   TWO52 = ix86_gen_TWO52 (mode);
   label = ix86_expand_sse_compare_and_jump (UNLE, TWO52, xa, false);
 
-  two52 = TWO52;
   if (flag_rounding_math)
     {
-      two52 = gen_reg_rtx (mode);
-      ix86_sse_copysign_to_positive (two52, TWO52, res, mask);
+      ix86_sse_copysign_to_positive (TWO52, TWO52, res, mask);
       xa = res;
     }
 
-  xa = expand_simple_binop (mode, PLUS, xa, two52, NULL_RTX, 0, OPTAB_DIRECT);
-  xa = expand_simple_binop (mode, MINUS, xa, two52, xa, 0, OPTAB_DIRECT);
+  xa = expand_simple_binop (mode, PLUS, xa, TWO52, NULL_RTX, 0, OPTAB_DIRECT);
+  xa = expand_simple_binop (mode, MINUS, xa, TWO52, xa, 0, OPTAB_DIRECT);
+
+  /* Remove the sign with FE_DOWNWARD, where x - x = -0.0.  */
+  if (HONOR_SIGNED_ZEROS (mode) && flag_rounding_math)
+    xa = ix86_expand_sse_fabs (xa, NULL);
 
   ix86_sse_copysign_to_positive (res, xa, res, mask);
 
@@ -45522,12 +45557,14 @@ ix86_expand_floorceildf_32 (rtx operand0, rtx operand1, bool do_floor)
           return x;
         xa = xa + TWO52 - TWO52;
         x2 = copysign (xa, x);
+
      Compensate.  Floor:
         if (x2 > x)
           x2 -= 1;
      Compensate.  Ceil:
         if (x2 < x)
           x2 += 1;
+
 	if (HONOR_SIGNED_ZEROS (mode))
 	  x2 = copysign (x2, x);
 	return x2;
@@ -45564,8 +45601,14 @@ ix86_expand_floorceildf_32 (rtx operand0, rtx operand1, bool do_floor)
   emit_insn (gen_rtx_SET (tmp, gen_rtx_AND (mode, one, tmp)));
   tmp = expand_simple_binop (mode, do_floor ? MINUS : PLUS,
 			     xa, tmp, NULL_RTX, 0, OPTAB_DIRECT);
-  if (!do_floor && HONOR_SIGNED_ZEROS (mode))
-    ix86_sse_copysign_to_positive (tmp, tmp, res, mask);
+  if (HONOR_SIGNED_ZEROS (mode))
+    {
+      /* Remove the sign with FE_DOWNWARD, where x - x = -0.0.  */
+      if (do_floor && flag_rounding_math)
+	tmp = ix86_expand_sse_fabs (tmp, NULL);
+
+      ix86_sse_copysign_to_positive (tmp, tmp, res, mask);
+    }
   emit_move_insn (res, tmp);
 
   emit_label (label);
@@ -45584,12 +45627,14 @@ ix86_expand_floorceil (rtx operand0, rtx operand1, bool do_floor)
         if (!isless (xa, TWO52))
           return x;
 	x2 = (double)(long)x;
+
      Compensate.  Floor:
 	if (x2 > x)
 	  x2 -= 1;
      Compensate.  Ceil:
 	if (x2 < x)
 	  x2 += 1;
+
 	if (HONOR_SIGNED_ZEROS (mode))
 	  return copysign (x2, x);
 	return x2;
@@ -45624,10 +45669,15 @@ ix86_expand_floorceil (rtx operand0, rtx operand1, bool do_floor)
   emit_insn (gen_rtx_SET (tmp, gen_rtx_AND (mode, one, tmp)));
   tmp = expand_simple_binop (mode, do_floor ? MINUS : PLUS,
 			     xa, tmp, NULL_RTX, 0, OPTAB_DIRECT);
-  emit_move_insn (res, tmp);
-
   if (HONOR_SIGNED_ZEROS (mode))
-    ix86_sse_copysign_to_positive (res, res, force_reg (mode, operand1), mask);
+    {
+      /* Remove the sign with FE_DOWNWARD, where x - x = -0.0.  */
+      if (do_floor && flag_rounding_math)
+	tmp = ix86_expand_sse_fabs (tmp, NULL);
+
+      ix86_sse_copysign_to_positive (tmp, tmp, res, mask);
+    }
+  emit_move_insn (res, tmp);
 
   emit_label (label);
   LABEL_NUSES (label) = 1;
@@ -45758,7 +45808,7 @@ void
 ix86_expand_truncdf_32 (rtx operand0, rtx operand1)
 {
   machine_mode mode = GET_MODE (operand0);
-  rtx xa, mask, TWO52, one, res, smask, tmp;
+  rtx xa, xa2, TWO52, tmp, one, res, mask;
   rtx_code_label *label;
 
   /* C code for SSE variant we expand below.
@@ -45781,28 +45831,29 @@ ix86_expand_truncdf_32 (rtx operand0, rtx operand1)
   emit_move_insn (res, operand1);
 
   /* xa = abs (operand1) */
-  xa = ix86_expand_sse_fabs (res, &smask);
+  xa = ix86_expand_sse_fabs (res, &mask);
 
   /* if (!isless (xa, TWO52)) goto label; */
   label = ix86_expand_sse_compare_and_jump (UNLE, TWO52, xa, false);
 
-  /* res = xa + TWO52 - TWO52; */
-  tmp = expand_simple_binop (mode, PLUS, xa, TWO52, NULL_RTX, 0, OPTAB_DIRECT);
-  tmp = expand_simple_binop (mode, MINUS, tmp, TWO52, tmp, 0, OPTAB_DIRECT);
-  emit_move_insn (res, tmp);
+  /* xa2 = xa + TWO52 - TWO52; */
+  xa2 = expand_simple_binop (mode, PLUS, xa, TWO52, NULL_RTX, 0, OPTAB_DIRECT);
+  xa2 = expand_simple_binop (mode, MINUS, xa2, TWO52, xa2, 0, OPTAB_DIRECT);
 
   /* generate 1.0 */
   one = force_reg (mode, const_double_from_real_value (dconst1, mode));
 
-  /* Compensate: res = xa2 - (res > xa ? 1 : 0)  */
-  mask = ix86_expand_sse_compare_mask (UNGT, res, xa, false);
-  emit_insn (gen_rtx_SET (mask, gen_rtx_AND (mode, mask, one)));
+  /* Compensate: xa2 = xa2 - (xa2 > xa ? 1 : 0)  */
+  tmp = ix86_expand_sse_compare_mask (UNGT, xa2, xa, false);
+  emit_insn (gen_rtx_SET (tmp, gen_rtx_AND (mode, one, tmp)));
   tmp = expand_simple_binop (mode, MINUS,
-			     res, mask, NULL_RTX, 0, OPTAB_DIRECT);
-  emit_move_insn (res, tmp);
+			     xa2, tmp, NULL_RTX, 0, OPTAB_DIRECT);
+  /* Remove the sign with FE_DOWNWARD, where x - x = -0.0.  */
+  if (HONOR_SIGNED_ZEROS (mode) && flag_rounding_math)
+    tmp = ix86_expand_sse_fabs (tmp, NULL);
 
-  /* res = copysign (res, operand1) */
-  ix86_sse_copysign_to_positive (res, res, force_reg (mode, operand1), smask);
+  /* res = copysign (xa2, operand1) */
+  ix86_sse_copysign_to_positive (res, tmp, res, mask);
 
   emit_label (label);
   LABEL_NUSES (label) = 1;
@@ -50287,7 +50338,9 @@ ix86_get_mask_mode (poly_uint64 nunits, poly_uint64 vector_size)
   if ((TARGET_AVX512F && vector_size == 64)
       || (TARGET_AVX512VL && (vector_size == 32 || vector_size == 16)))
     {
-      if (elem_size == 4 || elem_size == 8 || TARGET_AVX512BW)
+      if (elem_size == 4
+	  || elem_size == 8
+	  || (TARGET_AVX512BW && (elem_size == 1 || elem_size == 2)))
 	return smallest_int_mode_for_size (nunits);
     }
 
@@ -50941,11 +50994,12 @@ ix86_atomic_assign_expand_fenv (tree *hold, tree *clear, tree *update)
       *clear = build_call_expr (fnclex, 0);
       tree sw_var = create_tmp_var_raw (short_unsigned_type_node);
       tree fnstsw_call = build_call_expr (fnstsw, 0);
-      tree sw_mod = build2 (MODIFY_EXPR, short_unsigned_type_node,
-			    sw_var, fnstsw_call);
+      tree sw_mod = build4 (TARGET_EXPR, short_unsigned_type_node, sw_var,
+			    fnstsw_call, NULL_TREE, NULL_TREE);
       tree exceptions_x87 = fold_convert (integer_type_node, sw_var);
-      tree update_mod = build2 (MODIFY_EXPR, integer_type_node,
-				exceptions_var, exceptions_x87);
+      tree update_mod = build4 (TARGET_EXPR, integer_type_node,
+				exceptions_var, exceptions_x87,
+				NULL_TREE, NULL_TREE);
       *update = build2 (COMPOUND_EXPR, integer_type_node,
 			sw_mod, update_mod);
       tree update_fldenv = build_call_expr (fldenv, 1, fenv_addr);
@@ -50958,15 +51012,17 @@ ix86_atomic_assign_expand_fenv (tree *hold, tree *clear, tree *update)
       tree stmxcsr = ix86_builtins[IX86_BUILTIN_STMXCSR];
       tree ldmxcsr = ix86_builtins[IX86_BUILTIN_LDMXCSR];
       tree stmxcsr_hold_call = build_call_expr (stmxcsr, 0);
-      tree hold_assign_orig = build2 (MODIFY_EXPR, unsigned_type_node,
-				      mxcsr_orig_var, stmxcsr_hold_call);
+      tree hold_assign_orig = build4 (TARGET_EXPR, unsigned_type_node,
+				      mxcsr_orig_var, stmxcsr_hold_call,
+				      NULL_TREE, NULL_TREE);
       tree hold_mod_val = build2 (BIT_IOR_EXPR, unsigned_type_node,
 				  mxcsr_orig_var,
 				  build_int_cst (unsigned_type_node, 0x1f80));
       hold_mod_val = build2 (BIT_AND_EXPR, unsigned_type_node, hold_mod_val,
 			     build_int_cst (unsigned_type_node, 0xffffffc0));
-      tree hold_assign_mod = build2 (MODIFY_EXPR, unsigned_type_node,
-				     mxcsr_mod_var, hold_mod_val);
+      tree hold_assign_mod = build4 (TARGET_EXPR, unsigned_type_node,
+				     mxcsr_mod_var, hold_mod_val,
+				     NULL_TREE, NULL_TREE);
       tree ldmxcsr_hold_call = build_call_expr (ldmxcsr, 1, mxcsr_mod_var);
       tree hold_all = build2 (COMPOUND_EXPR, unsigned_type_node,
 			      hold_assign_orig, hold_assign_mod);
@@ -50995,8 +51051,8 @@ ix86_atomic_assign_expand_fenv (tree *hold, tree *clear, tree *update)
 			    exceptions_assign);
 	}
       else
-	*update = build2 (MODIFY_EXPR, integer_type_node,
-			  exceptions_var, exceptions_sse);
+	*update = build4 (TARGET_EXPR, integer_type_node, exceptions_var,
+			  exceptions_sse, NULL_TREE, NULL_TREE);
       tree ldmxcsr_update_call = build_call_expr (ldmxcsr, 1, mxcsr_orig_var);
       *update = build2 (COMPOUND_EXPR, void_type_node, *update,
 			ldmxcsr_update_call);

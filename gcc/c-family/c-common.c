@@ -2993,7 +2993,11 @@ shorten_compare (location_t loc, tree *op0_ptr, tree *op1_ptr,
   else if (real1 && real2
 	   && (DECIMAL_FLOAT_MODE_P (TYPE_MODE (TREE_TYPE (primop0)))
 	       || DECIMAL_FLOAT_MODE_P (TYPE_MODE (TREE_TYPE (primop1)))))
-    return NULL_TREE;
+    {
+      type = *restype_ptr;
+      primop0 = op0;
+      primop1 = op1;
+    }
 
   else if (real1 && real2
 	   && (TYPE_PRECISION (TREE_TYPE (primop0))
@@ -3150,7 +3154,7 @@ pointer_int_sum (location_t loc, enum tree_code resultcode,
       /* If the constant is unsigned, and smaller than the pointer size,
 	 then we must skip this optimization.  This is because it could cause
 	 an overflow error if the constant is negative but INTOP is not.  */
-      && (!TYPE_UNSIGNED (TREE_TYPE (intop))
+      && (TYPE_OVERFLOW_UNDEFINED (TREE_TYPE (intop))
 	  || (TYPE_PRECISION (TREE_TYPE (intop))
 	      == TYPE_PRECISION (TREE_TYPE (ptrop)))))
     {
@@ -4022,6 +4026,9 @@ c_common_nodes_and_builtins (void)
       sprintf (name, "__int%d", int_n_data[i].bitsize);
       record_builtin_type ((enum rid)(RID_FIRST_INT_N + i), name,
 			   int_n_trees[i].signed_type);
+      ridpointers[RID_FIRST_INT_N + i]
+	= DECL_NAME (TYPE_NAME (int_n_trees[i].signed_type));
+
       sprintf (name, "__int%d unsigned", int_n_data[i].bitsize);
       record_builtin_type (RID_MAX, name, int_n_trees[i].unsigned_type);
     }
@@ -4507,7 +4514,7 @@ build_va_arg (location_t loc, tree expr, tree type)
       if (canon_va_type == NULL_TREE)
 	error_at (loc, "first argument to %<va_arg%> not of type %<va_list%>");
 
-      /* Let's handle things neutrallly, if expr:
+      /* Let's handle things neutrally, if expr:
 	 - has undeclared type, or
 	 - is not an va_list type.  */
       return build_va_arg_1 (loc, type, error_mark_node);
@@ -4519,7 +4526,7 @@ build_va_arg (location_t loc, tree expr, tree type)
 
       /* Take the address, to get '&ap'.  Note that &ap is not a va_list
 	 type.  */
-      mark_addressable (expr);
+      c_common_mark_addressable_vec (expr);
       expr = build1 (ADDR_EXPR, build_pointer_type (TREE_TYPE (expr)), expr);
 
       return build_va_arg_1 (loc, type, expr);
@@ -4581,7 +4588,7 @@ build_va_arg (location_t loc, tree expr, tree type)
 
       /* Take the address, to get '&ap'.  Make sure it's a pointer to array
 	 elem type.  */
-      mark_addressable (expr);
+      c_common_mark_addressable_vec (expr);
       expr = build1 (ADDR_EXPR, build_pointer_type (TREE_TYPE (canon_va_type)),
 		     expr);
 
@@ -6891,8 +6898,15 @@ get_atomic_generic_size (location_t loc, tree function,
       return 0;
     }
 
+  if (!COMPLETE_TYPE_P (TREE_TYPE (type_0)))
+    {
+      error_at (loc, "argument 1 of %qE must be a pointer to a complete type",
+		function);
+      return 0;
+    }
+
   /* Types must be compile time constant sizes. */
-  if (TREE_CODE ((TYPE_SIZE_UNIT (TREE_TYPE (type_0)))) != INTEGER_CST)
+  if (!tree_fits_uhwi_p ((TYPE_SIZE_UNIT (TREE_TYPE (type_0)))))
     {
       error_at (loc, 
 		"argument 1 of %qE must be a pointer to a constant size type",
@@ -7348,9 +7362,11 @@ resolve_overloaded_builtin (location_t loc, tree function,
 	enum built_in_function fncode
 	  = speculation_safe_value_resolve_call (function, params);;
 
+	if (fncode == BUILT_IN_NONE)
+	  return error_mark_node;
+
 	first_param = (*params)[0];
-	if (fncode == BUILT_IN_NONE
-	    || !speculation_safe_value_resolve_params (loc, function, params))
+	if (!speculation_safe_value_resolve_params (loc, function, params))
 	  return error_mark_node;
 
 	if (targetm.have_speculation_safe_value (true))

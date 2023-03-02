@@ -214,36 +214,22 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
 (for cmp (gt ge lt le)
      outp (convert convert negate negate)
      outn (negate negate convert convert)
- /* Transform (X > 0.0 ? 1.0 : -1.0) into copysign(1, X). */
- /* Transform (X >= 0.0 ? 1.0 : -1.0) into copysign(1, X). */
- /* Transform (X < 0.0 ? 1.0 : -1.0) into copysign(1,-X). */
- /* Transform (X <= 0.0 ? 1.0 : -1.0) into copysign(1,-X). */
+ /* Transform X * (X > 0.0 ? 1.0 : -1.0) into abs(X). */
+ /* Transform X * (X >= 0.0 ? 1.0 : -1.0) into abs(X). */
+ /* Transform X * (X < 0.0 ? 1.0 : -1.0) into -abs(X). */
+ /* Transform X * (X <= 0.0 ? 1.0 : -1.0) into -abs(X). */
  (simplify
-  (cond (cmp @0 real_zerop) real_onep@1 real_minus_onep)
-  (if (!HONOR_NANS (type) && !HONOR_SIGNED_ZEROS (type)
-       && types_match (type, TREE_TYPE (@0)))
-   (switch
-    (if (types_match (type, float_type_node))
-     (BUILT_IN_COPYSIGNF @1 (outp @0)))
-    (if (types_match (type, double_type_node))
-     (BUILT_IN_COPYSIGN @1 (outp @0)))
-    (if (types_match (type, long_double_type_node))
-     (BUILT_IN_COPYSIGNL @1 (outp @0))))))
- /* Transform (X > 0.0 ? -1.0 : 1.0) into copysign(1,-X). */
- /* Transform (X >= 0.0 ? -1.0 : 1.0) into copysign(1,-X). */
- /* Transform (X < 0.0 ? -1.0 : 1.0) into copysign(1,X). */
- /* Transform (X <= 0.0 ? -1.0 : 1.0) into copysign(1,X). */
+  (mult:c @0 (cond (cmp @0 real_zerop) real_onep@1 real_minus_onep))
+  (if (!HONOR_NANS (type) && !HONOR_SIGNED_ZEROS (type))
+   (outp (abs @0))))
+ /* Transform X * (X > 0.0 ? -1.0 : 1.0) into -abs(X). */
+ /* Transform X * (X >= 0.0 ? -1.0 : 1.0) into -abs(X). */
+ /* Transform X * (X < 0.0 ? -1.0 : 1.0) into abs(X). */
+ /* Transform X * (X <= 0.0 ? -1.0 : 1.0) into abs(X). */
  (simplify
-  (cond (cmp @0 real_zerop) real_minus_onep real_onep@1)
-  (if (!HONOR_NANS (type) && !HONOR_SIGNED_ZEROS (type)
-       && types_match (type, TREE_TYPE (@0)))
-   (switch
-    (if (types_match (type, float_type_node))
-     (BUILT_IN_COPYSIGNF @1 (outn @0)))
-    (if (types_match (type, double_type_node))
-     (BUILT_IN_COPYSIGN @1 (outn @0)))
-    (if (types_match (type, long_double_type_node))
-     (BUILT_IN_COPYSIGNL @1 (outn @0)))))))
+  (mult:c @0 (cond (cmp @0 real_zerop) real_minus_onep real_onep@1))
+  (if (!HONOR_NANS (type) && !HONOR_SIGNED_ZEROS (type))
+   (outn (abs @0)))))
 
 /* Transform X * copysign (1.0, X) into abs(X). */
 (simplify
@@ -318,12 +304,15 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
     { build_minus_one_cst (type); })))
 
 /* For unsigned integral types, FLOOR_DIV_EXPR is the same as
-   TRUNC_DIV_EXPR.  Rewrite into the latter in this case.  */
-(simplify
- (floor_div @0 @1)
- (if ((INTEGRAL_TYPE_P (type) || VECTOR_INTEGER_TYPE_P (type))
-      && TYPE_UNSIGNED (type))
-  (trunc_div @0 @1)))
+   TRUNC_DIV_EXPR.  Rewrite into the latter in this case.  Similarly
+   for MOD instead of DIV.  */
+(for floor_divmod (floor_div floor_mod)
+     trunc_divmod (trunc_div trunc_mod)
+ (simplify
+  (floor_divmod @0 @1)
+  (if ((INTEGRAL_TYPE_P (type) || VECTOR_INTEGER_TYPE_P (type))
+       && TYPE_UNSIGNED (type))
+   (trunc_divmod @0 @1))))
 
 /* Combine two successive divisions.  Note that combining ceil_div
    and floor_div is trickier and combining round_div even more so.  */
@@ -557,17 +546,28 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
  (lshift INTEGER_CST@1 @2))
 (for mod (trunc_mod floor_mod)
  (simplify
-  (mod @0 (convert?@3 (power_of_two_cand@1 @2)))
-  (if ((TYPE_UNSIGNED (type)
-	|| tree_expr_nonnegative_p (@0))
-	&& tree_nop_conversion_p (type, TREE_TYPE (@3))
-	&& integer_pow2p (@2) && tree_int_cst_sgn (@2) > 0)
-   (bit_and @0 (convert (minus @1 { build_int_cst (TREE_TYPE (@1), 1); }))))))
+  (mod @0 (convert? (power_of_two_cand@1 @2)))
+  (if ((TYPE_UNSIGNED (type) || tree_expr_nonnegative_p (@0))
+       /* Allow any integral conversions of the divisor, except
+	  conversion from narrower signed to wider unsigned type
+	  where if @1 would be negative power of two, the divisor
+	  would not be a power of two.  */
+       && INTEGRAL_TYPE_P (type)
+       && INTEGRAL_TYPE_P (TREE_TYPE (@1))
+       && (TYPE_PRECISION (type) <= TYPE_PRECISION (TREE_TYPE (@1))
+	   || TYPE_UNSIGNED (TREE_TYPE (@1))
+	   || !TYPE_UNSIGNED (type))
+       && integer_pow2p (@2) && tree_int_cst_sgn (@2) > 0)
+   (with { tree utype = TREE_TYPE (@1);
+	   if (!TYPE_OVERFLOW_WRAPS (utype))
+	     utype = unsigned_type_for (utype); }
+    (bit_and @0 (convert (minus (convert:utype @1)
+				{ build_one_cst (utype); })))))))
 
 /* Simplify (unsigned t * 2)/2 -> unsigned t & 0x7FFFFFFF.  */
 (simplify
  (trunc_div (mult @0 integer_pow2p@1) @1)
- (if (TYPE_UNSIGNED (TREE_TYPE (@0)))
+ (if (INTEGRAL_TYPE_P (TREE_TYPE (@0)) && TYPE_UNSIGNED (TREE_TYPE (@0)))
   (bit_and @0 { wide_int_to_tree
 		(type, wi::mask (TYPE_PRECISION (type)
 				 - wi::exact_log2 (wi::to_wide (@1)),
@@ -576,7 +576,7 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
 /* Simplify (unsigned t / 2) * 2 -> unsigned t & ~1.  */
 (simplify
  (mult (trunc_div @0 integer_pow2p@1) @1)
- (if (TYPE_UNSIGNED (TREE_TYPE (@0)))
+ (if (INTEGRAL_TYPE_P (TREE_TYPE (@0)) && TYPE_UNSIGNED (TREE_TYPE (@0)))
   (bit_and @0 (negate @1))))
 
 /* Simplify (t * 2) / 2) -> t.  */
@@ -1987,13 +1987,15 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
   (simplify
    (minus (convert? (negate @0)) integer_each_onep)
    (if (!TYPE_OVERFLOW_TRAPS (type)
+	&& TREE_CODE (type) != COMPLEX_TYPE
 	&& tree_nop_conversion_p (type, TREE_TYPE (@0)))
     (bit_not (convert @0))))
 
   /* -1 - A -> ~A */
   (simplify
    (minus integer_all_onesp @0)
-   (bit_not @0))
+   (if (TREE_CODE (type) != COMPLEX_TYPE)
+    (bit_not @0)))
 
   /* (T)(P + A) - (T)P -> (T) A */
   (simplify
@@ -4047,7 +4049,12 @@ DEFINE_INT_AND_FLOAT_ROUND_FN (RINT)
   (cmp (convert @0) INTEGER_CST@1)
   (if (((POINTER_TYPE_P (TREE_TYPE (@0))
 	 && !FUNC_OR_METHOD_TYPE_P (TREE_TYPE (TREE_TYPE (@0)))
-	 && INTEGRAL_TYPE_P (TREE_TYPE (@1)))
+	 && INTEGRAL_TYPE_P (TREE_TYPE (@1))
+	 /* Don't perform this optimization in GENERIC if @0 has reference
+	    type when sanitizing.  See PR101210.  */
+	 && !(GENERIC
+	      && TREE_CODE (TREE_TYPE (@0)) == REFERENCE_TYPE
+	      && (flag_sanitize & (SANITIZE_NULL | SANITIZE_ALIGNMENT))))
 	|| (INTEGRAL_TYPE_P (TREE_TYPE (@0))
 	    && POINTER_TYPE_P (TREE_TYPE (@1))
 	    && !FUNC_OR_METHOD_TYPE_P (TREE_TYPE (TREE_TYPE (@1)))))

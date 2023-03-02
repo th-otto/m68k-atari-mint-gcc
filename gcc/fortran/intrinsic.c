@@ -1105,6 +1105,7 @@ gfc_is_intrinsic (gfc_symbol* sym, int subroutine_flag, locus loc)
 
   /* Check for attributes which prevent the symbol from being INTRINSIC.  */
   if (sym->attr.external || sym->attr.contained
+      || sym->attr.recursive
       || sym->attr.if_source == IFSRC_IFBODY)
     return false;
 
@@ -2700,8 +2701,8 @@ add_functions (void)
 
   make_generic ("null", GFC_ISYM_NULL, GFC_STD_F95);
 
-  add_sym_2 ("num_images", GFC_ISYM_NUM_IMAGES, CLASS_INQUIRY, ACTUAL_NO,
-	     BT_INTEGER, di, GFC_STD_F2008,
+  add_sym_2 ("num_images", GFC_ISYM_NUM_IMAGES, CLASS_TRANSFORMATIONAL,
+	     ACTUAL_NO, BT_INTEGER, di, GFC_STD_F2008,
 	     gfc_check_num_images, gfc_simplify_num_images, NULL,
 	     dist, BT_INTEGER, di, OPTIONAL,
 	     failed, BT_LOGICAL, dl, OPTIONAL);
@@ -3133,7 +3134,7 @@ add_functions (void)
   make_generic ("tanh", GFC_ISYM_TANH, GFC_STD_F77);
 
   add_sym_1 ("team_number", GFC_ISYM_TEAM_NUMBER, CLASS_TRANSFORMATIONAL,
-	     ACTUAL_YES, BT_INTEGER, di, GFC_STD_F2018,
+	     ACTUAL_NO, BT_INTEGER, di, GFC_STD_F2018,
 	     gfc_check_team_number, NULL, gfc_resolve_team_number,
 	     team, BT_DERIVED, di, OPTIONAL);
 
@@ -3368,7 +3369,7 @@ add_subroutines (void)
   /* Argument names.  These are used as argument keywords and so need to
      match the documentation.  Please keep this list in sorted order.  */
   static const char
-    *a = "a", *c = "count", *cm = "count_max", *com = "command",
+    *a = "a", *c_ = "c", *c = "count", *cm = "count_max", *com = "command",
     *cr = "count_rate", *dt = "date", *errmsg = "errmsg", *f = "from",
     *fp = "frompos", *gt = "get", *h = "harvest", *han = "handler",
     *length = "length", *ln = "len", *md = "mode", *msk = "mask",
@@ -3748,12 +3749,12 @@ add_subroutines (void)
   add_sym_3s ("fgetc", GFC_ISYM_FGETC, CLASS_IMPURE, BT_UNKNOWN, 0, GFC_STD_GNU,
 	      gfc_check_fgetputc_sub, NULL, gfc_resolve_fgetc_sub,
 	      ut, BT_INTEGER, di, REQUIRED, INTENT_IN,
-	      c, BT_CHARACTER, dc, REQUIRED, INTENT_OUT,
+	      c_, BT_CHARACTER, dc, REQUIRED, INTENT_OUT,
 	      st, BT_INTEGER, di, OPTIONAL, INTENT_OUT);
 
   add_sym_2s ("fget", GFC_ISYM_FGET, CLASS_IMPURE, BT_UNKNOWN, 0, GFC_STD_GNU,
 	      gfc_check_fgetput_sub, NULL, gfc_resolve_fget_sub,
-	      c, BT_CHARACTER, dc, REQUIRED, INTENT_OUT,
+	      c_, BT_CHARACTER, dc, REQUIRED, INTENT_OUT,
 	      st, BT_INTEGER, di, OPTIONAL, INTENT_OUT);
 
   add_sym_1s ("flush", GFC_ISYM_FLUSH, CLASS_IMPURE, BT_UNKNOWN, 0, GFC_STD_GNU,
@@ -3763,12 +3764,12 @@ add_subroutines (void)
   add_sym_3s ("fputc", GFC_ISYM_FPUTC, CLASS_IMPURE, BT_UNKNOWN, 0, GFC_STD_GNU,
 	      gfc_check_fgetputc_sub, NULL, gfc_resolve_fputc_sub,
 	      ut, BT_INTEGER, di, REQUIRED, INTENT_IN,
-	      c, BT_CHARACTER, dc, REQUIRED, INTENT_IN,
+	      c_, BT_CHARACTER, dc, REQUIRED, INTENT_IN,
 	      st, BT_INTEGER, di, OPTIONAL, INTENT_OUT);
 
   add_sym_2s ("fput", GFC_ISYM_FPUT, CLASS_IMPURE, BT_UNKNOWN, 0, GFC_STD_GNU,
 	      gfc_check_fgetput_sub, NULL, gfc_resolve_fput_sub,
-	      c, BT_CHARACTER, dc, REQUIRED, INTENT_IN,
+	      c_, BT_CHARACTER, dc, REQUIRED, INTENT_IN,
 	      st, BT_INTEGER, di, OPTIONAL, INTENT_OUT);
 
   add_sym_1s ("free", GFC_ISYM_FREE, CLASS_IMPURE, BT_UNKNOWN, 0, GFC_STD_GNU,

@@ -698,6 +698,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     inline shared_ptr<_Tp>
     allocate_shared(const _Alloc& __a, _Args&&... __args)
     {
+      static_assert(!is_array<_Tp>::value, "make_shared<T[]> not supported");
+
       return shared_ptr<_Tp>(_Sp_alloc_shared_tag<_Alloc>{__a},
 			     std::forward<_Args>(__args)...);
     }
@@ -730,7 +732,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       }
     };
 
-  // @} group pointer_abstractions
+  /// @} group pointer_abstractions
 
 #if __cplusplus >= 201703L
   namespace __detail::__variant

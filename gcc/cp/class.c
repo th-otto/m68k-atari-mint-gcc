@@ -331,6 +331,15 @@ build_base_path (enum tree_code code,
       return error_mark_node;
     }
 
+  bool uneval = (cp_unevaluated_operand != 0
+		 || processing_template_decl
+		 || in_template_function ());
+
+  /* For a non-pointer simple base reference, express it as a COMPONENT_REF
+     without taking its address (and so causing lambda capture, 91933).  */
+  if (code == PLUS_EXPR && !v_binfo && !want_pointer && !has_empty && !uneval)
+    return build_simple_base_path (expr, binfo);
+
   if (!want_pointer)
     {
       rvalue = !lvalue_p (expr);
@@ -358,9 +367,7 @@ build_base_path (enum tree_code code,
      template (even in instantiate_non_dependent_expr), we don't have vtables
      set up properly yet, and the value doesn't matter there either; we're
      just interested in the result of overload resolution.  */
-  if (cp_unevaluated_operand != 0
-      || processing_template_decl
-      || in_template_function ())
+  if (uneval)
     {
       expr = build_nop (ptr_target_type, expr);
       goto indout;
@@ -2389,6 +2396,24 @@ get_vcall_index (tree fn, tree type)
 
   /* There should always be an appropriate index.  */
   gcc_unreachable ();
+}
+
+/* Given a DECL_VINDEX of a virtual function found in BINFO, return the final
+   overrider at that index in the vtable.  This should only be used when we
+   know that BINFO is correct for the dynamic type of the object.  */
+
+tree
+lookup_vfn_in_binfo (tree idx, tree binfo)
+{
+  int ix = tree_to_shwi (idx);
+  if (TARGET_VTABLE_USES_DESCRIPTORS)
+    ix /= MAX (TARGET_VTABLE_USES_DESCRIPTORS, 1);
+  while (BINFO_PRIMARY_P (binfo))
+    /* BINFO_VIRTUALS in a primary base isn't accurate, find the derived
+       class that actually owns the vtable.  */
+    binfo = BINFO_INHERITANCE_CHAIN (binfo);
+  tree virtuals = BINFO_VIRTUALS (binfo);
+  return TREE_VALUE (chain_index (ix, virtuals));
 }
 
 /* Update an entry in the vtable for BINFO, which is in the hierarchy

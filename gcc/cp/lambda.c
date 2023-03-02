@@ -608,8 +608,11 @@ add_capture (tree lambda, tree id, tree orig_init, bool by_reference_p,
 	   parameter pack in this context.  We will want as many fields as we
 	   have elements in the expansion of the initializer, so use its packs
 	   instead.  */
-	PACK_EXPANSION_PARAMETER_PACKS (type)
-	  = uses_parameter_packs (initializer);
+	{
+	  PACK_EXPANSION_PARAMETER_PACKS (type)
+	    = uses_parameter_packs (initializer);
+	  PACK_EXPANSION_AUTO_P (type) = true;
+	}
     }
 
   /* Make member variable.  */
@@ -742,6 +745,7 @@ lambda_expr_this_capture (tree lambda, int add_capture_p)
     {
       tree lambda_stack = NULL_TREE;
       tree init = NULL_TREE;
+      bool saw_complete = false;
 
       /* If we are in a lambda function, we can move out until we hit:
            1. a non-lambda function or NSDMI,
@@ -760,6 +764,11 @@ lambda_expr_this_capture (tree lambda, int add_capture_p)
 				      lambda_stack);
 
 	  tree closure = LAMBDA_EXPR_CLOSURE (tlambda);
+	  if (COMPLETE_TYPE_P (closure))
+	    /* We're instantiating a generic lambda op(), the containing
+	       scope may be gone.  */
+	    saw_complete = true;
+
 	  tree containing_function
 	    = decl_function_context (TYPE_NAME (closure));
 
@@ -769,7 +778,7 @@ lambda_expr_this_capture (tree lambda, int add_capture_p)
 	      /* Lambda in an NSDMI.  We don't have a function to look up
 		 'this' in, but we can find (or rebuild) the fake one from
 		 inject_this_parameter.  */
-	      if (!containing_function && !COMPLETE_TYPE_P (closure))
+	      if (!containing_function && !saw_complete)
 		/* If we're parsing a lambda in a non-local class,
 		   we can find the fake 'this' in scope_chain.  */
 		init = scope_chain->x_current_class_ptr;
@@ -1331,7 +1340,8 @@ is_lambda_ignored_entity (tree val)
 
   /* None of the lookups that use qualify_lookup want the op() from the
      lambda; they want the one from the enclosing class.  */
-  if (TREE_CODE (val) == FUNCTION_DECL && LAMBDA_FUNCTION_P (val))
+  val = OVL_FIRST (val);
+  if (LAMBDA_FUNCTION_P (val))
     return true;
 
   return false;

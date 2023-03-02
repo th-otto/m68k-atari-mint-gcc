@@ -1330,7 +1330,9 @@ find_array_element (gfc_constructor_base base, gfc_array_ref *ar,
   for (i = 0; i < ar->dimen; i++)
     {
       if (!gfc_reduce_init_expr (ar->as->lower[i])
-	  || !gfc_reduce_init_expr (ar->as->upper[i]))
+	  || !gfc_reduce_init_expr (ar->as->upper[i])
+	  || ar->as->upper[i]->expr_type != EXPR_CONSTANT
+	  || ar->as->lower[i]->expr_type != EXPR_CONSTANT)
 	{
 	  t = false;
 	  cons = NULL;
@@ -1343,9 +1345,6 @@ find_array_element (gfc_constructor_base base, gfc_array_ref *ar,
 	  cons = NULL;
 	  goto depart;
 	}
-
-      gcc_assert (ar->as->upper[i]->expr_type == EXPR_CONSTANT
-		  && ar->as->lower[i]->expr_type == EXPR_CONSTANT);
 
       /* Check the bounds.  */
       if ((ar->as->upper[i]
@@ -1553,7 +1552,9 @@ find_array_section (gfc_expr *expr, gfc_ref *ref)
 	{
 	  if ((begin && begin->expr_type != EXPR_CONSTANT)
 	      || (finish && finish->expr_type != EXPR_CONSTANT)
-	      || (step && step->expr_type != EXPR_CONSTANT))
+	      || (step && step->expr_type != EXPR_CONSTANT)
+	      || !lower
+	      || !upper)
 	    {
 	      t = false;
 	      goto cleanup;
@@ -1718,8 +1719,8 @@ find_substring_ref (gfc_expr *p, gfc_expr **newp)
   *newp = gfc_copy_expr (p);
   free ((*newp)->value.character.string);
 
-  end = (gfc_charlen_t) mpz_get_ui (p->ref->u.ss.end->value.integer);
-  start = (gfc_charlen_t) mpz_get_ui (p->ref->u.ss.start->value.integer);
+  end = (gfc_charlen_t) mpz_get_si (p->ref->u.ss.end->value.integer);
+  start = (gfc_charlen_t) mpz_get_si (p->ref->u.ss.start->value.integer);
   if (end >= start)
     length = end - start + 1;
   else
@@ -2063,6 +2064,9 @@ simplify_parameter_variable (gfc_expr *p, int type)
 
   e->rank = p->rank;
 
+  if (e->ts.type == BT_CHARACTER && p->ts.u.cl)
+    e->ts = p->ts;
+
   /* Do not copy subobject refs for constant.  */
   if (e->expr_type != EXPR_CONSTANT && p->ref != NULL)
     e->ref = gfc_copy_ref (p->ref);
@@ -2141,10 +2145,9 @@ gfc_simplify_expr (gfc_expr *p, int type)
 	  && gfc_intrinsic_func_interface (p, 1) == MATCH_ERROR)
 	return false;
 
-      if (p->expr_type == EXPR_FUNCTION)
+      if (p->symtree && (p->value.function.isym || p->ts.type == BT_UNKNOWN))
 	{
-	  if (p->symtree)
-	    isym = gfc_find_function (p->symtree->n.sym->name);
+	  isym = gfc_find_function (p->symtree->n.sym->name);
 	  if (isym && isym->elemental)
 	    scalarize_intrinsic_call (p, false);
 	}
@@ -2278,7 +2281,7 @@ scalarize_intrinsic_call (gfc_expr *e, bool init_flag)
   gfc_constructor *ci, *new_ctor;
   gfc_expr *expr, *old;
   int n, i, rank[5], array_arg;
-  int errors = 0;
+  gfc_expr *p;
 
   if (e == NULL)
     return false;
@@ -2346,8 +2349,6 @@ scalarize_intrinsic_call (gfc_expr *e, bool init_flag)
       n++;
     }
 
-  gfc_get_errors (NULL, &errors);
-
   /* Using the array argument as the master, step through the array
      calling the function for each element and advancing the array
      constructors together.  */
@@ -2381,8 +2382,12 @@ scalarize_intrinsic_call (gfc_expr *e, bool init_flag)
       /* Simplify the function calls.  If the simplification fails, the
 	 error will be flagged up down-stream or the library will deal
 	 with it.  */
-      if (errors == 0)
-	gfc_simplify_expr (new_ctor->expr, 0);
+      p = gfc_copy_expr (new_ctor->expr);
+
+      if (!gfc_simplify_expr (p, init_flag))
+	gfc_free_expr (p);
+      else
+	gfc_replace_expr (new_ctor->expr, p);
 
       for (i = 0; i < n; i++)
 	if (args[i])
@@ -4196,11 +4201,8 @@ gfc_check_pointer_assign (gfc_expr *lvalue, gfc_expr *rvalue,
   if (rvalue->expr_type == EXPR_NULL)
     return true;
 
-  /* A function may also return subref arrray pointer.  */
-
-  if ((rvalue->expr_type == EXPR_VARIABLE && is_subref_array (rvalue))
-      || rvalue->expr_type == EXPR_FUNCTION)
-      lvalue->symtree->n.sym->attr.subref_array_pointer = 1;
+  if (rvalue->expr_type == EXPR_VARIABLE && is_subref_array (rvalue))
+    lvalue->symtree->n.sym->attr.subref_array_pointer = 1;
 
   attr = gfc_expr_attr (rvalue);
 
@@ -4228,7 +4230,20 @@ gfc_check_pointer_assign (gfc_expr *lvalue, gfc_expr *rvalue,
       gfc_symbol *sym;
       bool target;
 
-      gcc_assert (rvalue->symtree);
+      if (gfc_is_size_zero_array (rvalue))
+	{
+	  gfc_error ("Zero-sized array detected at %L where an entity with "
+		     "the TARGET attribute is expected", &rvalue->where);
+	  return false;
+	}
+      else if (!rvalue->symtree)
+	{
+	  gfc_error ("Pointer assignment target in initialization expression "
+		     "does not have the TARGET attribute at %L",
+		     &rvalue->where);
+	  return false;
+	}
+
       sym = rvalue->symtree->n.sym;
 
       if (sym->ts.type == BT_CLASS && sym->attr.class_ok)
@@ -4303,7 +4318,9 @@ gfc_check_pointer_assign (gfc_expr *lvalue, gfc_expr *rvalue,
      contiguous.  Be lenient in the definition of what counts as
      contiguous.  */
 
-  if (lhs_attr.contiguous && !gfc_is_simply_contiguous (rvalue, false, true))
+  if (lhs_attr.contiguous
+      && lhs_attr.dimension > 0
+      && !gfc_is_simply_contiguous (rvalue, false, true))
     gfc_warning (OPT_Wextra, "Assignment to contiguous pointer from "
 		 "non-contiguous target at %L", &rvalue->where);
 

@@ -420,6 +420,7 @@ const char *host_detect_local_cpu (int argc, const char **argv)
   unsigned int has_avx5124fmaps = 0, has_avx5124vnniw = 0;
   unsigned int has_gfni = 0, has_avx512vbmi2 = 0;
   unsigned int has_avx512bitalg = 0;
+  unsigned int has_avx512vpopcntdq = 0;
   unsigned int has_shstk = 0;
   unsigned int has_avx512vnni = 0, has_vaes = 0;
   unsigned int has_vpclmulqdq = 0;
@@ -523,6 +524,7 @@ const char *host_detect_local_cpu (int argc, const char **argv)
       has_vaes = ecx & bit_VAES;
       has_vpclmulqdq = ecx & bit_VPCLMULQDQ;
       has_avx512bitalg = ecx & bit_AVX512BITALG;
+      has_avx512vpopcntdq = ecx & bit_AVX512VPOPCNTDQ;
       has_movdiri = ecx & bit_MOVDIRI;
       has_movdir64b = ecx & bit_MOVDIR64B;
       has_cldemote = ecx & bit_CLDEMOTE;
@@ -765,9 +767,12 @@ const char *host_detect_local_cpu (int argc, const char **argv)
 	case 0x37:
 	case 0x4a:
 	case 0x4d:
-	case 0x5a:
 	case 0x5d:
 	  /* Silvermont.  */
+	case 0x4c:
+	case 0x5a:
+	case 0x75:
+	  /* Airmont.  */
 	  cpu = "silvermont";
 	  break;
 	case 0x5c:
@@ -778,6 +783,12 @@ const char *host_detect_local_cpu (int argc, const char **argv)
 	case 0x7a:
 	  /* Goldmont Plus.  */
 	  cpu = "goldmont-plus";
+	  break;
+	case 0x86:
+	case 0x96:
+	case 0x9c:
+	  /* Tremont.  */
+	  cpu = "tremont";
 	  break;
 	case 0x0f:
 	  /* Merom.  */
@@ -829,6 +840,9 @@ const char *host_detect_local_cpu (int argc, const char **argv)
 	case 0x8e:
 	case 0x9e:
 	  /* Kaby Lake.  */
+	case 0xa5:
+	case 0xa6:
+	  /* Comet Lake.  */
 	  cpu = "skylake";
 	  break;
 	case 0x55:
@@ -838,6 +852,22 @@ const char *host_detect_local_cpu (int argc, const char **argv)
 	  else
 	    /* Skylake with AVX-512.  */
 	    cpu = "skylake-avx512";
+	  break;
+	case 0x6a:
+	case 0x6c:
+	  /* Ice Lake server.  */
+	  cpu = "icelake-server";
+	  break;
+	case 0x7e:
+	case 0x7d:
+	case 0x9d:
+	  /* Ice Lake client.  */
+	  cpu = "icelake-client";
+	  break;
+	case 0x8c:
+	case 0x8d:
+	  /* Tiger Lake.  */
+	  cpu = "tigerlake";
 	  break;
 	case 0x57:
 	  /* Knights Landing.  */
@@ -855,36 +885,42 @@ const char *host_detect_local_cpu (int argc, const char **argv)
 	  if (arch)
 	    {
 	      /* This is unknown family 0x6 CPU.  */
-	      /* Assume Ice Lake Server.  */
-	      if (has_wbnoinvd)
-		cpu = "icelake-server";
-	      /* Assume Ice Lake.  */
-	      else if (has_gfni)
-		cpu = "icelake-client";
-	      /* Assume Cannon Lake.  */
-	      else if (has_avx512vbmi)
-		cpu = "cannonlake";
-	      /* Assume Knights Mill.  */
-	      else if (has_avx5124vnniw)
-		cpu = "knm";
-	      /* Assume Knights Landing.  */
-	      else if (has_avx512er)
-		cpu = "knl";
-	      /* Assume Skylake with AVX-512.  */
-	      else if (has_avx512f)
-		cpu = "skylake-avx512";
-	      /* Assume Skylake.  */
-	      else if (has_clflushopt)
-		cpu = "skylake";
-	      /* Assume Broadwell.  */
-	      else if (has_adx)
-		cpu = "broadwell";
-	      else if (has_avx2)
+	      if (has_avx)
+	      {
+		/* Assume Ice Lake Server.  */
+		if (has_wbnoinvd)
+		  cpu = "icelake-server";
+		/* Assume Ice Lake.  */
+		else if (has_avx512bitalg)
+		  cpu = "icelake-client";
+		/* Assume Tiger Lake */
+		else if (has_movdiri)
+		  cpu = "tigerlake";
+		/* Assume Cannon Lake.  */
+		else if (has_avx512vbmi)
+		  cpu = "cannonlake";
+		/* Assume Knights Mill.  */
+		else if (has_avx5124vnniw)
+		  cpu = "knm";
+		/* Assume Knights Landing.  */
+		else if (has_avx512er)
+		  cpu = "knl";
+		/* Assume Skylake with AVX-512.  */
+		else if (has_avx512f)
+		  cpu = "skylake-avx512";
+		/* Assume Skylake.  */
+		else if (has_clflushopt)
+		  cpu = "skylake";
+		/* Assume Broadwell.  */
+		else if (has_adx)
+		  cpu = "broadwell";
+		else if (has_avx2)
 		/* Assume Haswell.  */
-		cpu = "haswell";
-	      else if (has_avx)
+		  cpu = "haswell";
+		else
 		/* Assume Sandy Bridge.  */
-		cpu = "sandybridge";
+		  cpu = "sandybridge";	      
+	      }
 	      else if (has_sse4_2)
 		{
 		  if (has_gfni)
@@ -1138,6 +1174,7 @@ const char *host_detect_local_cpu (int argc, const char **argv)
       const char *vaes = has_vaes ? " -mvaes" : " -mno-vaes";
       const char *vpclmulqdq = has_vpclmulqdq ? " -mvpclmulqdq" : " -mno-vpclmulqdq";
       const char *avx512bitalg = has_avx512bitalg ? " -mavx512bitalg" : " -mno-avx512bitalg";
+      const char *avx512vpopcntdq = has_avx512vpopcntdq ? " -mavx512vpopcntdq" : " -mno-avx512vpopcntdq";
       const char *movdiri = has_movdiri ? " -mmovdiri" : " -mno-movdiri";
       const char *movdir64b = has_movdir64b ? " -mmovdir64b" : " -mno-movdir64b";
       const char *waitpkg = has_waitpkg ? " -mwaitpkg" : " -mno-waitpkg";
@@ -1156,9 +1193,8 @@ const char *host_detect_local_cpu (int argc, const char **argv)
 			avx512ifma, avx512vbmi, avx5124fmaps, avx5124vnniw,
 			clwb, mwaitx, clzero, pku, rdpid, gfni, shstk,
 			avx512vbmi2, avx512vnni, vaes, vpclmulqdq,
-			avx512bitalg, movdiri, movdir64b, waitpkg, cldemote,
-			ptwrite,
-			NULL);
+			avx512bitalg, avx512vpopcntdq, movdiri, movdir64b,
+			waitpkg, cldemote, ptwrite, NULL);
     }
 
 done:

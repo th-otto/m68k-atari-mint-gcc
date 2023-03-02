@@ -1,3 +1,161 @@
+2022-05-27  Release Manager
+
+	* GCC 9.5.0 released.
+
+2021-12-27  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-12-14  Harald Anlauf  <anlauf@gmx.de>
+
+	PR libfortran/103634
+	* intrinsics/pack_generic.c (pack_internal): Handle case when the
+	array argument of PACK has one or more extents of size zero to
+	avoid invalid reads.
+
+2021-06-01  Release Manager
+
+	* GCC 9.4.0 released.
+
+2021-05-01  Iain Sandoe  <iain@sandoe.co.uk>
+	    Jakub Jelinek   <jakub@redhat.com>
+
+	PR target/97865
+	* configure: Regenerate.
+
+2021-04-30  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* configure: Regenerate.
+
+2021-03-07  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2021-03-05  Harald Anlauf  <anlauf@gmx.de>
+
+	PR libfortran/99218
+	* m4/matmul_internal.m4: Invoke tuned matmul only for rank(b)>1.
+	* generated/matmul_c10.c: Regenerated.
+	* generated/matmul_c16.c: Likewise.
+	* generated/matmul_c4.c: Likewise.
+	* generated/matmul_c8.c: Likewise.
+	* generated/matmul_i1.c: Likewise.
+	* generated/matmul_i16.c: Likewise.
+	* generated/matmul_i2.c: Likewise.
+	* generated/matmul_i4.c: Likewise.
+	* generated/matmul_i8.c: Likewise.
+	* generated/matmul_r10.c: Likewise.
+	* generated/matmul_r16.c: Likewise.
+	* generated/matmul_r4.c: Likewise.
+	* generated/matmul_r8.c: Likewise.
+	* generated/matmulavx128_c10.c: Likewise.
+	* generated/matmulavx128_c16.c: Likewise.
+	* generated/matmulavx128_c4.c: Likewise.
+	* generated/matmulavx128_c8.c: Likewise.
+	* generated/matmulavx128_i1.c: Likewise.
+	* generated/matmulavx128_i16.c: Likewise.
+	* generated/matmulavx128_i2.c: Likewise.
+	* generated/matmulavx128_i4.c: Likewise.
+	* generated/matmulavx128_i8.c: Likewise.
+	* generated/matmulavx128_r10.c: Likewise.
+	* generated/matmulavx128_r16.c: Likewise.
+	* generated/matmulavx128_r4.c: Likewise.
+	* generated/matmulavx128_r8.c: Likewise.
+
+2020-12-29  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2020-11-21  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* intrinsics/execute_command_line.c (environ): Use
+	_NSGetEnviron to get the environment pointer on Darwin.
+
+2020-10-24  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2020-10-18  Harald Anlauf  <anlauf@gmx.de>
+
+	* m4/matmul_internal.m4: Move check for rank-1 times rank-2 before
+	checks on strides for rank-2 times rank-2.
+	* generated/matmul_c10.c: Regenerated.
+	* generated/matmul_c16.c: Likewise.
+	* generated/matmul_c4.c: Likewise.
+	* generated/matmul_c8.c: Likewise.
+	* generated/matmul_i1.c: Likewise.
+	* generated/matmul_i16.c: Likewise.
+	* generated/matmul_i2.c: Likewise.
+	* generated/matmul_i4.c: Likewise.
+	* generated/matmul_i8.c: Likewise.
+	* generated/matmul_r10.c: Likewise.
+	* generated/matmul_r16.c: Likewise.
+	* generated/matmul_r4.c: Likewise.
+	* generated/matmul_r8.c: Likewise.
+	* generated/matmulavx128_c10.c: Likewise.
+	* generated/matmulavx128_c16.c: Likewise.
+	* generated/matmulavx128_c4.c: Likewise.
+	* generated/matmulavx128_c8.c: Likewise.
+	* generated/matmulavx128_i1.c: Likewise.
+	* generated/matmulavx128_i16.c: Likewise.
+	* generated/matmulavx128_i2.c: Likewise.
+	* generated/matmulavx128_i4.c: Likewise.
+	* generated/matmulavx128_i8.c: Likewise.
+	* generated/matmulavx128_r10.c: Likewise.
+	* generated/matmulavx128_r16.c: Likewise.
+	* generated/matmulavx128_r4.c: Likewise.
+	* generated/matmulavx128_r8.c: Likewise.
+
+2020-09-09  Harald Anlauf  <anlauf@gmx.de>
+
+	Backported from master:
+	2020-09-03  Harald Anlauf  <anlauf@gmx.de>
+
+	* m4/iall.m4: Initial value for result should be -1.
+	* generated/iall_i1.c (miall_i1): Generated.
+	* generated/iall_i16.c (miall_i16): Likewise.
+	* generated/iall_i2.c (miall_i2): Likewise.
+	* generated/iall_i4.c (miall_i4): Likewise.
+	* generated/iall_i8.c (miall_i8): Likewise.
+
+2020-08-24  Mark Eggleston  <markeggleston@gcc.gnu.org>
+
+	Backported from master:
+	2020-08-24  Mark Eggleston  <markeggleston@gcc.gnu.org>
+
+	PR fortran/96486
+	* intrinsics/env.c: If value_len is > 0 blank the string.
+	Copy the result only if its length is > 0.
+
+2020-07-25  Dominique d'Humieres  <dhumieres.dominique@free.fr>
+
+	Backported from master:
+	2020-07-24  Dominique d'Humieres  <dhumieres.dominique@free.fr>
+
+	PR fortran/93592
+	* io/write_float.def (build_float_string): Do not reset
+	  nbefore for FMT_F and FMT_EN.
+
+2020-05-28  Harald Anlauf  <anlauf@gmx.de>
+
+	PR libfortran/95104
+	* io/unit.c (unlock_unit): Guard by check for NULL pointer.
+
+2020-05-27  Harald Anlauf  <anlauf@gmx.de>
+	    Steven G. Kargl   <kargl@gcc.gnu.org>
+
+	PR libfortran/95104
+	* io/transfer.c (st_wait_async): Do not dereference NULL pointer.
+
+2020-05-27  Thomas Koenig  <tkoenig@gcc.gnu.org>
+
+	PR libfortran/95191
+	* io/async.c (async_wait_id): Generate error if ID is higher
+	than the highest current ID.
+	* runtime/error.c (translate_error): Handle LIBERROR_BAD_WAIT_ID.
+
+2020-05-22  Thomas Koenig  <tkoenig@gcc.gnu.org>
+
+	PR libfortran/95119
+	* io/close.c (close_status): Add CLOSE_INVALID.
+	(st_close): Return early on invalid STATUS parameter.
+
 2020-04-19  Uroš Bizjak  <ubizjak@gmail.com>
 
 	* config/fpu-387.h (local_feraiseexcept) [__SSE_MATH__]:

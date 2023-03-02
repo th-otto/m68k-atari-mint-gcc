@@ -1,3 +1,33 @@
+2022-05-27  Release Manager
+
+	* GCC 9.5.0 released.
+
+2022-05-11  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-02-22  Jakub Jelinek  <jakub@redhat.com>
+
+	PR lto/104617
+	* simple-object-elf.c (simple_object_elf_match): Fix up URL
+	in comment.
+	(simple_object_elf_copy_lto_debug_sections): Remap sh_info and
+	sh_link even if they are in the SHN_LORESERVE .. SHN_HIRESERVE
+	range (inclusive).
+
+2021-06-01  Release Manager
+
+	* GCC 9.4.0 released.
+
+2021-04-12  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2020-08-03  Richard Biener  <rguenther@suse.de>
+
+	PR lto/96385
+	* simple-object-elf.c
+	(simple_object_elf_copy_lto_debug_sections): Localize global
+	UNDEFs and reuse the prevailing name.
+
 2020-03-12  Release Manager
 
 	* GCC 9.3.0 released.

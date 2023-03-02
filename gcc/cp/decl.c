@@ -5267,7 +5267,7 @@ start_decl (const cp_declarator *declarator,
       && DECL_DECLARED_CONSTEXPR_P (current_function_decl))
     {
       bool ok = false;
-      if (CP_DECL_THREAD_LOCAL_P (decl))
+      if (CP_DECL_THREAD_LOCAL_P (decl) && !DECL_REALLY_EXTERN (decl))
 	error_at (DECL_SOURCE_LOCATION (decl),
 		  "%qD declared %<thread_local%> in %<constexpr%> function",
 		  decl);
@@ -5616,6 +5616,38 @@ layout_var_decl (tree decl)
 	  error_at (DECL_SOURCE_LOCATION (decl),
 		    "storage size of %qD isn%'t constant", decl);
 	  TREE_TYPE (decl) = error_mark_node;
+	  type = error_mark_node;
+	}
+    }
+
+  /* If the final element initializes a flexible array field, add the size of
+     that initializer to DECL's size.  */
+  if (type != error_mark_node
+      && DECL_INITIAL (decl)
+      && TREE_CODE (DECL_INITIAL (decl)) == CONSTRUCTOR
+      && !vec_safe_is_empty (CONSTRUCTOR_ELTS (DECL_INITIAL (decl)))
+      && DECL_SIZE (decl) != NULL_TREE
+      && TREE_CODE (DECL_SIZE (decl)) == INTEGER_CST
+      && TYPE_SIZE (type) != NULL_TREE
+      && TREE_CODE (TYPE_SIZE (type)) == INTEGER_CST
+      && tree_int_cst_equal (DECL_SIZE (decl), TYPE_SIZE (type)))
+    {
+      constructor_elt &elt = CONSTRUCTOR_ELTS (DECL_INITIAL (decl))->last ();
+      if (elt.index)
+	{
+	  tree itype = TREE_TYPE (elt.index);
+	  tree vtype = TREE_TYPE (elt.value);
+	  if (TREE_CODE (itype) == ARRAY_TYPE
+	      && TYPE_DOMAIN (itype) == NULL
+	      && TREE_CODE (vtype) == ARRAY_TYPE
+	      && COMPLETE_TYPE_P (vtype))
+	    {
+	      DECL_SIZE (decl)
+		= size_binop (PLUS_EXPR, DECL_SIZE (decl), TYPE_SIZE (vtype));
+	      DECL_SIZE_UNIT (decl)
+		= size_binop (PLUS_EXPR, DECL_SIZE_UNIT (decl),
+			      TYPE_SIZE_UNIT (vtype));
+	    }
 	}
     }
 }
@@ -6319,6 +6351,19 @@ check_array_initializer (tree decl, tree type, tree init)
 {
   tree element_type = TREE_TYPE (type);
 
+  /* Structured binding when initialized with an array type needs
+     to have complete type.  */
+  if (decl
+      && DECL_DECOMPOSITION_P (decl)
+      && !DECL_DECOMP_BASE (decl)
+      && !COMPLETE_TYPE_P (type))
+    {
+      error_at (DECL_SOURCE_LOCATION (decl),
+		"structured binding has incomplete type %qT", type);
+      TREE_TYPE (decl) = error_mark_node;
+      return true;
+    }
+
   /* The array type itself need not be complete, because the
      initializer may tell us how many elements are in the array.
      But, the elements of the array must be complete.  */
@@ -6965,10 +7010,13 @@ cp_finish_decl (tree decl, tree init, bool init_const_expr_p,
   if (asmspec_tree && asmspec_tree != error_mark_node)
     asmspec = TREE_STRING_POINTER (asmspec_tree);
 
-  if (current_class_type
-      && CP_DECL_CONTEXT (decl) == current_class_type
-      && TYPE_BEING_DEFINED (current_class_type)
-      && !CLASSTYPE_TEMPLATE_INSTANTIATION (current_class_type)
+  bool in_class_decl
+    = (current_class_type
+       && CP_DECL_CONTEXT (decl) == current_class_type
+       && TYPE_BEING_DEFINED (current_class_type)
+       && !CLASSTYPE_TEMPLATE_INSTANTIATION (current_class_type));
+
+  if (in_class_decl
       && (DECL_INITIAL (decl) || init))
     DECL_INITIALIZED_IN_CLASS_P (decl) = 1;
 
@@ -7138,6 +7186,12 @@ cp_finish_decl (tree decl, tree init, bool init_const_expr_p,
 	  retrofit_lang_decl (decl);
 	  SET_DECL_DEPENDENT_INIT_P (decl, true);
 	}
+
+      if (VAR_P (decl) && DECL_REGISTER (decl) && asmspec)
+	{
+	  set_user_assembler_name (decl, asmspec);
+	  DECL_HARD_REGISTER (decl) = 1;
+	}
       return;
     }
 
@@ -7294,12 +7348,22 @@ cp_finish_decl (tree decl, tree init, bool init_const_expr_p,
 	{
 	  layout_var_decl (decl);
 	  maybe_commonize_var (decl);
+	  /* A class-scope constexpr variable with an out-of-class declaration.
+	     C++17 makes them implicitly inline, but still force it out.  */
+	  if (DECL_INLINE_VAR_P (decl)
+	      && !DECL_VAR_DECLARED_INLINE_P (decl)
+	      && !DECL_TEMPLATE_INSTANTIATION (decl)
+	      && !in_class_decl)
+	    mark_needed (decl);
 	}
 
       /* This needs to happen after the linkage is set. */
       determine_visibility (decl);
 
-      if (var_definition_p && TREE_STATIC (decl))
+      if (var_definition_p
+	  /* With -fmerge-all-constants, gimplify_init_constructor
+	     might add TREE_STATIC to the variable.  */
+	  && (TREE_STATIC (decl) || flag_merge_constants >= 2))
 	{
 	  /* If a TREE_READONLY variable needs initialization
 	     at runtime, it is no longer readonly and we need to
@@ -7378,7 +7442,7 @@ cp_finish_decl (tree decl, tree init, bool init_const_expr_p,
     {
       unsigned i; tree t;
       FOR_EACH_VEC_ELT (*cleanups, i, t)
-	push_cleanup (decl, t, false);
+	push_cleanup (NULL_TREE, t, false);
       release_tree_vector (cleanups);
     }
 
@@ -7820,6 +7884,12 @@ cp_finish_decomp (tree decl, tree first, unsigned int count)
 			 : get_tuple_element_type (type, i));
 	  input_location = sloc;
 
+	  if (VOID_TYPE_P (eltype))
+	    {
+	      error ("%<std::tuple_element<%u, %T>::type%> is %<void%>",
+		     i, type);
+	      eltype = error_mark_node;
+	    }
 	  if (init == error_mark_node || eltype == error_mark_node)
 	    {
 	      inform (dloc, "in initialization of structured binding "
@@ -7861,6 +7931,8 @@ cp_finish_decomp (tree decl, tree first, unsigned int count)
       error_at (loc, "cannot decompose lambda closure type %qT", type);
       goto error_out;
     }
+  else if (processing_template_decl && complete_type (type) == error_mark_node)
+    goto error_out;
   else if (processing_template_decl && !COMPLETE_TYPE_P (type))
     pedwarn (loc, 0, "structured binding refers to incomplete class type %qT",
 	     type);
@@ -8424,17 +8496,25 @@ expand_static_init (tree decl, tree init)
 
 	  /* Do the initialization itself.  */
 	  init = add_stmt_to_compound (begin, init);
-	  init = add_stmt_to_compound
-	    (init, build2 (MODIFY_EXPR, void_type_node, flag, boolean_true_node));
-	  init = add_stmt_to_compound
-	    (init, build_call_n (release_fn, 1, guard_addr));
+	  init = add_stmt_to_compound (init,
+				       build2 (MODIFY_EXPR, void_type_node,
+					       flag, boolean_true_node));
+
+	  /* Use atexit to register a function for destroying this static
+	     variable.  Do this before calling __cxa_guard_release.  */
+	  init = add_stmt_to_compound (init, register_dtor_fn (decl));
+
+	  init = add_stmt_to_compound (init, build_call_n (release_fn, 1,
+							   guard_addr));
 	}
       else
-	init = add_stmt_to_compound (init, set_guard (guard));
+	{
+	  init = add_stmt_to_compound (init, set_guard (guard));
 
-      /* Use atexit to register a function for destroying this static
-	 variable.  */
-      init = add_stmt_to_compound (init, register_dtor_fn (decl));
+	  /* Use atexit to register a function for destroying this static
+	     variable.  */
+	  init = add_stmt_to_compound (init, register_dtor_fn (decl));
+	}
 
       finish_expr_stmt (init);
 
@@ -11259,9 +11339,12 @@ grokdeclarator (const cp_declarator *declarator,
 	    attr_flags |= (int) ATTR_FLAG_FUNCTION_NEXT;
 	  if (declarator->kind == cdk_array)
 	    attr_flags |= (int) ATTR_FLAG_ARRAY_NEXT;
-	  /* Assume that any attributes that get applied late to templates will
-	     DTRT when applied to the declaration as a whole.  */
-	  tree late_attrs = splice_template_attributes (&attrs, type);
+	  tree late_attrs = NULL_TREE;
+	  if (decl_context != PARM)
+	    /* Assume that any attributes that get applied late to
+	       templates will DTRT when applied to the declaration
+	       as a whole.  */
+	    late_attrs = splice_template_attributes (&attrs, type);
 	  returned_attrs = decl_attributes (&type,
 					    chainon (returned_attrs, attrs),
 					    attr_flags);
@@ -15835,14 +15918,20 @@ begin_destructor_body (void)
 	    /* If the vptr is shared with some virtual nearly empty base,
 	       don't clear it if not in charge, the dtor of the virtual
 	       nearly empty base will do that later.  */
-	    if (CLASSTYPE_VBASECLASSES (current_class_type)
-		&& CLASSTYPE_PRIMARY_BINFO (current_class_type)
-		&& BINFO_VIRTUAL_P
-			  (CLASSTYPE_PRIMARY_BINFO (current_class_type)))
+	    if (CLASSTYPE_VBASECLASSES (current_class_type))
 	      {
-		stmt = convert_to_void (stmt, ICV_STATEMENT,
-					tf_warning_or_error);
-		stmt = build_if_in_charge (stmt);
+		tree c = current_class_type;
+		while (CLASSTYPE_PRIMARY_BINFO (c))
+		  {
+		    if (BINFO_VIRTUAL_P (CLASSTYPE_PRIMARY_BINFO (c)))
+		      {
+			stmt = convert_to_void (stmt, ICV_STATEMENT,
+						tf_warning_or_error);
+			stmt = build_if_in_charge (stmt);
+			break;
+		      }
+		    c = BINFO_TYPE (CLASSTYPE_PRIMARY_BINFO (c));
+		  }
 	      }
 	    finish_decl_cleanup (NULL_TREE, stmt);
 	  }

@@ -1829,7 +1829,7 @@
 	     (match_operand:<ssescalarmode> 1 "memory_operand" "m"))
 	  (match_operand:VF_AVX512 2 "register_operand" "v")))]
   "TARGET_AVX512F && <mask_mode512bit_condition>"
-  "vmul<ssemodesuffix>\t{%1<avx512bcst>, %2, %0<mask_operand3>|%0<mask_operand3>, %2, %1<<avx512bcst>>}"
+  "vmul<ssemodesuffix>\t{%1<avx512bcst>, %2, %0<mask_operand3>|%0<mask_operand3>, %2, %1<avx512bcst>}"
   [(set_attr "prefix" "evex")
    (set_attr "type" "ssemul")
    (set_attr "mode" "<MODE>")])
@@ -1899,7 +1899,7 @@
 	  (vec_duplicate:VF_AVX512
 	     (match_operand:<ssescalarmode> 2 "memory_operand" "m"))))]
   "TARGET_AVX512F && <mask_mode512bit_condition>"
-  "vdiv<ssemodesuffix>\t{%2<avx512bcst>, %1, %0<mask_operand3>|%0<mask_operand3>, %1, %2<<avx512bcst>>}"
+  "vdiv<ssemodesuffix>\t{%2<avx512bcst>, %1, %0<mask_operand3>|%0<mask_operand3>, %1, %2<avx512bcst>}"
   [(set_attr "prefix" "evex")
     (set_attr "type" "ssediv")
    (set_attr "mode" "<MODE>")])
@@ -6393,7 +6393,7 @@
 (define_expand "vec_unpacks_float_hi_v8si"
   [(set (match_dup 2)
 	(vec_select:V4SI
-	  (match_operand:V8SI 1 "vector_operand")
+	  (match_operand:V8SI 1 "register_operand")
 	  (parallel [(const_int 4) (const_int 5)
 		     (const_int 6) (const_int 7)])))
    (set (match_operand:V4DF 0 "register_operand")
@@ -18713,8 +18713,9 @@
 	    negate = true;
 	}
       par = gen_rtx_PARALLEL (V16QImode, rtvec_alloc (16));
+      tmp = lowpart_subreg (QImode, operands[2], SImode);
       for (i = 0; i < 16; i++)
-        XVECEXP (par, 0, i) = operands[2];
+	XVECEXP (par, 0, i) = tmp;
 
       tmp = gen_reg_rtx (V16QImode);
       emit_insn (gen_vec_initv16qiqi (tmp, par));

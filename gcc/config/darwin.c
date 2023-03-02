@@ -924,7 +924,7 @@ machopic_legitimize_pic_address (rtx orig, machine_mode mode, rtx reg)
 	      emit_use (gen_rtx_REG (Pmode, PIC_OFFSET_TABLE_REGNUM));
 #endif
 
-	      if (lra_in_progress)
+	      if (lra_in_progress && HARD_REGISTER_P (pic))
 		df_set_regs_ever_live (REGNO (pic), true);
 	      pic_ref = gen_rtx_PLUS (Pmode, pic,
 				      machopic_gen_offset (XEXP (orig, 0)));
@@ -994,7 +994,8 @@ machopic_legitimize_pic_address (rtx orig, machine_mode mode, rtx reg)
 #if 0
 		  emit_use (pic_offset_table_rtx);
 #endif
-		  if (lra_in_progress)
+
+		  if (lra_in_progress && HARD_REGISTER_P (pic))
 		    df_set_regs_ever_live (REGNO (pic), true);
 		  pic_ref = gen_rtx_PLUS (Pmode,
 					  pic,
@@ -1295,6 +1296,17 @@ darwin_encode_section_info (tree decl, rtx rtl, int first)
       || (DECL_WEAK (decl) && ! MACHO_SYMBOL_HIDDEN_VIS_P (sym_ref))
       || lookup_attribute ("weakref", DECL_ATTRIBUTES (decl)))
      SYMBOL_REF_FLAGS (sym_ref) |= MACHO_SYMBOL_FLAG_MUST_INDIRECT;
+
+#if DARWIN_PPC
+  /* Objective C V2 (m64) IVAR offset refs from Apple GCC-4.x have an
+     indirection for m64 code on PPC.  Historically, these indirections
+     also appear in the .data section.  */
+  tree o2meta = lookup_attribute ("OBJC2META", DECL_ATTRIBUTES (decl));
+  o2meta = o2meta ? TREE_VALUE (o2meta) : NULL_TREE;
+
+  if (o2meta && strncmp (IDENTIFIER_POINTER (o2meta), "V2_IVRF",7) == 0)
+    SYMBOL_REF_FLAGS (sym_ref) |= MACHO_SYMBOL_FLAG_MUST_INDIRECT;
+#endif
 }
 
 void
@@ -2219,6 +2231,17 @@ darwin_emit_except_table_label (FILE *file)
 			       except_table_label_num++);
   ASM_OUTPUT_LABEL (file, section_start_label);
 }
+
+/* The unwinders in earlier Darwin versions are based on an old version
+   of libgcc_s and need current frame address stateto be reset after a
+   DW_CFA_restore_state recovers the register values.  */
+
+bool
+darwin_should_restore_cfa_state (void)
+{
+  return generating_for_darwin_version <= 10;
+}
+
 /* Generate a PC-relative reference to a Mach-O non-lazy-symbol.  */
 
 void
@@ -3584,7 +3607,8 @@ bool
 darwin_libc_has_function (enum function_class fn_class)
 {
   if (fn_class == function_sincos)
-    return false;
+    return (strverscmp (darwin_macosx_version_min, "10.9") >= 0);
+
   if (fn_class == function_c99_math_complex
       || fn_class == function_c99_misc)
     return (TARGET_64BIT

@@ -229,6 +229,7 @@ ubsan_get_type_descriptor_type (void)
   TYPE_FIELDS (ret) = fields[0];
   TYPE_NAME (ret) = type_decl;
   TYPE_STUB_DECL (ret) = type_decl;
+  TYPE_ARTIFICIAL (ret) = 1;
   layout_type (ret);
   ubsan_type_descriptor_type = ret;
   return ret;
@@ -277,6 +278,7 @@ ubsan_get_source_location_type (void)
   TYPE_FIELDS (ret) = fields[0];
   TYPE_NAME (ret) = type_decl;
   TYPE_STUB_DECL (ret) = type_decl;
+  TYPE_ARTIFICIAL (ret) = 1;
   layout_type (ret);
   ubsan_source_location_type = ret;
   return ret;
@@ -593,6 +595,7 @@ ubsan_create_data (const char *name, int loccnt, const location_t *ploc, ...)
   TYPE_FIELDS (ret) = fields[0];
   TYPE_NAME (ret) = type_decl;
   TYPE_STUB_DECL (ret) = type_decl;
+  TYPE_ARTIFICIAL (ret) = 1;
   layout_type (ret);
 
   /* Now, fill in the type.  */
@@ -1437,7 +1440,10 @@ maybe_instrument_pointer_overflow (gimple_stmt_iterator *gsi, tree t)
   tree base;
   if (decl_p)
     {
-      if (DECL_REGISTER (inner))
+      if ((VAR_P (inner)
+	   || TREE_CODE (inner) == PARM_DECL
+	   || TREE_CODE (inner) == RESULT_DECL)
+	  && DECL_REGISTER (inner))
 	return;
       base = inner;
       /* If BASE is a fixed size automatic variable or
@@ -2101,7 +2107,12 @@ instrument_object_size (gimple_stmt_iterator *gsi, tree t, bool is_lhs)
   tree base;
   if (decl_p)
     {
-      if (DECL_REGISTER (inner))
+      if ((VAR_P (inner)
+	   || TREE_CODE (inner) == PARM_DECL
+	   || TREE_CODE (inner) == RESULT_DECL)
+	  && DECL_REGISTER (inner))
+	return;
+      if (t == inner && !is_global_var (t))
 	return;
       base = inner;
     }
@@ -2199,6 +2210,11 @@ instrument_object_size (gimple_stmt_iterator *gsi, tree t, bool is_lhs)
 	    return;
 	}
     }
+
+  if (DECL_P (base)
+      && decl_function_context (base) == current_function_decl
+      && !TREE_ADDRESSABLE (base))
+    mark_addressable (base);
 
   if (bos_stmt && gimple_call_builtin_p (bos_stmt, BUILT_IN_OBJECT_SIZE))
     ubsan_create_edge (bos_stmt);

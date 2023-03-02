@@ -612,7 +612,12 @@ build_target_expr (tree decl, tree exp)
 tree
 force_target_expr (tree exp)
 {
-  tree decl = create_temporary_var (TREE_TYPE (exp));
+  tree decl = build_decl (input_location, VAR_DECL, NULL_TREE,
+			  TREE_TYPE (exp));
+  DECL_CONTEXT (decl) = current_function_decl;
+  DECL_ARTIFICIAL (decl) = 1;
+  DECL_IGNORED_P (decl) = 1;
+  layout_decl (decl, 0);
 
   return build_target_expr (decl, exp);
 }
@@ -1299,6 +1304,7 @@ component_ref (tree object, tree field)
 tree
 build_assign (tree_code code, tree lhs, tree rhs)
 {
+  tree result;
   tree init = stabilize_expr (&lhs);
   init = compound_expr (init, stabilize_expr (&rhs));
 
@@ -1317,19 +1323,27 @@ build_assign (tree_code code, tree lhs, tree rhs)
   if (TREE_CODE (rhs) == TARGET_EXPR)
     {
       /* If CODE is not INIT_EXPR, can't initialize LHS directly,
-	 since that would cause the LHS to be constructed twice.
-	 So we force the TARGET_EXPR to be expanded without a target.  */
+	 since that would cause the LHS to be constructed twice.  */
       if (code != INIT_EXPR)
-	rhs = compound_expr (rhs, TARGET_EXPR_SLOT (rhs));
+	{
+	  init = compound_expr (init, rhs);
+	  result = build_assign (code, lhs, TARGET_EXPR_SLOT (rhs));
+	}
       else
 	{
 	  d_mark_addressable (lhs);
-	  rhs = TARGET_EXPR_INITIAL (rhs);
+	  TARGET_EXPR_INITIAL (rhs) = build_assign (code, lhs,
+						    TARGET_EXPR_INITIAL (rhs));
+	  result = rhs;
 	}
     }
+  else
+    {
+      /* Simple assignment.  */
+      result = fold_build2_loc (input_location, code,
+				TREE_TYPE (lhs), lhs, rhs);
+    }
 
-  tree result = fold_build2_loc (input_location, code,
-				 TREE_TYPE (lhs), lhs, rhs);
   return compound_expr (init, result);
 }
 
@@ -1451,6 +1465,11 @@ compound_expr (tree arg0, tree arg1)
   if (arg0 == NULL_TREE || !TREE_SIDE_EFFECTS (arg0))
     return arg1;
 
+  /* Remove intermediate expressions that have no side-effects.  */
+  while (TREE_CODE (arg0) == COMPOUND_EXPR
+	 && !TREE_SIDE_EFFECTS (TREE_OPERAND (arg0, 1)))
+    arg0 = TREE_OPERAND (arg0, 0);
+
   if (TREE_CODE (arg1) == TARGET_EXPR)
     {
       /* If the rhs is a TARGET_EXPR, then build the compound expression
@@ -1471,6 +1490,19 @@ compound_expr (tree arg0, tree arg1)
 tree
 return_expr (tree ret)
 {
+  /* Same as build_assign, the DECL_RESULT assignment replaces the temporary
+     in TARGET_EXPR_SLOT.  */
+  if (ret != NULL_TREE && TREE_CODE (ret) == TARGET_EXPR)
+    {
+      tree exp = TARGET_EXPR_INITIAL (ret);
+      tree init = stabilize_expr (&exp);
+
+      exp = fold_build1_loc (input_location, RETURN_EXPR, void_type_node, exp);
+      TARGET_EXPR_INITIAL (ret) = compound_expr (init, exp);
+
+      return ret;
+    }
+
   return fold_build1_loc (input_location, RETURN_EXPR,
 			  void_type_node, ret);
 }
@@ -1574,21 +1606,9 @@ build_array_index (tree ptr, tree index)
   /* Array element size.  */
   tree size_exp = size_in_bytes (target_type);
 
-  if (integer_zerop (size_exp))
+  if (integer_zerop (size_exp) || integer_onep (size_exp))
     {
-      /* Test for array of void.  */
-      if (TYPE_MODE (target_type) == TYPE_MODE (void_type_node))
-	index = fold_convert (type, index);
-      else
-	{
-	  /* Should catch this earlier.  */
-	  error ("invalid use of incomplete type %qD", TYPE_NAME (target_type));
-	  ptr_type = error_mark_node;
-	}
-    }
-  else if (integer_onep (size_exp))
-    {
-      /* Array of bytes -- No need to multiply.  */
+      /* Array of void or bytes -- No need to multiply.  */
       index = fold_convert (type, index);
     }
   else
@@ -1799,66 +1819,6 @@ array_bounds_check (void)
     default:
       gcc_unreachable ();
     }
-}
-
-/* Return an undeclared local temporary of type TYPE
-   for use with BIND_EXPR.  */
-
-tree
-create_temporary_var (tree type)
-{
-  tree decl = build_decl (input_location, VAR_DECL, NULL_TREE, type);
-
-  DECL_CONTEXT (decl) = current_function_decl;
-  DECL_ARTIFICIAL (decl) = 1;
-  DECL_IGNORED_P (decl) = 1;
-  layout_decl (decl, 0);
-
-  return decl;
-}
-
-/* Return an undeclared local temporary OUT_VAR initialized
-   with result of expression EXP.  */
-
-tree
-maybe_temporary_var (tree exp, tree *out_var)
-{
-  tree t = exp;
-
-  /* Get the base component.  */
-  while (TREE_CODE (t) == COMPONENT_REF)
-    t = TREE_OPERAND (t, 0);
-
-  if (!DECL_P (t) && !REFERENCE_CLASS_P (t))
-    {
-      *out_var = create_temporary_var (TREE_TYPE (exp));
-      DECL_INITIAL (*out_var) = exp;
-      return *out_var;
-    }
-  else
-    {
-      *out_var = NULL_TREE;
-      return exp;
-    }
-}
-
-/* Builds a BIND_EXPR around BODY for the variables VAR_CHAIN.  */
-
-tree
-bind_expr (tree var_chain, tree body)
-{
-  /* Only handles one var.  */
-  gcc_assert (TREE_CHAIN (var_chain) == NULL_TREE);
-
-  if (DECL_INITIAL (var_chain))
-    {
-      tree ini = build_assign (INIT_EXPR, var_chain, DECL_INITIAL (var_chain));
-      DECL_INITIAL (var_chain) = NULL_TREE;
-      body = compound_expr (ini, body);
-    }
-
-  return d_save_expr (build3 (BIND_EXPR, TREE_TYPE (body),
-			      var_chain, body, NULL_TREE));
 }
 
 /* Returns the TypeFunction class for Type T.

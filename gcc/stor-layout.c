@@ -1315,7 +1315,8 @@ place_field (record_layout_info rli, tree field)
 	 Bump the cumulative size to multiple of field alignment.  */
 
       if (!targetm.ms_bitfield_layout_p (rli->t)
-          && DECL_SOURCE_LOCATION (field) != BUILTINS_LOCATION)
+	  && DECL_SOURCE_LOCATION (field) != BUILTINS_LOCATION
+	  && !TYPE_ARTIFICIAL (rli->t))
 	warning (OPT_Wpadded, "padding struct to align %q+D", field);
 
       /* If the alignment is still within offset_align, just align
@@ -1749,7 +1750,8 @@ finalize_record_size (record_layout_info rli)
 
   if (TREE_CONSTANT (unpadded_size)
       && simple_cst_equal (unpadded_size, TYPE_SIZE (rli->t)) == 0
-      && input_location != BUILTINS_LOCATION)
+      && input_location != BUILTINS_LOCATION
+      && !TYPE_ARTIFICIAL (rli->t))
     warning (OPT_Wpadded, "padding struct size to alignment boundary");
 
   if (warn_packed && TREE_CODE (rli->t) == RECORD_TYPE
@@ -2030,9 +2032,14 @@ finish_bitfield_representative (tree repr, tree field)
   bitsize = (bitsize + BITS_PER_UNIT - 1) & ~(BITS_PER_UNIT - 1);
 
   /* Now nothing tells us how to pad out bitsize ...  */
-  nextf = DECL_CHAIN (field);
-  while (nextf && TREE_CODE (nextf) != FIELD_DECL)
-    nextf = DECL_CHAIN (nextf);
+  if (TREE_CODE (DECL_CONTEXT (field)) == RECORD_TYPE)
+    {
+      nextf = DECL_CHAIN (field);
+      while (nextf && TREE_CODE (nextf) != FIELD_DECL)
+	nextf = DECL_CHAIN (nextf);
+    }
+  else
+    nextf = NULL_TREE;
   if (nextf)
     {
       tree maxsize;
@@ -2125,11 +2132,7 @@ finish_bitfield_layout (tree t)
   tree field, prev;
   tree repr = NULL_TREE;
 
-  /* Unions would be special, for the ease of type-punning optimizations
-     we could use the underlying type as hint for the representative
-     if the bitfield would fit and the representative would not exceed
-     the union in size.  */
-  if (TREE_CODE (t) != RECORD_TYPE)
+  if (TREE_CODE (t) == QUAL_UNION_TYPE)
     return;
 
   for (prev = NULL_TREE, field = TYPE_FIELDS (t);
@@ -2191,7 +2194,13 @@ finish_bitfield_layout (tree t)
       if (repr)
 	DECL_BIT_FIELD_REPRESENTATIVE (field) = repr;
 
-      prev = field;
+      if (TREE_CODE (t) == RECORD_TYPE)
+	prev = field;
+      else if (repr)
+	{
+	  finish_bitfield_representative (repr, field);
+	  repr = NULL_TREE;
+	}
     }
 
   if (repr)

@@ -63,6 +63,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "builtins.h"
 #include "fnmatch.h"
 #include "tree-inline.h"
+#include "tree-eh.h"
 
 /* AddressSanitizer finds out-of-bounds and use-after-free bugs
    with <2x slowdown on average.
@@ -623,13 +624,23 @@ handle_builtin_alloca (gcall *call, gimple_stmt_iterator *iter)
 
   tree last_alloca = get_last_alloca_addr ();
   tree callee = gimple_call_fndecl (call);
+  tree lhs = gimple_call_lhs (call);
   tree old_size = gimple_call_arg (call, 0);
-  tree ptr_type = gimple_call_lhs (call) ? TREE_TYPE (gimple_call_lhs (call))
-					 : ptr_type_node;
+  tree ptr_type = lhs ? TREE_TYPE (lhs) : ptr_type_node;
   tree partial_size = NULL_TREE;
   unsigned int align
     = DECL_FUNCTION_CODE (callee) == BUILT_IN_ALLOCA
       ? 0 : tree_to_uhwi (gimple_call_arg (call, 1));
+
+  bool throws = false;
+  edge e = NULL;
+  if (stmt_can_throw_internal (cfun, call))
+    {
+      if (!lhs)
+	return;
+      throws = true;
+      e = find_fallthru_edge (gsi_bb (*iter)->succs);
+    }
 
   /* If ALIGN > ASAN_RED_ZONE_SIZE, we embed left redzone into first ALIGN
      bytes of allocated space.  Otherwise, align alloca to ASAN_RED_ZONE_SIZE
@@ -687,29 +698,54 @@ handle_builtin_alloca (gcall *call, gimple_stmt_iterator *iter)
 			  build_int_cst (size_type_node, align));
   tree new_alloca_with_rz = make_ssa_name (ptr_type, gg);
   gimple_call_set_lhs (gg, new_alloca_with_rz);
-  gsi_insert_before (iter, gg, GSI_SAME_STMT);
+  if (throws)
+    {
+      gimple_call_set_lhs (call, NULL);
+      gsi_replace (iter, gg, true);
+    }
+  else
+    gsi_insert_before (iter, gg, GSI_SAME_STMT);
 
   /* new_alloca = new_alloca_with_rz + align.  */
   g = gimple_build_assign (make_ssa_name (ptr_type), POINTER_PLUS_EXPR,
 			   new_alloca_with_rz,
 			   build_int_cst (size_type_node,
 					  align / BITS_PER_UNIT));
-  gsi_insert_before (iter, g, GSI_SAME_STMT);
+  gimple_stmt_iterator gsi = gsi_none ();
+  if (throws)
+    {
+      gsi_insert_on_edge_immediate (e, g);
+      gsi = gsi_for_stmt (g);
+    }
+  else
+    gsi_insert_before (iter, g, GSI_SAME_STMT);
   tree new_alloca = gimple_assign_lhs (g);
 
   /* Poison newly created alloca redzones:
       __asan_alloca_poison (new_alloca, old_size).  */
   fn = builtin_decl_implicit (BUILT_IN_ASAN_ALLOCA_POISON);
   gg = gimple_build_call (fn, 2, new_alloca, old_size);
-  gsi_insert_before (iter, gg, GSI_SAME_STMT);
+  if (throws)
+    gsi_insert_after (&gsi, gg, GSI_NEW_STMT);
+  else
+    gsi_insert_before (iter, gg, GSI_SAME_STMT);
 
   /* Save new_alloca_with_rz value into last_alloca to use it during
      allocas unpoisoning.  */
   g = gimple_build_assign (last_alloca, new_alloca_with_rz);
-  gsi_insert_before (iter, g, GSI_SAME_STMT);
+  if (throws)
+    gsi_insert_after (&gsi, g, GSI_NEW_STMT);
+  else
+    gsi_insert_before (iter, g, GSI_SAME_STMT);
 
   /* Finally, replace old alloca ptr with NEW_ALLOCA.  */
-  replace_call_with_value (iter, new_alloca);
+  if (throws)
+    {
+      g = gimple_build_assign (lhs, new_alloca);
+      gsi_insert_after (&gsi, g, GSI_NEW_STMT);
+    }
+  else
+    replace_call_with_value (iter, new_alloca);
 }
 
 /* Return the memory references contained in a gimple statement
@@ -1270,10 +1306,14 @@ asan_redzone_buffer::emit_redzone_byte (HOST_WIDE_INT offset,
   HOST_WIDE_INT off
     = m_prev_offset + ASAN_SHADOW_GRANULARITY * m_shadow_bytes.length ();
   if (off == offset)
+    /* Consecutive shadow memory byte.  */;
+  else if (offset < m_prev_offset + (HOST_WIDE_INT) (ASAN_SHADOW_GRANULARITY
+						     * RZ_BUFFER_SIZE)
+	   && !m_shadow_bytes.is_empty ())
     {
-      /* Consecutive shadow memory byte.  */
-      m_shadow_bytes.safe_push (value);
-      flush_if_full ();
+      /* Shadow memory byte with a small gap.  */
+      for (; off < offset; off += ASAN_SHADOW_GRANULARITY)
+	m_shadow_bytes.safe_push (0);
     }
   else
     {
@@ -1294,9 +1334,9 @@ asan_redzone_buffer::emit_redzone_byte (HOST_WIDE_INT offset,
       m_shadow_mem = adjust_address (m_shadow_mem, VOIDmode,
 				     diff >> ASAN_SHADOW_SHIFT);
       m_prev_offset = offset;
-      m_shadow_bytes.safe_push (value);
-      flush_if_full ();
     }
+  m_shadow_bytes.safe_push (value);
+  flush_if_full ();
 }
 
 /* Emit RTX emission of the content of the buffer.  */
@@ -1597,8 +1637,25 @@ asan_emit_stack_protection (rtx base, rtx pbase, unsigned int alignb,
       if (use_after_return_class < 5
 	  && can_store_by_pieces (sz, builtin_memset_read_str, &c,
 				  BITS_PER_UNIT, true))
-	store_by_pieces (shadow_mem, sz, builtin_memset_read_str, &c,
-			 BITS_PER_UNIT, true, RETURN_BEGIN);
+	{
+	  /* Emit:
+	       memset(ShadowBase, kAsanStackAfterReturnMagic, ShadowSize);
+	       **SavedFlagPtr(FakeStack, class_id) = 0
+	  */
+	  store_by_pieces (shadow_mem, sz, builtin_memset_read_str, &c,
+			   BITS_PER_UNIT, true, RETURN_BEGIN);
+
+	  unsigned HOST_WIDE_INT offset
+	    = (1 << (use_after_return_class + 6));
+	  offset -= GET_MODE_SIZE (ptr_mode);
+	  mem = gen_rtx_MEM (ptr_mode, base);
+	  mem = adjust_address (mem, ptr_mode, offset);
+	  rtx addr = gen_reg_rtx (ptr_mode);
+	  emit_move_insn (addr, mem);
+	  addr = convert_memory_address (Pmode, addr);
+	  mem = gen_rtx_MEM (QImode, addr);
+	  emit_move_insn (mem, const0_rtx);
+	}
       else if (use_after_return_class >= 5
 	       || !set_storage_via_setmem (shadow_mem,
 					   GEN_INT (sz),
@@ -2660,6 +2717,7 @@ asan_global_struct (void)
   TYPE_FIELDS (ret) = fields[0];
   TYPE_NAME (ret) = type_decl;
   TYPE_STUB_DECL (ret) = type_decl;
+  TYPE_ARTIFICIAL (ret) = 1;
   layout_type (ret);
   return ret;
 }

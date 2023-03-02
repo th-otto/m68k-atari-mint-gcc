@@ -2684,7 +2684,7 @@ add_builtin_candidate (struct z_candidate **candidates, enum tree_code code,
 	  tree c1 = TREE_TYPE (type1);
 	  tree c2 = TYPE_PTRMEM_CLASS_TYPE (type2);
 
-	  if (MAYBE_CLASS_TYPE_P (c1) && DERIVED_FROM_P (c2, c1)
+	  if (CLASS_TYPE_P (c1) && DERIVED_FROM_P (c2, c1)
 	      && (TYPE_PTRMEMFUNC_P (type2)
 		  || is_complete (TYPE_PTRMEM_POINTED_TO_TYPE (type2))))
 	    break;
@@ -3959,7 +3959,7 @@ build_user_type_conversion_1 (tree totype, tree expr, int flags,
 	{
 	  cand->second_conv = build_identity_conv (totype, NULL_TREE);
 
-	  /* If totype isn't a reference, and LOOKUP_NO_TEMP_BIND isn't
+	  /* If totype isn't a reference, and LOOKUP_ONLYCONVERTING is
 	     set, then this is copy-initialization.  In that case, "The
 	     result of the call is then used to direct-initialize the
 	     object that is the destination of the copy-initialization."
@@ -3968,6 +3968,8 @@ build_user_type_conversion_1 (tree totype, tree expr, int flags,
 	     We represent this in the conversion sequence with an
 	     rvalue conversion, which means a constructor call.  */
 	  if (!TYPE_REF_P (totype)
+	      && cxx_dialect < cxx17
+	      && (flags & LOOKUP_ONLYCONVERTING)
 	      && !(convflags & LOOKUP_NO_TEMP_BIND))
 	    cand->second_conv
 	      = build_conv (ck_rvalue, totype, cand->second_conv);
@@ -4584,7 +4586,6 @@ build_operator_new_call (tree fnname, vec<tree, va_gc> **args,
 
      we disregard block-scope declarations of "operator new".  */
   fns = lookup_name_real (fnname, 0, 1, /*block_p=*/false, 0, 0);
-  fns = lookup_arg_dependent (fnname, fns, *args);
 
   if (align_arg)
     {
@@ -5790,6 +5791,15 @@ op_is_ordered (tree_code code)
     case LSHIFT_EXPR:
       // 8. a >> b
     case RSHIFT_EXPR:
+      // a && b
+      // Predates P0145R3.
+    case TRUTH_ANDIF_EXPR:
+      // a || b
+      // Predates P0145R3.
+    case TRUTH_ORIF_EXPR:
+      // a , b
+      // Predates P0145R3.
+    case COMPOUND_EXPR:
       return (flag_strong_eval_order ? 1 : 0);
 
     default:
@@ -6836,6 +6846,14 @@ build_temp (tree expr, tree type, int flags,
       && !type_has_nontrivial_copy_init (TREE_TYPE (expr)))
     return get_target_expr_sfinae (expr, complain);
 
+  /* In decltype, we might have decided not to wrap this call in a TARGET_EXPR.
+     But it turns out to be a subexpression, so perform temporary
+     materialization now.  */
+  if (TREE_CODE (expr) == CALL_EXPR
+      && CLASS_TYPE_P (type)
+      && same_type_ignoring_top_level_qualifiers_p (type, TREE_TYPE (expr)))
+    expr = build_cplus_new (type, expr, complain);
+
   savew = warningcount + werrorcount, savee = errorcount;
   args = make_tree_vector_single (expr);
   expr = build_special_member_call (NULL_TREE, complete_ctor_identifier,
@@ -7298,7 +7316,7 @@ convert_like_real (conversion *convs, tree expr, tree fn, int argnum,
   expr = convert_like_real (next_conversion (convs), expr, fn, argnum,
 			    convs->kind == ck_ref_bind
 			    ? issue_conversion_warnings : false, 
-			    c_cast_p, complain);
+			    c_cast_p, complain & ~tf_no_cleanup);
   if (expr == error_mark_node)
     return error_mark_node;
 
@@ -7547,7 +7565,10 @@ convert_arg_to_ellipsis (tree arg, tsubst_flags_t complain)
   else if (NULLPTR_TYPE_P (arg_type))
     {
       if (TREE_SIDE_EFFECTS (arg))
-	arg = cp_build_compound_expr (arg, null_pointer_node, complain);
+	{
+	  warning_sentinel w(warn_unused_result);
+	  arg = cp_build_compound_expr (arg, null_pointer_node, complain);
+	}
       else
 	arg = null_pointer_node;
     }
@@ -8301,10 +8322,6 @@ build_over_call (struct z_candidate *cand, int flags, tsubst_flags_t complain)
       gcc_assert (TYPE_PTR_P (parmtype));
       /* Convert to the base in which the function was declared.  */
       gcc_assert (cand->conversion_path != NULL_TREE);
-      converted_arg = build_base_path (PLUS_EXPR,
-				       arg,
-				       cand->conversion_path,
-				       1, complain);
       /* Check that the base class is accessible.  */
       if (!accessible_base_p (TREE_TYPE (argtype),
 			      BINFO_TYPE (cand->conversion_path), true))
@@ -8319,10 +8336,33 @@ build_over_call (struct z_candidate *cand, int flags, tsubst_flags_t complain)
       /* If fn was found by a using declaration, the conversion path
 	 will be to the derived class, not the base declaring fn. We
 	 must convert from derived to base.  */
-      base_binfo = lookup_base (TREE_TYPE (TREE_TYPE (converted_arg)),
+      base_binfo = lookup_base (cand->conversion_path,
 				TREE_TYPE (parmtype), ba_unique,
 				NULL, complain);
-      converted_arg = build_base_path (PLUS_EXPR, converted_arg,
+
+      /* If we know the dynamic type of the object, look up the final overrider
+	 in the BINFO.  */
+      if (DECL_VINDEX (fn) && (flags & LOOKUP_NONVIRTUAL) == 0
+	  && resolves_to_fixed_type_p (arg))
+	{
+	  tree ov = lookup_vfn_in_binfo (DECL_VINDEX (fn), base_binfo);
+
+	  /* And unwind base_binfo to match.  If we don't find the type we're
+	     looking for in BINFO_INHERITANCE_CHAIN, we're looking at diamond
+	     inheritance; for now do a normal virtual call in that case.  */
+	  tree octx = DECL_CONTEXT (ov);
+	  tree obinfo = base_binfo;
+	  while (obinfo && !SAME_BINFO_TYPE_P (BINFO_TYPE (obinfo), octx))
+	    obinfo = BINFO_INHERITANCE_CHAIN (obinfo);
+	  if (obinfo)
+	    {
+	      fn = ov;
+	      base_binfo = obinfo;
+	      flags |= LOOKUP_NONVIRTUAL;
+	    }
+	}
+
+      converted_arg = build_base_path (PLUS_EXPR, arg,
 				       base_binfo, 1, complain);
 
       argarray[j++] = converted_arg;
@@ -8623,8 +8663,11 @@ build_over_call (struct z_candidate *cand, int flags, tsubst_flags_t complain)
 	   && DECL_OVERLOADED_OPERATOR_IS (fn, NOP_EXPR)
 	   && trivial_fn_p (fn))
     {
-      tree to = cp_stabilize_reference
-	(cp_build_fold_indirect_ref (argarray[0]));
+      /* Don't use cp_build_fold_indirect_ref, op= returns an lvalue even if
+	 the object argument isn't one.  */
+      tree to = cp_build_indirect_ref (argarray[0],
+				       RO_ARROW, complain);
+      to = cp_stabilize_reference (to);
       tree type = TREE_TYPE (to);
       tree as_base = CLASSTYPE_AS_BASE (type);
       tree arg = argarray[1];
@@ -9605,7 +9648,7 @@ build_new_method_call_1 (tree instance, tree fns, vec<tree, va_gc> **args,
   struct z_candidate *candidates = 0, *cand;
   tree explicit_targs = NULL_TREE;
   tree basetype = NULL_TREE;
-  tree access_binfo, binfo;
+  tree access_binfo;
   tree optype;
   tree first_mem_arg = NULL_TREE;
   tree name;
@@ -9644,7 +9687,6 @@ build_new_method_call_1 (tree instance, tree fns, vec<tree, va_gc> **args,
   if (!conversion_path)
     conversion_path = BASELINK_BINFO (fns);
   access_binfo = BASELINK_ACCESS_BINFO (fns);
-  binfo = BASELINK_BINFO (fns);
   optype = BASELINK_OPTYPE (fns);
   fns = BASELINK_FUNCTIONS (fns);
   if (TREE_CODE (fns) == TEMPLATE_ID_EXPR)
@@ -9895,17 +9937,6 @@ build_new_method_call_1 (tree instance, tree fns, vec<tree, va_gc> **args,
 
 	  if (call != error_mark_node)
 	    {
-	      /* Optimize away vtable lookup if we know that this
-		 function can't be overridden.  We need to check if
-		 the context and the type where we found fn are the same,
-		 actually FN might be defined in a different class
-		 type because of a using-declaration. In this case, we
-		 do not want to perform a non-virtual call.  */
-	      if (DECL_VINDEX (fn) && ! (flags & LOOKUP_NONVIRTUAL)
-		  && same_type_ignoring_top_level_qualifiers_p
-		  (DECL_CONTEXT (fn), BINFO_TYPE (binfo))
-		  && resolves_to_fixed_type_p (instance, 0))
-		flags |= LOOKUP_NONVIRTUAL;
               if (explicit_targs)
                 flags |= LOOKUP_EXPLICIT_TMPL_ARGS;
 	      /* Now we know what function is being called.  */
@@ -9925,7 +9956,8 @@ build_new_method_call_1 (tree instance, tree fns, vec<tree, va_gc> **args,
 		  tree a = instance;
 		  if (TREE_THIS_VOLATILE (a))
 		    a = build_this (a);
-		  call = build2 (COMPOUND_EXPR, TREE_TYPE (call), a, call);
+		  if (TREE_SIDE_EFFECTS (a))
+		    call = build2 (COMPOUND_EXPR, TREE_TYPE (call), a, call);
 		}
 	      else if (call != error_mark_node
 		       && DECL_DESTRUCTOR_P (cand->fn)

@@ -1045,7 +1045,7 @@ vect_compute_data_ref_alignment (dr_vec_info *dr_info)
   if (tree_int_cst_sgn (drb->step) < 0)
     /* PLUS because STEP is negative.  */
     misalignment += ((TYPE_VECTOR_SUBPARTS (vectype) - 1)
-		     * TREE_INT_CST_LOW (drb->step));
+		     * -TREE_INT_CST_LOW (TYPE_SIZE_UNIT (TREE_TYPE (vectype))));
 
   unsigned int const_misalignment;
   if (!known_misalignment (misalignment, vect_align_c, &const_misalignment))
@@ -3424,9 +3424,9 @@ vect_prune_runtime_alias_test_list (loop_vec_info loop_vinfo)
   /* Step values are irrelevant for aliasing if the number of vector
      iterations is equal to the number of scalar iterations (which can
      happen for fully-SLP loops).  */
-  bool ignore_step_p = known_eq (LOOP_VINFO_VECT_FACTOR (loop_vinfo), 1U);
+  bool vf_one_p = known_eq (LOOP_VINFO_VECT_FACTOR (loop_vinfo), 1U);
 
-  if (!ignore_step_p)
+  if (!vf_one_p)
     {
       /* Convert the checks for nonzero steps into bound tests.  */
       tree value;
@@ -3478,10 +3478,18 @@ vect_prune_runtime_alias_test_list (loop_vec_info loop_vinfo)
       dr_vec_info *dr_info_b = loop_vinfo->lookup_dr (DDR_B (ddr));
       stmt_vec_info stmt_info_b = dr_info_b->stmt;
 
+      bool preserves_scalar_order_p
+	= vect_preserves_scalar_order_p (dr_info_a, dr_info_b);
+      bool ignore_step_p
+	  = (vf_one_p
+	     && (preserves_scalar_order_p
+		 || operand_equal_p (DR_STEP (dr_info_a->dr),
+				     DR_STEP (dr_info_b->dr), 0)));
+
       /* Skip the pair if inter-iteration dependencies are irrelevant
 	 and intra-iteration dependencies are guaranteed to be honored.  */
       if (ignore_step_p
-	  && (vect_preserves_scalar_order_p (dr_info_a, dr_info_b)
+	  && (preserves_scalar_order_p
 	      || vectorizable_with_step_bound_p (dr_info_a, dr_info_b,
 						 &lower_bound)))
 	{
@@ -4556,7 +4564,8 @@ vect_create_addr_base_for_vector_ref (stmt_vec_info stmt_info,
 
   if (DR_PTR_INFO (dr)
       && TREE_CODE (addr_base) == SSA_NAME
-      && !SSA_NAME_PTR_INFO (addr_base))
+      /* We should only duplicate pointer info to newly created SSA names.  */
+      && SSA_NAME_VAR (addr_base) == dest)
     {
       vect_duplicate_ssa_name_ptr_info (addr_base, dr_info);
       if (offset || byte_offset)

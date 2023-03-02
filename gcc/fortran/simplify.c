@@ -4197,6 +4197,12 @@ simplify_bound (gfc_expr *array, gfc_expr *dim, gfc_expr *kind, int upper)
 	     || (as->type == AS_ASSUMED_SHAPE && upper)))
     return NULL;
 
+  /* 'array' shall not be an unallocated allocatable variable or a pointer that
+     is not associated.  */
+  if (array->expr_type == EXPR_VARIABLE
+      && (gfc_expr_attr (array).allocatable || gfc_expr_attr (array).pointer))
+    return NULL;
+
   gcc_assert (!as
 	      || (as->type != AS_DEFERRED
 		  && array->expr_type == EXPR_VARIABLE
@@ -7964,7 +7970,18 @@ gfc_simplify_transfer (gfc_expr *source, gfc_expr *mold, gfc_expr *size)
      set even for array expressions, in order to pass this information into
      gfc_target_interpret_expr.  */
   if (result->ts.type == BT_CHARACTER && gfc_is_constant_expr (mold_element))
-    result->value.character.length = mold_element->value.character.length;
+    {
+      result->value.character.length = mold_element->value.character.length;
+
+      /* Let the typespec of the result inherit the string length.
+	 This is crucial if a resulting array has size zero.  */
+      if (mold_element->ts.u.cl->length)
+	result->ts.u.cl->length = gfc_copy_expr (mold_element->ts.u.cl->length);
+      else
+	result->ts.u.cl->length =
+	  gfc_get_int_expr (gfc_charlen_int_kind, NULL,
+			    mold_element->value.character.length);
+    }
 
   /* Set the number of elements in the result, and determine its size.  */
 
@@ -8008,8 +8025,8 @@ gfc_simplify_transpose (gfc_expr *matrix)
 			       &matrix->where);
   result->rank = 2;
   result->shape = gfc_get_shape (result->rank);
-  mpz_set (result->shape[0], matrix->shape[1]);
-  mpz_set (result->shape[1], matrix->shape[0]);
+  mpz_init_set (result->shape[0], matrix->shape[1]);
+  mpz_init_set (result->shape[1], matrix->shape[0]);
 
   if (matrix->ts.type == BT_CHARACTER)
     result->ts.u.cl = matrix->ts.u.cl;

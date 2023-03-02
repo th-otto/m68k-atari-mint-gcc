@@ -535,7 +535,8 @@ vn_get_stmt_kind (gimple *stmt)
 		     || code == IMAGPART_EXPR
 		     || code == VIEW_CONVERT_EXPR
 		     || code == BIT_FIELD_REF)
-		    && TREE_CODE (TREE_OPERAND (rhs1, 0)) == SSA_NAME)
+		    && (TREE_CODE (TREE_OPERAND (rhs1, 0)) == SSA_NAME
+			|| is_gimple_min_invariant (TREE_OPERAND (rhs1, 0))))
 		  return VN_NARY;
 
 		/* Fallthrough.  */
@@ -2790,6 +2791,7 @@ vn_reference_lookup_call (gcall *call, vn_reference_t *vnresult,
   vr->vuse = vuse ? SSA_VAL (vuse) : NULL_TREE;
   vr->operands = valueize_shared_reference_ops_from_call (call);
   vr->type = gimple_expr_type (call);
+  vr->punned = false;
   vr->set = 0;
   vr->hashcode = vn_reference_compute_hash (vr);
   vn_reference_lookup_1 (vr, vnresult);
@@ -2812,6 +2814,7 @@ vn_reference_insert (tree op, tree result, tree vuse, tree vdef)
   vr1->vuse = vuse_ssa_val (vuse);
   vr1->operands = valueize_shared_reference_ops_from_ref (op, &tem).copy ();
   vr1->type = TREE_TYPE (op);
+  vr1->punned = false;
   vr1->set = get_alias_set (op);
   vr1->hashcode = vn_reference_compute_hash (vr1);
   vr1->result = TREE_CODE (result) == SSA_NAME ? SSA_VAL (result) : result;
@@ -2867,6 +2870,7 @@ vn_reference_insert_pieces (tree vuse, alias_set_type set, tree type,
   vr1->vuse = vuse_ssa_val (vuse);
   vr1->operands = valueize_refs (operands);
   vr1->type = type;
+  vr1->punned = false;
   vr1->set = set;
   vr1->hashcode = vn_reference_compute_hash (vr1);
   if (result && TREE_CODE (result) == SSA_NAME)
@@ -3331,7 +3335,7 @@ vn_nary_op_insert_pieces_predicated (unsigned int length, enum tree_code code,
 }
 
 static bool
-dominated_by_p_w_unex (basic_block bb1, basic_block bb2);
+dominated_by_p_w_unex (basic_block bb1, basic_block bb2, bool);
 
 static tree
 vn_nary_op_get_predicated_value (vn_nary_op_t vno, basic_block bb)
@@ -3340,9 +3344,12 @@ vn_nary_op_get_predicated_value (vn_nary_op_t vno, basic_block bb)
     return vno->u.result;
   for (vn_pval *val = vno->u.values; val; val = val->next)
     for (unsigned i = 0; i < val->n; ++i)
-      if (dominated_by_p_w_unex (bb,
-			  BASIC_BLOCK_FOR_FN
-			    (cfun, val->valid_dominated_by_p[i])))
+      /* Do not handle backedge executability optimistically since
+	 when figuring out whether to iterate we do not consider
+	 changed predication.  */
+      if (dominated_by_p_w_unex
+	    (bb, BASIC_BLOCK_FOR_FN (cfun, val->valid_dominated_by_p[i]),
+	     false))
 	return val->result;
   return NULL_TREE;
 }
@@ -3642,10 +3649,11 @@ vn_phi_insert (gimple *phi, tree result, bool backedges_varying_p)
 
 
 /* Return true if BB1 is dominated by BB2 taking into account edges
-   that are not executable.  */
+   that are not executable.  When ALLOW_BACK is false consider not
+   executable backedges as executable.  */
 
 static bool
-dominated_by_p_w_unex (basic_block bb1, basic_block bb2)
+dominated_by_p_w_unex (basic_block bb1, basic_block bb2, bool allow_back)
 {
   edge_iterator ei;
   edge e;
@@ -3662,7 +3670,8 @@ dominated_by_p_w_unex (basic_block bb1, basic_block bb2)
     {
       edge prede = NULL;
       FOR_EACH_EDGE (e, ei, bb1->preds)
-	if (e->flags & EDGE_EXECUTABLE)
+	if ((e->flags & EDGE_EXECUTABLE)
+	    || (!allow_back && (e->flags & EDGE_DFS_BACK)))
 	  {
 	    if (prede)
 	      {
@@ -3684,7 +3693,8 @@ dominated_by_p_w_unex (basic_block bb1, basic_block bb2)
   /* Iterate to the single executable bb2 successor.  */
   edge succe = NULL;
   FOR_EACH_EDGE (e, ei, bb2->succs)
-    if (e->flags & EDGE_EXECUTABLE)
+    if ((e->flags & EDGE_EXECUTABLE)
+	|| (!allow_back && (e->flags & EDGE_DFS_BACK)))
       {
 	if (succe)
 	  {
@@ -3702,7 +3712,8 @@ dominated_by_p_w_unex (basic_block bb1, basic_block bb2)
 	{
 	  FOR_EACH_EDGE (e, ei, succe->dest->preds)
 	    if (e != succe
-		&& (e->flags & EDGE_EXECUTABLE))
+		&& ((e->flags & EDGE_EXECUTABLE)
+		    || (!allow_back && (e->flags & EDGE_DFS_BACK))))
 	      {
 		succe = NULL;
 		break;
@@ -3731,6 +3742,8 @@ set_ssa_val_to (tree from, tree to)
   vn_ssa_aux_t from_info = VN_INFO (from);
   tree currval = from_info->valnum; // SSA_VAL (from)
   poly_int64 toff, coff;
+  bool curr_undefined = false;
+  bool curr_invariant = false;
 
   /* The only thing we allow as value numbers are ssa_names
      and invariants.  So assert that here.  We don't allow VN_TOP
@@ -3773,9 +3786,9 @@ set_ssa_val_to (tree from, tree to)
 	    }
 	  return false;
 	}
-      bool curr_invariant = is_gimple_min_invariant (currval);
-      bool curr_undefined = (TREE_CODE (currval) == SSA_NAME
-			     && ssa_undefined_value_p (currval, false));
+      curr_invariant = is_gimple_min_invariant (currval);
+      curr_undefined = (TREE_CODE (currval) == SSA_NAME
+			&& ssa_undefined_value_p (currval, false));
       if (currval != VN_TOP
 	  && !curr_invariant
 	  && !curr_undefined
@@ -3830,9 +3843,8 @@ set_and_exit:
       && !operand_equal_p (currval, to, 0)
       /* Different undefined SSA names are not actually different.  See
          PR82320 for a testcase were we'd otherwise not terminate iteration.  */
-      && !(TREE_CODE (currval) == SSA_NAME
+      && !(curr_undefined
 	   && TREE_CODE (to) == SSA_NAME
-	   && ssa_undefined_value_p (currval, false)
 	   && ssa_undefined_value_p (to, false))
       /* ???  For addresses involving volatile objects or types operand_equal_p
          does not reliably detect ADDR_EXPRs as equal.  We know we are only
@@ -3844,6 +3856,22 @@ set_and_exit:
 	       == get_addr_base_and_unit_offset (TREE_OPERAND (to, 0), &toff))
 	   && known_eq (coff, toff)))
     {
+      if (to != from
+	  && currval != VN_TOP
+	  && !curr_undefined
+	  /* We do not want to allow lattice transitions from one value
+	     to another since that may lead to not terminating iteration
+	     (see PR95049).  Since there's no convenient way to check
+	     for the allowed transition of VAL -> PHI (loop entry value,
+	     same on two PHIs, to same PHI result) we restrict the check
+	     to invariants.  */
+	  && curr_invariant
+	  && is_gimple_min_invariant (to))
+	{
+	  if (dump_file && (dump_flags & TDF_DETAILS))
+	    fprintf (dump_file, " forced VARYING");
+	  to = from;
+	}
       if (dump_file && (dump_flags & TDF_DETAILS))
 	fprintf (dump_file, " (changed)\n");
       from_info->valnum = to;
@@ -4088,6 +4116,7 @@ visit_reference_op_call (tree lhs, gcall *stmt)
 	 them here.  */
       vr2->operands = vr1.operands.copy ();
       vr2->type = vr1.type;
+      vr2->punned = vr1.punned;
       vr2->set = vr1.set;
       vr2->hashcode = vr1.hashcode;
       vr2->result = lhs;
@@ -4113,10 +4142,11 @@ visit_reference_op_load (tree lhs, tree op, gimple *stmt)
   bool changed = false;
   tree last_vuse;
   tree result;
+  vn_reference_t res;
 
   last_vuse = gimple_vuse (stmt);
   result = vn_reference_lookup (op, gimple_vuse (stmt),
-				default_vn_walk_kind, NULL, true, &last_vuse);
+				default_vn_walk_kind, &res, true, &last_vuse);
 
   /* We handle type-punning through unions by value-numbering based
      on offset and size of the access.  Be prepared to handle a
@@ -4138,6 +4168,13 @@ visit_reference_op_load (tree lhs, tree op, gimple *stmt)
 	  gimple_match_op res_op (gimple_match_cond::UNCOND,
 				  VIEW_CONVERT_EXPR, TREE_TYPE (op), result);
 	  result = vn_nary_build_or_lookup (&res_op);
+	  if (result
+	      && TREE_CODE (result) == SSA_NAME
+	      && VN_INFO (result)->needs_insertion)
+	    /* Track whether this is the canonical expression for different
+	       typed loads.  We use that as a stopgap measure for code
+	       hoisting when dealing with floating point loads.  */
+	    res->punned = true;
 	}
 
       /* When building the conversion fails avoid inserting the reference
@@ -4302,6 +4339,8 @@ visit_phi (gimple *phi, bool *inserted, bool backedges_varying_p)
       {
 	tree def = PHI_ARG_DEF_FROM_EDGE (phi, e);
 
+	if (def == PHI_RESULT (phi))
+	  continue;
 	++n_executable;
 	if (TREE_CODE (def) == SSA_NAME)
 	  {
@@ -5041,8 +5080,7 @@ eliminate_dom_walker::eliminate_stmt (basic_block b, gimple_stmt_iterator *gsi)
 	      duplicate_ssa_name_ptr_info (sprime,
 					   SSA_NAME_PTR_INFO (lhs));
 	      if (b != sprime_b)
-		mark_ptr_info_alignment_unknown
-		    (SSA_NAME_PTR_INFO (sprime));
+		reset_flow_sensitive_info (sprime);
 	    }
 	  else if (INTEGRAL_TYPE_P (TREE_TYPE (lhs))
 		   && SSA_NAME_RANGE_INFO (lhs)
@@ -5880,7 +5918,7 @@ rpo_elim::eliminate_avail (basic_block bb, tree op)
 	     may also be able to "pre-compute" (bits of) the next immediate
 	     (non-)dominator during the RPO walk when marking edges as
 	     executable.  */
-	  if (dominated_by_p_w_unex (bb, abb))
+	  if (dominated_by_p_w_unex (bb, abb, true))
 	    {
 	      tree leader = ssa_name ((*av)[i].second);
 	      /* Prevent eliminations that break loop-closed SSA.  */

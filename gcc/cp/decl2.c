@@ -1098,7 +1098,7 @@ grokbitfield (const cp_declarator *declarator,
 	  && !INTEGRAL_OR_UNSCOPED_ENUMERATION_TYPE_P (TREE_TYPE (width)))
 	error ("width of bit-field %qD has non-integral type %qT", value,
 	       TREE_TYPE (width));
-      else
+      else if (!check_for_bare_parameter_packs (width))
 	{
 	  /* Temporarily stash the width in DECL_BIT_FIELD_REPRESENTATIVE.
 	     check_bitfield_decl picks it from there later and sets DECL_SIZE
@@ -5403,6 +5403,7 @@ mark_used (tree decl, tsubst_flags_t complain)
     used_types_insert (DECL_CONTEXT (decl));
 
   if (TREE_CODE (decl) == FUNCTION_DECL
+      && !DECL_DELETED_FN (decl)
       && !maybe_instantiate_noexcept (decl, complain))
     return false;
 

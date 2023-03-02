@@ -1,3 +1,25 @@
+2022-05-27  Release Manager
+
+	* GCC 9.5.0 released.
+
+2021-06-01  Release Manager
+
+	* GCC 9.4.0 released.
+
+2021-05-01  Iain Sandoe  <iain@sandoe.co.uk>
+	    Jakub Jelinek   <jakub@redhat.com>
+
+	PR target/97865
+	* configure: Regenerate.
+
+2020-12-29  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2020-10-11  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* encoding.c (_darwin_rs6000_special_round_type_align):
+	Use DFMode in the emulation of the special round type.
+
 2020-03-12  Release Manager
 
 	* GCC 9.3.0 released.

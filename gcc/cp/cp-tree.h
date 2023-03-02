@@ -443,6 +443,7 @@ extern GTY(()) tree cp_global_trees[CPTI_MAX];
       SWITCH_STMT_NO_BREAK_P (in SWITCH_STMT)
       LAMBDA_EXPR_CAPTURE_OPTIMIZED (in LAMBDA_EXPR)
       IMPLICIT_CONV_EXPR_BRACED_INIT (in IMPLICIT_CONV_EXPR)
+      PACK_EXPANSION_AUTO_P (in *_PACK_EXPANSION)
    3: (TREE_REFERENCE_EXPR) (in NON_LVALUE_EXPR) (commented-out).
       ICS_BAD_FLAG (in _CONV)
       FN_TRY_BLOCK_P (in TRY_BLOCK)
@@ -3622,6 +3623,9 @@ struct GTY(()) lang_decl {
 /* True iff this pack expansion is for sizeof....  */
 #define PACK_EXPANSION_SIZEOF_P(NODE) TREE_LANG_FLAG_1 (NODE)
 
+/* True iff this pack expansion is for auto... in lambda init-capture.  */
+#define PACK_EXPANSION_AUTO_P(NODE) TREE_LANG_FLAG_2 (NODE)
+
 /* True iff the wildcard can match a template parameter pack.  */
 #define WILDCARD_PACK_P(NODE) TREE_LANG_FLAG_0 (NODE)
 
@@ -6272,7 +6276,7 @@ extern tree outermost_open_class		(void);
 extern tree current_nonlambda_class_type	(void);
 extern tree finish_struct			(tree, tree);
 extern void finish_struct_1			(tree);
-extern int resolves_to_fixed_type_p		(tree, int *);
+extern int resolves_to_fixed_type_p		(tree, int * = NULL);
 extern void init_class_processing		(void);
 extern int is_empty_class			(tree);
 extern bool is_really_empty_class		(tree, bool);
@@ -6286,6 +6290,7 @@ extern void pop_lang_context			(void);
 extern tree instantiate_type			(tree, tree, tsubst_flags_t);
 extern void build_self_reference		(void);
 extern int same_signature_p			(const_tree, const_tree);
+extern tree lookup_vfn_in_binfo			(tree, tree);
 extern void maybe_add_class_template_decl_list	(tree, tree, int);
 extern void unreverse_member_declarations	(tree);
 extern void invalidate_class_lookup_cache	(void);

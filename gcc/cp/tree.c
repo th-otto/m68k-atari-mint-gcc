@@ -746,7 +746,15 @@ build_vec_init_expr (tree type, tree init, tsubst_flags_t complain)
 {
   tree slot;
   bool value_init = false;
-  tree elt_init = build_vec_init_elt (type, init, complain);
+  tree elt_init;
+  if (init && TREE_CODE (init) == CONSTRUCTOR)
+    {
+      gcc_assert (!BRACE_ENCLOSED_INITIALIZER_P (init));
+      /* We built any needed constructor calls in digest_init.  */
+      elt_init = init;
+    }
+  else
+    elt_init = build_vec_init_elt (type, init, complain);
 
   if (init == void_type_node)
     {
@@ -1400,9 +1408,9 @@ apply_identity_attributes (tree result, tree attribs, bool *remove_attributes)
 	      p = &TREE_CHAIN (*p);
 	    }
 	}
-      else if (first_ident)
+      else if (first_ident && first_ident != error_mark_node)
 	{
-	  for (tree a2 = first_ident; a2; a2 = TREE_CHAIN (a2))
+	  for (tree a2 = first_ident; a2 != a; a2 = TREE_CHAIN (a2))
 	    {
 	      *p = tree_cons (TREE_PURPOSE (a2), TREE_VALUE (a2), NULL_TREE);
 	      p = &TREE_CHAIN (*p);
@@ -3738,6 +3746,9 @@ cp_tree_equal (tree t1, tree t2)
 	    if (SIZEOF_EXPR_TYPE_P (t2))
 	      o2 = TREE_TYPE (o2);
 	  }
+	else if (ALIGNOF_EXPR_STD_P (t1) != ALIGNOF_EXPR_STD_P (t2))
+	  return false;
+
 	if (TREE_CODE (o1) != TREE_CODE (o2))
 	  return false;
 	if (TYPE_P (o1))
@@ -4384,7 +4395,7 @@ bool
 zero_init_expr_p (tree t)
 {
   tree type = TREE_TYPE (t);
-  if (!type || dependent_type_p (type))
+  if (!type || uses_template_parms (type))
     return false;
   if (zero_init_p (type))
     return initializer_zerop (t);

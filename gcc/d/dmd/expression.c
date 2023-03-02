@@ -2647,8 +2647,11 @@ bool Expression::checkPostblit(Scope *sc, Type *t)
     t = t->baseElemOf();
     if (t->ty == Tstruct)
     {
-        // Bugzilla 11395: Require TypeInfo generation for array concatenation
-        semanticTypeInfo(sc, t);
+        if (global.params.useTypeInfo)
+        {
+            // Bugzilla 11395: Require TypeInfo generation for array concatenation
+            semanticTypeInfo(sc, t);
+        }
 
         StructDeclaration *sd = ((TypeStruct *)t)->sym;
         if (sd->postblit)
@@ -6714,7 +6717,7 @@ Expression *FuncInitExp::resolveLoc(Loc loc, Scope *sc)
         s = "";
     Expression *e = new StringExp(loc, const_cast<char *>(s));
     e = semantic(e, sc);
-    e = e->castTo(sc, type);
+    e->type = Type::tstring;
     return e;
 }
 
@@ -6748,7 +6751,7 @@ Expression *PrettyFuncInitExp::resolveLoc(Loc loc, Scope *sc)
 
     Expression *e = new StringExp(loc, const_cast<char *>(s));
     e = semantic(e, sc);
-    e = e->castTo(sc, type);
+    e->type = Type::tstring;
     return e;
 }
 

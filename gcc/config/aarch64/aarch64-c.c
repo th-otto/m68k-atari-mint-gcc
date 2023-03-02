@@ -110,6 +110,7 @@ aarch64_update_cpp_builtins (cpp_reader *pfile)
   aarch64_def_or_undef (TARGET_CRC32, "__ARM_FEATURE_CRC32", pfile);
   aarch64_def_or_undef (TARGET_DOTPROD, "__ARM_FEATURE_DOTPROD", pfile);
   aarch64_def_or_undef (TARGET_COMPLEX, "__ARM_FEATURE_COMPLEX", pfile);
+  aarch64_def_or_undef (TARGET_JSCVT, "__ARM_FEATURE_JCVT", pfile);
 
   cpp_undef (pfile, "__AARCH64_CMODEL_TINY__");
   cpp_undef (pfile, "__AARCH64_CMODEL_SMALL__");
@@ -155,6 +156,21 @@ aarch64_update_cpp_builtins (cpp_reader *pfile)
   aarch64_def_or_undef (TARGET_SM4, "__ARM_FEATURE_SM3", pfile);
   aarch64_def_or_undef (TARGET_SM4, "__ARM_FEATURE_SM4", pfile);
   aarch64_def_or_undef (TARGET_F16FML, "__ARM_FEATURE_FP16_FML", pfile);
+
+  aarch64_def_or_undef (aarch64_bti_enabled (),
+			"__ARM_FEATURE_BTI_DEFAULT", pfile);
+
+  cpp_undef (pfile, "__ARM_FEATURE_PAC_DEFAULT");
+  if (aarch64_ra_sign_scope != AARCH64_FUNCTION_NONE)
+    {
+      int v = 1;
+      if (aarch64_ra_sign_scope == AARCH64_FUNCTION_ALL)
+	v |= 4;
+      builtin_define_with_int_value ("__ARM_FEATURE_PAC_DEFAULT", v);
+    }
+
+  aarch64_def_or_undef (TARGET_RNG, "__ARM_FEATURE_RNG", pfile);
+  aarch64_def_or_undef (TARGET_FRINT, "__ARM_FEATURE_FRINT", pfile);
 
   /* Not for ACLE, but required to keep "float.h" correct if we switch
      target between implementations that do or do not support ARMv8.2-A

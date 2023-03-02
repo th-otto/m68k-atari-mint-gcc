@@ -1,3 +1,200 @@
+2022-05-27  Release Manager
+
+	* GCC 9.5.0 released.
+
+2022-05-11  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-02-08  Jakub Jelinek  <jakub@redhat.com>
+
+	PR libgomp/104385
+	* task.c (gomp_task_run_post_handle_dependers): If parent is NULL,
+	clear task->parent.
+	* testsuite/libgomp.c/pr104385.c: New test.
+
+2022-05-11  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-10-15  Jakub Jelinek  <jakub@redhat.com>
+
+	* config/linux/affinity.c (gomp_affinity_init_level_1): For level 1
+	after creating count places clean up and return immediately.
+	* testsuite/libgomp.c/places-6.c: New test.
+	* testsuite/libgomp.c/places-7.c: New test.
+	* testsuite/libgomp.c/places-8.c: New test.
+
+2022-05-11  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-07-01  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/94366
+	* testsuite/libgomp.c-c++-common/pr94366.c: New test.
+
+2022-05-11  Tobias Burnus  <tobias@codesourcery.com>
+
+	Backported from master:
+	2021-05-04  Tobias Burnus  <tobias@codesourcery.com>
+
+	* testsuite/libgomp.c-c++-common/reduction-1.c: New test.
+	* testsuite/libgomp.c-c++-common/reduction-2.c: New test.
+	* testsuite/libgomp.c-c++-common/reduction-3.c: New test.
+	* testsuite/libgomp.c-c++-common/reduction-4.c: New file.
+
+2022-05-11  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-07-13  Jakub Jelinek  <jakub@redhat.com>
+		    Florian Weimer  <fweimer@redhat.com>
+
+	* config/linux/sem.h: Don't include limits.h.
+	(SEM_WAIT): Define to -__INT_MAX__ - 1 instead of INT_MIN.
+	* config/linux/affinity.c: Include limits.h.
+
+2022-05-11  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-06-23  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/101167
+	* testsuite/libgomp.c-c++-common/task-reduction-15.c: New test.
+
+2022-05-11  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-05-11  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/100471
+	* taskloop.c (GOMP_taskloop): If GOMP_TASK_FLAG_REDUCTION and not
+	GOMP_TASK_FLAG_NOGROUP, when doing early return clear the task
+	reduction pointer.
+	* testsuite/libgomp.c/task-reduction-4.c: New test.
+
+2021-06-01  Release Manager
+
+	* GCC 9.4.0 released.
+
+2021-05-06  Roman Zhuykov  <zhroma@ispras.ru>
+
+	Backported from master:
+	2021-04-30  Roman Zhuykov  <zhroma@ispras.ru>
+
+	* testsuite/libgomp.oacc-c-c++-common/atomic_capture-3.c: New test.
+
+2021-05-01  Iain Sandoe  <iain@sandoe.co.uk>
+	    Jakub Jelinek   <jakub@redhat.com>
+
+	PR target/97865
+	* configure: Regenerate.
+
+2021-04-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-01-06  Jakub Jelinek  <jakub@redhat.com>
+
+	* testsuite/libgomp.c/task-6.c: New test.
+
+2021-03-25  Thomas Schwinge  <thomas@codesourcery.com>
+
+	Backported from master:
+	2021-03-25  Thomas Schwinge  <thomas@codesourcery.com>
+
+	* plugin/plugin-hsa.c (init_enviroment_variables): Don't prepend
+	the 'HSA_RUNTIME_LIB' path to 'libhsa-runtime64.so'.
+	* plugin/configfrag.ac (HSA_RUNTIME_LIB): Clean up.
+	* config.h.in: Regenerate.
+	* configure: Likewise.
+
+2021-01-14  Kwok Cheung Yeung  <kcy@codesourcery.com>
+
+	Backported from master:
+	2019-09-30  Kwok Cheung Yeung  <kcy@codesourcery.com>
+
+	* libgomp_g.h: Include stdint.h instead of gstdint.h.
+
+2021-01-14  Thomas Schwinge  <thomas@codesourcery.com>
+
+	Backported from master:
+	2021-01-14  Thomas Schwinge  <thomas@codesourcery.com>
+
+	PR libgomp/65099
+	* plugin/configfrag.ac (PLUGIN_NVPTX): Restrict to supported
+	configurations.
+	* configure: Regenerate.
+	* plugin/plugin-nvptx.c (nvptx_get_num_devices): Remove 64-bit
+	check.
+
+2020-11-25  Thomas Schwinge  <thomas@codesourcery.com>
+
+	Backported from master:
+	2020-11-25  Thomas Schwinge  <thomas@codesourcery.com>
+
+	* testsuite/libgomp.oacc-c++/cache-1.C: New.
+	* testsuite/libgomp.oacc-c-c++-common/cache-1.c: Update.
+
+2020-11-02  Thomas Schwinge  <thomas@codesourcery.com>
+
+	Backported from master:
+	2020-11-02  Thomas Schwinge  <thomas@codesourcery.com>
+
+	PR target/85486
+	* testsuite/libgomp.oacc-c-c++-common/pr85486-2.c: Simplify and enhance.
+	* testsuite/libgomp.oacc-c-c++-common/pr85486-3.c: Likewise.
+	* testsuite/libgomp.oacc-c-c++-common/pr85486.c: Likewise.
+
+2020-11-02  Thomas Schwinge  <thomas@codesourcery.com>
+
+	Backported from master:
+	2020-11-02  Thomas Schwinge  <thomas@codesourcery.com>
+
+	PR testsuite/80219
+	PR testsuite/85303
+	* testsuite/lib/libgomp.exp (libgomp_init): Set
+	'gcc_warning_prefix', 'gcc_error_prefix'.
+
+2020-09-16  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-08-08  Jakub Jelinek  <jakub@redhat.com>
+		    Tobias Burnus  <tobias@codesourcery.com>
+
+	PR fortran/93553
+	* testsuite/libgomp.fortran/pr93553.f90: New test.
+
+2020-09-16  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-08-05  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/96459
+	* testsuite/libgomp.c/teams-3.c: New test.
+	* testsuite/libgomp.c-c++-common/for-2.h (OMPTEAMS): Define to nothing
+	if not defined yet.
+	(N(test)): Use it before all N(f*) calls.
+	* testsuite/libgomp.c-c++-common/for-14.c (DO_PRAGMA, OMPTEAMS): Define.
+	(main): Don't call all test_* functions from within
+	#pragma omp teams reduction(|:err), call them directly.
+
+2020-06-04  Thomas Schwinge  <thomas@codesourcery.com>
+
+	* testsuite/libgomp.oacc-fortran/error_stop-1.f: Initialize before
+	the checkpoint.
+	* testsuite/libgomp.oacc-fortran/error_stop-2.f: Likewise.
+	* testsuite/libgomp.oacc-fortran/error_stop-3.f: Likewise.
+	* testsuite/libgomp.oacc-fortran/stop-1.f: Likewise.
+	* testsuite/libgomp.oacc-fortran/stop-2.f: Likewise.
+	* testsuite/libgomp.oacc-fortran/stop-3.f: Likewise.
+
+2020-05-27  Thomas Koenig  <tkoenig@gcc.gnu.org>
+
+	PR libfortran/95191
+	* testsuite/libgomp.fortran/async_io_9.f90: New test.
+
+2020-05-22  Thomas Koenig  <tkoenig@gcc.gnu.org>
+
+	PR libfortran/95119
+	* testsuite/libgomp.fortran/close_errors_1.f90: New test.
+
 2020-04-13  Thomas Schwinge  <thomas@codesourcery.com>
 
 	PR libgomp/92843

@@ -581,6 +581,11 @@ extern GTY(()) int darwin_ms_struct;
 /* Emit a label to separate the exception table.  */
 #define TARGET_ASM_EMIT_EXCEPT_TABLE_LABEL darwin_emit_except_table_label
 
+/* Some of Darwin's unwinders need current frame address state to be reset
+   after a DW_CFA_restore_state recovers the register values.  */
+#undef TARGET_ASM_SHOULD_RESTORE_CFA_STATE
+#define TARGET_ASM_SHOULD_RESTORE_CFA_STATE darwin_should_restore_cfa_state
+
 /* Our profiling scheme doesn't LP labels and counter words.  */
 
 #define NO_PROFILE_COUNTERS	1
@@ -799,6 +804,12 @@ extern GTY(()) section * darwin_sections[NUM_DARWIN_SECTIONS];
   do {							\
     if (strcmp ("LC", PREFIX) == 0)			\
       sprintf (LABEL, "*%s%ld", "lC", (long)(NUM));	\
+    else if (strcmp ("Lubsan_data", PREFIX) == 0)	\
+      sprintf (LABEL, "*%s%ld", "lubsan_data", (long)(NUM));\
+    else if (strcmp ("Lubsan_type", PREFIX) == 0)	\
+      sprintf (LABEL, "*%s%ld", "lubsan_type", (long)(NUM));\
+    else if (strcmp ("LASAN", PREFIX) == 0)	\
+      sprintf (LABEL, "*%s%ld", "lASAN", (long)(NUM));\
     else						\
       sprintf (LABEL, "*%s%ld", PREFIX, (long)(NUM));	\
   } while (0)

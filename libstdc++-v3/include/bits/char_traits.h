@@ -227,7 +227,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    *  Assumes that _CharT is a built-in character type.
    */
   template<typename _CharT>
-    static _GLIBCXX_ALWAYS_INLINE constexpr bool
+    _GLIBCXX_ALWAYS_INLINE constexpr bool
     __constant_string_p(const _CharT* __s)
     {
 #ifdef _GLIBCXX_HAVE_BUILTIN_IS_CONSTANT_EVALUATED
@@ -250,7 +250,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    *  Assumes that _CharT is a built-in character type.
    */
   template<typename _CharT>
-    static _GLIBCXX_ALWAYS_INLINE constexpr bool
+    _GLIBCXX_ALWAYS_INLINE constexpr bool
     __constant_char_array_p(const _CharT* __a, size_t __n)
     {
 #ifdef _GLIBCXX_HAVE_BUILTIN_IS_CONSTANT_EVALUATED
@@ -320,7 +320,14 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	if (__builtin_constant_p(__n)
 	    && __constant_char_array_p(__s1, __n)
 	    && __constant_char_array_p(__s2, __n))
-	  return __gnu_cxx::char_traits<char_type>::compare(__s1, __s2, __n);
+	  {
+	    for (size_t __i = 0; __i < __n; ++__i)
+	      if (lt(__s1[__i], __s2[__i]))
+		return -1;
+	      else if (lt(__s2[__i], __s1[__i]))
+		return 1;
+	    return 0;
+	  }
 #endif
 	return __builtin_memcmp(__s1, __s2, __n);
       }

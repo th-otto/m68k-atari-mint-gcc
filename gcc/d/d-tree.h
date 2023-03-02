@@ -488,6 +488,7 @@ extern const attribute_spec d_langhook_attribute_table[];
 extern const attribute_spec d_langhook_common_attribute_table[];
 
 extern tree d_builtin_function (tree);
+extern tree d_builtin_function_ext_scope (tree);
 extern void d_init_builtins (void);
 extern void d_register_builtin_type (tree, const char *);
 extern void d_build_builtins_module (Module *);
@@ -558,8 +559,6 @@ extern tree build_array_from_val (Type *, tree);
 extern tree void_okay_p (tree);
 extern tree build_bounds_condition (const Loc &, tree, tree, bool);
 extern bool array_bounds_check (void);
-extern tree create_temporary_var (tree);
-extern tree maybe_temporary_var (tree, tree *);
 extern tree bind_expr (tree, tree);
 extern TypeFunction *get_function_type (Type *);
 extern bool call_by_alias_p (FuncDeclaration *, FuncDeclaration *);
@@ -579,11 +578,12 @@ extern bool decl_with_nonnull_addr_p (const_tree);
 extern tree d_truthvalue_conversion (tree);
 extern tree d_convert (tree, tree);
 extern tree convert_expr (tree, Type *, Type *);
+extern tree convert_for_rvalue (tree, Type *, Type *);
 extern tree convert_for_assignment (tree, Type *, Type *);
 extern tree convert_for_argument (tree, Parameter *);
 extern tree convert_for_condition (tree, Type *);
 extern tree d_array_convert (Expression *);
-extern tree d_array_convert (Type *, Expression *, vec<tree, va_gc> **);
+extern tree d_array_convert (Type *, Expression *);
 
 /* In d-incpath.cc.  */
 extern void add_import_paths (const char *, const char *, bool);
@@ -652,6 +652,7 @@ extern tree layout_typeinfo (TypeInfoDeclaration *);
 extern tree layout_classinfo (ClassDeclaration *);
 extern tree get_typeinfo_decl (TypeInfoDeclaration *);
 extern tree get_classinfo_decl (ClassDeclaration *);
+extern void check_typeinfo_type (const Loc &, Scope *);
 extern tree build_typeinfo (const Loc &, Type *);
 extern void create_typeinfo (Type *, Module *);
 extern void create_tinfo_types (Module *);

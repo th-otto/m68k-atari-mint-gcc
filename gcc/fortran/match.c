@@ -1374,9 +1374,6 @@ gfc_match_assignment (void)
 
   gfc_check_do_variable (lvalue->symtree);
 
-  if (lvalue->ts.type == BT_CLASS)
-    gfc_find_vtab (&rvalue->ts);
-
   return MATCH_YES;
 }
 
@@ -2217,7 +2214,10 @@ found:
 	 a scalar integer initialization-expr and valid kind parameter. */
       if (c == ')')
 	{
-	  if (e->ts.type != BT_INTEGER || e->rank > 0)
+	  bool ok = true;
+	  if (e->expr_type != EXPR_CONSTANT && e->expr_type != EXPR_VARIABLE)
+	    ok = gfc_reduce_init_expr (e);
+	  if (!ok || e->ts.type != BT_INTEGER || e->rank > 0)
 	    {
 	      gfc_free_expr (e);
 	      return MATCH_NO;
@@ -5575,6 +5575,11 @@ gfc_match_equivalence (void)
 
 	  if (!gfc_add_in_equivalence (&sym->attr, sym->name, NULL))
 	    goto cleanup;
+	  if (sym->ts.type == BT_CLASS
+	      && CLASS_DATA (sym)
+	      && !gfc_add_in_equivalence (&CLASS_DATA (sym)->attr,
+					  sym->name, NULL))
+	    goto cleanup;
 
 	  if (sym->attr.in_common)
 	    {
@@ -6163,7 +6168,7 @@ select_intrinsic_set_tmp (gfc_typespec *ts)
 static void
 select_type_set_tmp (gfc_typespec *ts)
 {
-  char name[GFC_MAX_SYMBOL_LEN];
+  char name[GFC_MAX_SYMBOL_LEN + 12 + 1];
   gfc_symtree *tmp = NULL;
   gfc_symbol *selector = select_type_stack->selector;
 
@@ -6237,7 +6242,7 @@ gfc_match_select_type (void)
 {
   gfc_expr *expr1, *expr2 = NULL;
   match m;
-  char name[GFC_MAX_SYMBOL_LEN];
+  char name[GFC_MAX_SYMBOL_LEN + 1];
   bool class_array;
   gfc_symbol *sym;
   gfc_namespace *ns = gfc_current_ns;

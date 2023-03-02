@@ -623,6 +623,13 @@ variable_check (gfc_expr *e, int n, bool allow_proc)
 	  return true;
     }
 
+  /* F2018:R902: function reference having a data pointer result.  */
+  if (e->expr_type == EXPR_FUNCTION
+      && e->symtree->n.sym->attr.flavor == FL_PROCEDURE
+      && e->symtree->n.sym->attr.function
+      && e->symtree->n.sym->attr.pointer)
+    return true;
+
   gfc_error ("%qs argument of %qs intrinsic at %L must be a variable",
 	     gfc_current_intrinsic_arg[n]->name, gfc_current_intrinsic, &e->where);
 
@@ -4154,7 +4161,8 @@ gfc_check_reshape (gfc_expr *source, gfc_expr *shape,
 	   && shape->ref->u.ar.as->lower[0]->ts.type == BT_INTEGER
 	   && shape->ref->u.ar.as->upper[0]->expr_type == EXPR_CONSTANT
 	   && shape->ref->u.ar.as->upper[0]->ts.type == BT_INTEGER
-	   && shape->symtree->n.sym->attr.flavor == FL_PARAMETER)
+	   && shape->symtree->n.sym->attr.flavor == FL_PARAMETER
+	   && shape->symtree->n.sym->value)
     {
       int i, extent;
       gfc_expr *e, *v;
@@ -5088,6 +5096,19 @@ gfc_check_spread (gfc_expr *source, gfc_expr *dim, gfc_expr *ncopies)
    functions).  */
 
 bool
+arg_strlen_is_zero (gfc_expr *c, int n)
+{
+  if (gfc_var_strlen (c) == 0)
+    {
+      gfc_error ("%qs argument of %qs intrinsic at %L must have "
+		 "length at least 1", gfc_current_intrinsic_arg[n]->name,
+		 gfc_current_intrinsic, &c->where);
+      return true;
+    }
+  return false;
+}
+
+bool
 gfc_check_fgetputc_sub (gfc_expr *unit, gfc_expr *c, gfc_expr *status)
 {
   if (!type_check (unit, 0, BT_INTEGER))
@@ -5100,13 +5121,19 @@ gfc_check_fgetputc_sub (gfc_expr *unit, gfc_expr *c, gfc_expr *status)
     return false;
   if (!kind_value_check (c, 1, gfc_default_character_kind))
     return false;
+  if (strcmp (gfc_current_intrinsic, "fgetc") == 0
+      && !variable_check (c, 1, false))
+    return false;
+  if (arg_strlen_is_zero (c, 1))
+    return false;
 
   if (status == NULL)
     return true;
 
   if (!type_check (status, 2, BT_INTEGER)
       || !kind_value_check (status, 2, gfc_default_integer_kind)
-      || !scalar_check (status, 2))
+      || !scalar_check (status, 2)
+      || !variable_check (status, 2, false))
     return false;
 
   return true;
@@ -5127,13 +5154,19 @@ gfc_check_fgetput_sub (gfc_expr *c, gfc_expr *status)
     return false;
   if (!kind_value_check (c, 0, gfc_default_character_kind))
     return false;
+  if (strcmp (gfc_current_intrinsic, "fget") == 0
+      && !variable_check (c, 0, false))
+    return false;
+  if (arg_strlen_is_zero (c, 0))
+    return false;
 
   if (status == NULL)
     return true;
 
   if (!type_check (status, 1, BT_INTEGER)
       || !kind_value_check (status, 1, gfc_default_integer_kind)
-      || !scalar_check (status, 1))
+      || !scalar_check (status, 1)
+      || !variable_check (status, 1, false))
     return false;
 
   return true;
@@ -5529,8 +5562,8 @@ gfc_calculate_transfer_sizes (gfc_expr *source, gfc_expr *mold, gfc_expr *size,
    * representation is not shorter than that of SOURCE.
    * If SIZE is present, the result is an array of rank one and size SIZE.
    */
-  if (result_elt_size == 0 && *source_size > 0 && !size
-      && mold->expr_type == EXPR_ARRAY)
+  if (result_elt_size == 0 && *source_size > 0
+      && (mold->expr_type == EXPR_ARRAY || mold->rank))
     {
       gfc_error ("%<MOLD%> argument of %<TRANSFER%> intrinsic at %L is an "
 		 "array and shall not have storage size 0 when %<SOURCE%> "

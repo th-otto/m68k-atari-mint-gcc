@@ -115,6 +115,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "params.h"
 #include "tree-vectorizer.h"
 #include "tree-eh.h"
+#include "tree-affine.h"
 
 
 #define MAX_DATAREFS_NUM \
@@ -1063,6 +1064,18 @@ generate_memcpy_builtin (struct loop *loop, partition *partition)
     kind = BUILT_IN_MEMCPY;
   else
     kind = BUILT_IN_MEMMOVE;
+  /* Try harder if we're copying a constant size.  */
+  if (kind == BUILT_IN_MEMMOVE && poly_int_tree_p (nb_bytes))
+    {
+      aff_tree asrc, adest;
+      tree_to_aff_combination (src, ptr_type_node, &asrc);
+      tree_to_aff_combination (dest, ptr_type_node, &adest);
+      aff_combination_scale (&adest, -1);
+      aff_combination_add (&asrc, &adest);
+      if (aff_comb_cannot_overlap_p (&asrc, wi::to_poly_widest (nb_bytes),
+				     wi::to_poly_widest (nb_bytes)))
+	kind = BUILT_IN_MEMCPY;
+    }
 
   dest = force_gimple_operand_gsi (&gsi, dest, true, NULL_TREE,
 				   false, GSI_CONTINUE_LINKING);
@@ -1621,11 +1634,11 @@ classify_builtin_ldst (loop_p loop, struct graph *rdg, partition *partition,
   /* Now check that if there is a dependence.  */
   ddr_p ddr = get_data_dependence (rdg, src_dr, dst_dr);
 
-  /* Classify as memcpy if no dependence between load and store.  */
+  /* Classify as memmove if no dependence between load and store.  */
   if (DDR_ARE_DEPENDENT (ddr) == chrec_known)
     {
       partition->builtin = alloc_builtin (dst_dr, src_dr, base, src_base, size);
-      partition->kind = PKIND_MEMCPY;
+      partition->kind = PKIND_MEMMOVE;
       return;
     }
 
@@ -1949,7 +1962,8 @@ pg_add_dependence_edges (struct graph *rdg, int dir,
 		this_dir = -this_dir;
 
 	      /* Known dependences can still be unordered througout the
-		 iteration space, see gcc.dg/tree-ssa/ldist-16.c.  */
+		 iteration space, see gcc.dg/tree-ssa/ldist-16.c and
+		 gcc.dg/tree-ssa/pr94969.c.  */
 	      if (DDR_NUM_DIST_VECTS (ddr) != 1)
 		this_dir = 2;
 	      /* If the overlap is exact preserve stmt order.  */
@@ -2013,6 +2027,8 @@ struct pg_edge_callback_data
   bitmap sccs_to_merge;
   /* Array constains component information for all vertices.  */
   int *vertices_component;
+  /* Array constains postorder information for all vertices.  */
+  int *vertices_post;
   /* Vector to record all data dependence relations which are needed
      to break strong connected components by runtime alias checks.  */
   vec<ddr_p> *alias_ddrs;
@@ -2275,7 +2291,7 @@ break_alias_scc_partitions (struct graph *rdg,
 			    vec<struct partition *> *partitions,
 			    vec<ddr_p> *alias_ddrs)
 {
-  int i, j, k, num_sccs, num_sccs_no_alias;
+  int i, j, k, num_sccs, num_sccs_no_alias = 0;
   /* Build partition dependence graph.  */
   graph *pg = build_partition_graph (rdg, partitions, false);
 
@@ -2326,6 +2342,7 @@ break_alias_scc_partitions (struct graph *rdg,
       cbdata.sccs_to_merge = sccs_to_merge;
       cbdata.alias_ddrs = alias_ddrs;
       cbdata.vertices_component = XNEWVEC (int, pg->n_vertices);
+      cbdata.vertices_post = XNEWVEC (int, pg->n_vertices);
       /* Record the component information which will be corrupted by next
 	 graph scc finding call.  */
       for (i = 0; i < pg->n_vertices; ++i)
@@ -2334,6 +2351,11 @@ break_alias_scc_partitions (struct graph *rdg,
       /* Collect data dependences for runtime alias checks to break SCCs.  */
       if (bitmap_count_bits (sccs_to_merge) != (unsigned) num_sccs)
 	{
+	  /* Record the postorder information which will be corrupted by next
+	     graph SCC finding call.  */
+	  for (i = 0; i < pg->n_vertices; ++i)
+	    cbdata.vertices_post[i] = pg->vertices[i].post;
+
 	  /* Run SCC finding algorithm again, with alias dependence edges
 	     skipped.  This is to topologically sort partitions according to
 	     compilation time known dependence.  Note the topological order
@@ -2364,11 +2386,6 @@ break_alias_scc_partitions (struct graph *rdg,
 	      if (cbdata.vertices_component[k] != i)
 		continue;
 
-	      /* Update to the minimal postordeer number of vertices in scc so
-		 that merged partition is sorted correctly against others.  */
-	      if (pg->vertices[j].post > pg->vertices[k].post)
-		pg->vertices[j].post = pg->vertices[k].post;
-
 	      partition_merge_into (NULL, first, partition, FUSE_SAME_SCC);
 	      (*partitions)[k] = NULL;
 	      partition_free (partition);
@@ -2379,6 +2396,29 @@ break_alias_scc_partitions (struct graph *rdg,
 	      first->type = PTYPE_SEQUENTIAL;
 	    }
 	}
+      /* Restore the postorder information if it's corrupted in finding SCC
+	 with alias dependence edges skipped.  If reduction partition's SCC is
+	 broken by runtime alias checks, we force a negative post order to it
+	 making sure it will be scheduled in the last.  */
+      if (num_sccs_no_alias > 0)
+	{
+	  j = -1;
+	  for (i = 0; i < pg->n_vertices; ++i)
+	    {
+	      pg->vertices[i].post = cbdata.vertices_post[i];
+	      struct pg_vdata *data = (struct pg_vdata *)pg->vertices[i].data;
+	      if (data->partition && partition_reduction_p (data->partition))
+		{
+		  gcc_assert (j == -1);
+		  j = i;
+		}
+	    }
+	  if (j >= 0)
+	    pg->vertices[j].post = -1;
+	}
+
+      free (cbdata.vertices_component);
+      free (cbdata.vertices_post);
     }
 
   sort_partitions_by_post_order (pg, partitions);

@@ -673,31 +673,13 @@ public:
 	return;
       }
 
-    /* Do not store variables we cannot take the address of,
-       but keep the values for purposes of debugging.  */
     if (!d->canTakeAddressOf ())
       {
-	/* Don't know if there is a good way to handle instantiations.  */
-	if (d->isInstantiated ())
-	  return;
-
-	/* Cannot make an expression out of a void initializer.  */
-	if (!d->_init || d->_init->isVoidInitializer ())
-	  return;
-
-	tree decl = get_symbol_decl (d);
-	Expression *ie = initializerToExpression (d->_init);
-
-	/* CONST_DECL was initially intended for enumerals and may be used for
-	   scalars in general, but not for aggregates.  Here a non-constant
-	   value is generated anyway so as the CONST_DECL only serves as a
-	   placeholder for the value, however the DECL itself should never be
-	   referenced in any generated code, or passed to the back-end.  */
+	/* Do not store variables we cannot take the address of,
+	   but keep the values for purposes of debugging.  */
 	if (!d->type->isscalar ())
-	  DECL_INITIAL (decl) = build_expr (ie, false);
-	else
 	  {
-	    DECL_INITIAL (decl) = build_expr (ie, true);
+	    tree decl = get_symbol_decl (d);
 	    d_pushdecl (decl);
 	    rest_of_decl_compilation (decl, 1, 0);
 	  }
@@ -1135,6 +1117,25 @@ get_symbol_decl (Declaration *decl)
 
       if (vd->storage_class & STCextern)
 	DECL_EXTERNAL (decl->csym) = 1;
+
+      /* CONST_DECL was initially intended for enumerals and may be used for
+	 scalars in general, but not for aggregates.  Here a non-constant
+	 value is generated anyway so as the CONST_DECL only serves as a
+	 placeholder for the value, however the DECL itself should never be
+	 referenced in any generated code, or passed to the back-end.  */
+      if (vd->storage_class & STCmanifest)
+	{
+	  /* Cannot make an expression out of a void initializer.  */
+	  if (vd->_init && !vd->_init->isVoidInitializer ())
+	    {
+	      Expression *ie = initializerToExpression (vd->_init);
+
+	      if (!vd->type->isscalar ())
+		DECL_INITIAL (decl->csym) = build_expr (ie, false);
+	      else
+		DECL_INITIAL (decl->csym) = build_expr (ie, true);
+	    }
+	}
     }
 
   /* Set the declaration mangled identifier if static.  */
@@ -1232,6 +1233,9 @@ get_symbol_decl (Declaration *decl)
 	      DECL_VINDEX (decl->csym) = size_int (fd->vtblIndex);
 	      DECL_VIRTUAL_P (decl->csym) = 1;
 	    }
+
+	  /* Align method to the minimum boundary for target.  */
+	  SET_DECL_ALIGN (decl->csym, MINIMUM_METHOD_BOUNDARY);
 	}
       else if (fd->isMain () || fd->isCMain ())
 	{
@@ -1558,8 +1562,9 @@ d_finish_decl (tree decl)
   if (flag_checking && DECL_INITIAL (decl))
     {
       /* Initializer must never be bigger than symbol size.  */
-      dinteger_t tsize = int_size_in_bytes (TREE_TYPE (decl));
-      dinteger_t dtsize = int_size_in_bytes (TREE_TYPE (DECL_INITIAL (decl)));
+      HOST_WIDE_INT tsize = int_size_in_bytes (TREE_TYPE (decl));
+      HOST_WIDE_INT dtsize =
+	int_size_in_bytes (TREE_TYPE (DECL_INITIAL (decl)));
 
       if (tsize < dtsize)
 	{
@@ -1803,8 +1808,11 @@ make_thunk (FuncDeclaration *decl, int offset)
 
   DECL_CONTEXT (thunk) = d_decl_context (decl);
 
-  /* Thunks inherit the public access of the function they are targetting.  */
-  TREE_PUBLIC (thunk) = TREE_PUBLIC (function);
+  /* Thunks inherit the public access of the function they are targetting.
+     When the function is outside the current compilation unit however, then the
+     thunk must be kept private to not conflict.  */
+  TREE_PUBLIC (thunk) = TREE_PUBLIC (function) && !DECL_EXTERNAL (function);
+
   DECL_EXTERNAL (thunk) = 0;
 
   /* Thunks are always addressable.  */

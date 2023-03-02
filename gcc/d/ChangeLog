@@ -1,3 +1,272 @@
+2022-05-27  Release Manager
+
+	* GCC 9.5.0 released.
+
+2021-12-10  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-12-10  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	* decl.cc (get_symbol_decl): Align methods to MINIMUM_METHOD_BOUNDARY.
+
+2021-11-18  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-11-18  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	* decl.cc (d_finish_decl): Use HOST_WIDE_INT for type size
+	temporaries.
+
+2021-10-04  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-10-04  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/102574
+	* d-spec.cc (lang_specific_driver): Link libstdc++ statically if
+	-static-libstdc++ was given on command-line.
+
+2021-07-29  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-07-29  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/96435
+	* d-convert.cc (convert_for_rvalue): New function.
+	* d-tree.h (convert_for_rvalue): Declare.
+	* expr.cc (ExprVisitor::visit (CastExp *)): Use convert_for_rvalue.
+	(build_return_dtor): Likewise.
+
+2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/101640
+	* expr.cc (binary_op): Use build2 instead of fold_build2.
+
+2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/101490
+	* d-codegen.cc (build_array_index): Handle void arrays same as byte.
+	* d-convert.cc (convert_expr): Handle converting to zero-sized arrays.
+	* dmd/dcast.c (castTo): Handle casting to zero-sized arrays.
+
+2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/101441
+	* dmd/expression.c (FuncInitExp::resolveLoc): Set type as `string'.
+	(PrettyFuncInitExp::resolveLoc): Likewise.
+
+2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-07-28  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/101127
+	* d-builtins.cc (d_builtin_function_ext_scope): New function.
+	* d-lang.cc (LANG_HOOKS_BUILTIN_FUNCTION_EXT_SCOPE): Define.
+	* d-tree.h (d_builtin_function_ext_scope): Declare.
+
+2021-06-10  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-06-10  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/100967
+	* d-frontend.cc (getTypeInfoType): Move TypeInfo checks to
+	check_typeinfo_type and call new function.
+	* d-tree.h (check_typeinfo_type): Declare.
+	* typeinfo.cc: Include dmd/scope.h.
+	(create_frontend_tinfo_types): Generate front-end types even if Object
+	is missing.
+	(build_typeinfo): Move TypeInfo checks to check_typeinfo_type and call
+	new function.
+	(check_typeinfo_type): New function.
+
+2021-06-10  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2019-06-16  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/90651
+	* dmd/expressionsem.c (ExpressionSemanticVisitor::visit (TypeidExp)):
+	Error when TypeInfo doesn't exist.
+	* dmd/func.c (FuncDeclaration::semantic3): Likewise.
+	* dmd/mtype.c (TypeClass::dotExp): Likewise.
+	* typeinfo.cc (object_module): New variable.
+	(make_frontend_typeinfo): Update signature.  Set temporary on
+	generated TypeInfo classes.
+	(create_tinfo_types): Set object_module.  Move generation of front-end
+	typeinfo into ...
+	(create_frontend_tinfo_types): ... New function.
+	(layout_typeinfo): Call create_frontend_tinfo_types.
+	(layout_classinfo): Likewise.
+	(layout_cpp_typeinfo): Likewise.
+	(create_typeinfo): Likewise.
+
+2021-06-09  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-06-09  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/100964
+	* dmd/expression.c (Expression::checkPostblit): Don't generate
+	TypeInfo when RTTI is disabled.
+
+2021-06-09  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-06-09  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/100935
+	* dmd/mtype.c (Type::getProperty): Prefer explicit alignment over
+	natural alignment for alignof property.
+
+2021-06-04  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-06-04  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/100882
+	* d-codegen.cc (build_assign): Construct initializations inside
+	TARGET_EXPR_INITIAL.
+	(compound_expr): Remove intermediate expressions that have no
+	side-effects.
+	(return_expr): Construct returns inside TARGET_EXPR_INITIAL.
+	* expr.cc (ExprVisitor::visit (CallExp *)): Remove useless assignment
+	to TARGET_EXPR_SLOT.
+
+2021-06-01  Release Manager
+
+	* GCC 9.4.0 released.
+
+2021-04-19  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-04-19  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/98457
+	* d-diagnostic.cc (expand_d_format): Handle escaped backticks.
+	(escape_d_format): New funtion.
+	(verror): Call escape_d_format on prefixing strings.
+	(vdeprecation): Likewise.
+
+2021-03-03  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-03-03  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/99337
+	* dmd/dmodule.c (checkModFileAlias): Don't read past buffer in
+	  comparison.
+
+2021-02-02  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-02-02  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/98921
+	* dmd/dmangle.c (Mangler::visit (TypeSArray *)): Use buf->print
+	  to format integer value.
+	(Mangler::visit (TypeIdentifier *)): Likewise.
+	(Mangler::toBuffer): Likewise.
+	(Mangler::visit (IntegerExp *)): Likewise.
+	(Mangler::visit (StringExp *)): Likewise.
+	(Mangler::visit (ArrayLiteralExp *)): Likewise.
+	(Mangler::visit (AssocArrayLiteralExp *)): Likewise.
+	(Mangler::visit (StructLiteralExp *)): Likewise.
+	* dmd/root/outbuffer.c (OutBuffer::print): New function.
+	* dmd/root/outbuffer.h (OutBuffer::print): Declare.
+
+2020-12-15  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2020-12-15  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/98277
+	* decl.cc (DeclVisitor::visit (VarDeclaration *)): Move setting of
+	DECL_INITIAL for manifest constants to ...
+	(get_symbol_decl): ... here.
+
+2020-10-12  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2020-10-12  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	* dmd/declaration.c (AliasDeclaration::aliasSemantic): Apply storage
+	class and protection attributes.
+
+2020-08-01  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2020-07-30  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/96140
+	* intrinsics.cc (expand_intrinsic_vaarg): Handle ref parameters as
+	arguments to va_arg().
+	(expand_intrinsic_vastart): Handle ref parameters as arguments to
+	va_start().
+
+2020-06-26  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2020-06-25  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/95250
+	* dmd/expressionsem.c (class ExpressionSemanticVisitor): Return early
+	if error occurred during semantic of DivExp.
+
+2020-06-26  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2020-06-25  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/95173
+	* d-attribs.cc (uda_attribute_p): Don't search target attribute table
+	if NULL.
+
+2020-05-18  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backport from mainline
+	2020-03-16  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/92216
+	* decl.cc (make_thunk): Don't set TREE_PUBLIC on thunks if the target
+	function is external to the current compilation.
+
+2020-05-17  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backport from mainline
+	2020-05-06  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/94970
+	* d-codegen.cc (force_target_expr): Move create_temporary_var
+	implementation inline here.
+	(create_temporary_var): Remove.
+	(maybe_temporary_var): Remove.
+	(bind_expr): Remove.
+	* d-convert.cc (d_array_convert): Use build_local_temp to generate
+	temporaries, and generate its assignment.
+	* d-tree.h (create_temporary_var): Remove.
+	(maybe_temporary_var): Remove.
+	(d_array_convert): Remove vars argument.
+	* expr.cc (ExprVisitor::visit (CatExp *)): Use build_local_temp to
+	generate temporaries, don't wrap them in a BIND_EXPR.
+	(ExprVisitor::visit (NewExp *)): Likewise.
+
+2020-05-16  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/95155
+	* dmd/dclass.c (ClassDeclaration::semantic): Don't prematurely
+	set done on semantic analysis.
+
 2020-04-07  Iain Buclaw  <ibuclaw@gdcproject.org>
 
 	PR d/94240

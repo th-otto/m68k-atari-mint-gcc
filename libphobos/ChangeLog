@@ -1,3 +1,84 @@
+2022-05-27  Release Manager
+
+	* GCC 9.5.0 released.
+
+2022-04-26  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-09-30  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	* libdruntime/gcc/unwind/generic.d (__aligned__): Define.
+	(_Unwind_Exception): Align struct to __aligned__.
+
+2022-04-26  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2022-04-26  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	* libdruntime/gcc/emutls.d (emutlsDestroyThread): Clear the per-thread
+	TLS array, don't call free().
+
+2021-12-21  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-12-21  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/103604
+	* libdruntime/core/sys/posix/sys/stat.d (struct stat_t): Fix
+	definition for MIPS64.
+
+2021-11-19  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-11-19  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	* libdruntime/core/thread.d (defaultStackPages): New constant.
+	(Fiber.this): Set stack size to be a multiple of defaultStackPages.
+
+2021-11-19  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-11-19  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	* libdruntime/gcc/emutls.d (emutlsDestroyThread): Don't remove entry
+	from global array.
+	(_d_emutls_destroy): Don't call __gthread_key_delete.
+
+2021-06-01  Release Manager
+
+	* GCC 9.4.0 released.
+
+2021-05-01  Iain Sandoe  <iain@sandoe.co.uk>
+	    Jakub Jelinek   <jakub@redhat.com>
+
+	PR target/97865
+	* configure: Regenerate.
+
+2021-01-24  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-01-23  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/98806
+	* libdruntime/gcc/sections/elf_shared.d (MIPS_Any): Declare version
+	for MIPS32 and MIPS64.
+	(getDependencies): Adjust dlpi_addr on MIPS_Any.
+
+2020-10-15  Maciej W. Rozycki  <macro@linux-mips.org>
+
+	Backported from master:
+	2020-10-12  Maciej W. Rozycki  <macro@linux-mips.org>
+
+	* libdruntime/config/mips/switchcontext.S [__mips_hard_float]:
+	Use L.D and S.D generic assembly instructions rather than LDC1
+	and SDC1 MIPS II hardware instructions.
+
+2020-05-16  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	PR d/90719
+	* libdruntime/core/sys/posix/sys/stat.d (Solaris): Move st_pad3 from
+	struct stat64_t to stat32_t.
+
 2020-04-27  Iain Buclaw  <ibuclaw@gdcproject.org>
 
 	PR d/90718

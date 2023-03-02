@@ -1,3 +1,39 @@
+2022-05-27  Release Manager
+
+	* GCC 9.5.0 released.
+
+2021-06-01  Release Manager
+
+	* GCC 9.4.0 released.
+
+2021-05-01  Iain Sandoe  <iain@sandoe.co.uk>
+	    Jakub Jelinek   <jakub@redhat.com>
+
+	PR target/97865
+	* libtool.m4: Update handling of Darwin platform link flags
+	for Darwin20.
+
+2021-03-09  Ian Lance Taylor  <iant@golang.org>
+
+	PR go/99458
+	* libgo/runtime/proc.c: cast SIGSTKSZ to uintptr
+	In newer versions of glibc it is long, which causes a signed
+	comparison warning.
+
+2020-10-06  Tobias Burnus  <tobias@codesourcery.com>
+
+	Backported from master:
+	2020-10-06  Tobias Burnus  <tobias@codesourcery.com>
+
+	PR target/97302
+	* configure.ac: Only set with_gmp to /usr/local
+	if not building in tree.
+	* configure: Regenerate.
+
+2020-06-02  Martin Liska  <mliska@suse.cz>
+
+	* -: Remove.
+
 2020-04-20  Martin Liska  <mliska@suse.cz>
 
 	Backport from mainline

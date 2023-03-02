@@ -4414,6 +4414,27 @@ proc check_effective_target_aarch64_bti_hw { } {
     } "-O2" ]
 }
 
+# Return 1 if the target supports executing the armv8.3-a FJCVTZS
+# instruction.
+proc check_effective_target_aarch64_fjcvtzs_hw { } {
+    if { ![istarget aarch64*-*-*] } {
+	return 0
+    }
+    return [check_runtime aarch64_fjcvtzs_hw_available {
+	int
+	main (void)
+	{
+	  double in = 25.1;
+	  int out;
+	  asm volatile ("fjcvtzs %w0, %d1"
+			: "=r" (out)
+			: "w" (in)
+			: /* No clobbers.  */);
+	  return out != 25;
+	}
+    } "-march=armv8.3-a" ]
+}
+
 # Return 1 if GCC was configured with --enable-standard-branch-protection
 proc check_effective_target_default_branch_protection { } {
     return [check_configured_with "enable-standard-branch-protection"]
@@ -8579,7 +8600,8 @@ proc check_effective_target_aarch64_tiny { } {
 # Create functions to check that the AArch64 assembler supports the
 # various architecture extensions via the .arch_extension pseudo-op.
 
-foreach { aarch64_ext } { "fp" "simd" "crypto" "crc" "lse" "dotprod" "sve"} {
+foreach { aarch64_ext } { "fp" "simd" "crypto" "crc" "lse" "dotprod" "sve"
+			  "sb"} {
     eval [string map [list FUNC $aarch64_ext] {
 	proc check_effective_target_aarch64_asm_FUNC_ok { } {
 	  if { [istarget aarch64*-*-*] } {
@@ -9399,4 +9421,26 @@ proc check_effective_target_mfentry { } {
     return [check_no_compiler_messages mfentry object {
 	        void foo (void) { }
     } "-mfentry"]
+}
+
+# Return 1 if we're able to assemble movdiri and movdir64b
+
+proc check_effective_target_movdir { } {
+    return [check_no_compiler_messages movdir object {
+	void
+	foo (unsigned int *d, unsigned int s)
+	{
+	  __builtin_ia32_directstoreu_u32 (d, s);
+	}
+	void
+	bar (void *d, const void *s)
+	{
+	  __builtin_ia32_movdir64b (d, s);
+	}
+    } "-mmovdiri -mmovdir64b" ]
+}
+
+# Return 1 if GCC was configured with --with-tune=cortex-a76
+proc check_effective_target_tune_cortex_a76 { } {
+    return [check_configured_with "with-tune=cortex-a76"]
 }

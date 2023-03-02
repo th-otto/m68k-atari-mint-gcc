@@ -1464,6 +1464,19 @@ gfc_check_dummy_characteristics (gfc_symbol *s1, gfc_symbol *s2,
       int i, compval;
       gfc_expr *shape1, *shape2;
 
+      /* Sometimes the ambiguity between deferred shape and assumed shape
+	 does not get resolved in module procedures, where the only explicit
+	 declaration of the dummy is in the interface.  */
+      if (s1->ns->proc_name && s1->ns->proc_name->attr.module_procedure
+	  && s1->as->type == AS_ASSUMED_SHAPE
+	  && s2->as->type == AS_DEFERRED)
+	{
+	  s2->as->type = AS_ASSUMED_SHAPE;
+	  for (i = 0; i < s2->as->rank; i++)
+	    if (s1->as->lower[i] != NULL)
+	      s2->as->lower[i] = gfc_copy_expr (s1->as->lower[i]);
+	}
+
       if (s1->as->type != s2->as->type)
 	{
 	  snprintf (errmsg, err_len, "Shape mismatch in argument '%s'",
@@ -2424,7 +2437,7 @@ compare_parameter (gfc_symbol *formal, gfc_expr *actual,
 	       && formal->ts.u.derived->intmod_sym_id == ISOFORTRAN_LOCK_TYPE)
 	      || formal->attr.lock_comp))
 
-    	{
+	{
 	  if (where)
 	    gfc_error ("Actual argument to non-INTENT(INOUT) dummy %qs at %L, "
 		       "which is LOCK_TYPE or has a LOCK_TYPE component",
@@ -2439,7 +2452,7 @@ compare_parameter (gfc_symbol *formal, gfc_expr *actual,
 	       && formal->ts.u.derived->intmod_sym_id == ISOFORTRAN_EVENT_TYPE)
 	      || formal->attr.event_comp))
 
-    	{
+	{
 	  if (where)
 	    gfc_error ("Actual argument to non-INTENT(INOUT) dummy %qs at %L, "
 		       "which is EVENT_TYPE or has a EVENT_TYPE component",
@@ -3096,11 +3109,13 @@ compare_actual_formal (gfc_actual_arglist **ap, gfc_formal_arglist *formal,
 	  && f->sym->attr.flavor != FL_PROCEDURE)
 	{
 	  if (a->expr->ts.type == BT_CHARACTER && !f->sym->as && where)
-	    gfc_warning (OPT_Wargument_mismatch,
-			 "Character length of actual argument shorter "
-			 "than of dummy argument %qs (%lu/%lu) at %L",
-			 f->sym->name, actual_size, formal_size,
-			 &a->expr->where);
+	    {
+	      gfc_warning (0, "Character length of actual argument shorter "
+			   "than of dummy argument %qs (%lu/%lu) at %L",
+			   f->sym->name, actual_size, formal_size,
+			   &a->expr->where);
+	      goto skip_size_check;
+	    }
           else if (where)
 	    {
 	      /* Emit a warning for -std=legacy and an error otherwise. */
@@ -3654,36 +3669,6 @@ check_intents (gfc_formal_arglist *f, gfc_actual_arglist *a)
   return true;
 }
 
-/* Go through the argument list of a procedure and look for
-   pointers which may be set, possibly introducing a span.  */
-
-static void
-gfc_set_subref_array_pointer_arg (gfc_formal_arglist *dummy_args,
-				  gfc_actual_arglist *actual_args)
-{
-  gfc_formal_arglist *f;
-  gfc_actual_arglist *a;
-  gfc_symbol *a_sym;
-  for (f = dummy_args, a = actual_args; f && a ; f = f->next, a = a->next)
-    {
-
-      if (f->sym == NULL)
-	continue;
-
-      if (!f->sym->attr.pointer || f->sym->attr.intent == INTENT_IN)
-	continue;
-
-      if (a->expr == NULL || a->expr->expr_type != EXPR_VARIABLE)
-	continue;
-      a_sym = a->expr->symtree->n.sym;
-
-      if (!a_sym->attr.pointer)
-	continue;
-
-      a_sym->attr.subref_array_pointer = 1;
-    }
-  return;
-}
 
 /* Check how a procedure is used against its interface.  If all goes
    well, the actual argument list will also end up being properly
@@ -3828,16 +3813,12 @@ gfc_procedure_use (gfc_symbol *sym, gfc_actual_arglist **ap, locus *where)
   if (!compare_actual_formal (ap, dummy_args, 0, sym->attr.elemental,
 			      sym->attr.proc == PROC_ST_FUNCTION, where))
     return false;
- 
+
   if (!check_intents (dummy_args, *ap))
     return false;
 
   if (warn_aliasing)
     check_some_aliasing (dummy_args, *ap);
-
-  /* Set the subref_array_pointer_arg if needed.  */
-  if (dummy_args)
-    gfc_set_subref_array_pointer_arg (dummy_args, *ap);
 
   return true;
 }
@@ -5013,7 +4994,8 @@ gfc_find_typebound_dtio_proc (gfc_symbol *derived, bool write, bool formatted)
   gfc_symtree *tb_io_st = NULL;
   bool t = false;
 
-  if (!derived || !derived->resolved || derived->attr.flavor != FL_DERIVED)
+  if (!derived || !derived->resolve_symbol_called
+      || derived->attr.flavor != FL_DERIVED)
     return NULL;
 
   /* Try to find a typebound DTIO binding.  */

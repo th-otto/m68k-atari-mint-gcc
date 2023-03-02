@@ -1972,6 +1972,13 @@ prune_clobbered_mems (bitmap_set_t set, basic_block block)
 			  && value_dies_in_block_x (expr, block))))
 		to_remove = i;
 	    }
+	  /* If the REFERENCE may trap make sure the block does not contain
+	     a possible exit point.
+	     ???  This is overly conservative if we translate AVAIL_OUT
+	     as the available expression might be after the exit point.  */
+	  if (BB_MAY_NOTRETURN (block)
+	      && vn_reference_may_trap (ref))
+	    to_remove = i;
 	}
       else if (expr->kind == NARY)
 	{
@@ -3302,7 +3309,11 @@ do_pre_regular_insertion (basic_block block, basic_block dom)
 	  /* If all edges produce the same value and that value is
 	     an invariant, then the PHI has the same value on all
 	     edges.  Note this.  */
-	  else if (!cant_insert && all_same)
+	  else if (!cant_insert
+		   && all_same
+		   && (edoubleprime->kind != NAME
+		       || !SSA_NAME_OCCURS_IN_ABNORMAL_PHI
+			     (PRE_EXPR_NAME (edoubleprime))))
 	    {
 	      gcc_assert (edoubleprime->kind == CONSTANT
 			  || edoubleprime->kind == NAME);
@@ -3562,6 +3573,16 @@ do_hoist_insertion (basic_block block)
 	    }
 	  continue;
 	}
+
+      /* If we end up with a punned expression representation and this
+	 happens to be a float typed one give up - we can't know for
+	 sure whether all paths perform the floating-point load we are
+	 about to insert and on some targets this can cause correctness
+	 issues.  See PR88240.  */
+      if (expr->kind == REFERENCE
+	  && PRE_EXPR_REFERENCE (expr)->punned
+	  && FLOAT_TYPE_P (get_expr_type (expr)))
+	continue;
 
       /* OK, we should hoist this value.  Perform the transformation.  */
       pre_stats.hoist_insert++;

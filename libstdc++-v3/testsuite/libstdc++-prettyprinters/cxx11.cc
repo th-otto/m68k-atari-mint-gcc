@@ -60,6 +60,21 @@ struct datum
 
 std::unique_ptr<datum> global;
 
+struct Deleter
+{
+  // Deleter is not an empty class:
+  int deleter_member = -1;
+  // But pointer is an empty class:
+  struct pointer
+  {
+    pointer(const void* = nullptr) { }
+    explicit operator bool() const noexcept { return false; }
+    friend bool operator==(pointer, pointer) noexcept { return true; }
+    friend bool operator!=(pointer, pointer) noexcept { return false; }
+  };
+  void operator()(pointer) const noexcept { }
+};
+
 int
 main()
 {
@@ -137,10 +152,34 @@ main()
   std::unique_ptr<data>& rarrptr = arrptr;
 // { dg-final { regexp-test rarrptr {std::unique_ptr.datum \[\]. = {get\(\) = 0x.*}} } }
 
+  std::unique_ptr<int, Deleter> empty_ptr;
+// { dg-final { note-test empty_ptr {std::unique_ptr<int> = {get() = {<No data fields>}}} } }
+  std::unique_ptr<int, Deleter>& rempty_ptr = empty_ptr;
+// { dg-final { note-test rempty_ptr {std::unique_ptr<int> = {get() = {<No data fields>}}} } }
+
   ExTuple tpl(6,7);
 // { dg-final { note-test tpl {std::tuple containing = {[1] = 6, [2] = 7}} } }
   ExTuple &rtpl = tpl;
 // { dg-final { note-test rtpl {std::tuple containing = {[1] = 6, [2] = 7}} } }
+
+  std::error_code e0;
+  // { dg-final { note-test e0 {std::error_code = { }} } }
+  std::error_condition ec0;
+  // { dg-final { note-test ec0 {std::error_condition = { }} } }
+  std::error_code einval = std::make_error_code(std::errc::invalid_argument);
+  // { dg-final { note-test einval {std::error_code = {"generic": EINVAL}} } }
+  std::error_condition ecinval = std::make_error_condition(std::errc::invalid_argument);
+  // { dg-final { note-test ecinval {std::error_condition = {"generic": EINVAL}} } }
+
+  struct custom_cat : std::error_category {
+    const char* name() const noexcept { return "miaow"; }
+    std::string message(int) const { return ""; }
+  } cat;
+  std::error_code emiaow(42, cat);
+  // { dg-final { note-test emiaow {std::error_code = {"miaow": 42}} } }
+  std::error_condition ecmiaow(42, cat);
+  // { dg-final { note-test ecmiaow {std::error_condition = {"miaow": 42}} } }
+
   placeholder(""); // Mark SPOT
   use(efl);
   use(fl);

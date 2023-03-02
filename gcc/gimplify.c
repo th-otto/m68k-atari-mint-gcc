@@ -211,6 +211,7 @@ struct gimplify_omp_ctx
   bool distribute;
   bool target_firstprivatize_array_bases;
   bool add_safelen1;
+  bool has_depend;
   int defaultmap[4];
 };
 
@@ -4496,7 +4497,11 @@ gimplify_init_ctor_eval_range (tree object, tree lower, tree upper,
     gimplify_init_ctor_eval (cref, CONSTRUCTOR_ELTS (value),
 			     pre_p, cleared);
   else
-    gimplify_seq_add_stmt (pre_p, gimple_build_assign (cref, value));
+    {
+      if (gimplify_expr (&value, pre_p, NULL, is_gimple_val, fb_rvalue)
+	  != GS_ERROR)
+	gimplify_seq_add_stmt (pre_p, gimple_build_assign (cref, value));
+    }
 
   /* We exit the loop when the index var is equal to the upper bound.  */
   gimplify_seq_add_stmt (pre_p,
@@ -7570,7 +7575,13 @@ omp_check_private (struct gimplify_omp_ctx *ctx, tree decl, bool copyprivate)
 
       if ((ctx->region_type & (ORT_TARGET | ORT_TARGET_DATA)) != 0
 	  && (n == NULL || (n->value & GOVD_DATA_SHARE_CLASS) == 0))
-	continue;
+	{
+	  if ((ctx->region_type & ORT_TARGET_DATA) != 0
+	      || n == NULL
+	      || (n->value & GOVD_MAP) == 0)
+	    continue;
+	  return false;
+	}
 
       if (n != NULL)
 	{
@@ -7579,11 +7590,16 @@ omp_check_private (struct gimplify_omp_ctx *ctx, tree decl, bool copyprivate)
 	    return false;
 	  return (n->value & GOVD_SHARED) == 0;
 	}
+
+      if (ctx->region_type == ORT_WORKSHARE
+	  || ctx->region_type == ORT_TASKGROUP
+	  || ctx->region_type == ORT_SIMD
+	  || ctx->region_type == ORT_ACC)
+	continue;
+
+      break;
     }
-  while (ctx->region_type == ORT_WORKSHARE
-	 || ctx->region_type == ORT_TASKGROUP
-	 || ctx->region_type == ORT_SIMD
-	 || ctx->region_type == ORT_ACC);
+  while (1);
   return false;
 }
 
@@ -8260,13 +8276,17 @@ gimplify_scan_omp_clauses (tree *list_p, gimple_seq *pre_p,
 	  if (TREE_CODE (decl) == MEM_REF)
 	    {
 	      tree type = TREE_TYPE (decl);
+	      bool saved_into_ssa = gimplify_ctxp->into_ssa;
+	      gimplify_ctxp->into_ssa = false;
 	      if (gimplify_expr (&TYPE_MAX_VALUE (TYPE_DOMAIN (type)), pre_p,
 				 NULL, is_gimple_val, fb_rvalue, false)
 		  == GS_ERROR)
 		{
+		  gimplify_ctxp->into_ssa = saved_into_ssa;
 		  remove = true;
 		  break;
 		}
+	      gimplify_ctxp->into_ssa = saved_into_ssa;
 	      tree v = TYPE_MAX_VALUE (TYPE_DOMAIN (type));
 	      if (DECL_P (v))
 		{
@@ -8276,13 +8296,16 @@ gimplify_scan_omp_clauses (tree *list_p, gimple_seq *pre_p,
 	      decl = TREE_OPERAND (decl, 0);
 	      if (TREE_CODE (decl) == POINTER_PLUS_EXPR)
 		{
+		  gimplify_ctxp->into_ssa = false;
 		  if (gimplify_expr (&TREE_OPERAND (decl, 1), pre_p,
 				     NULL, is_gimple_val, fb_rvalue, false)
 		      == GS_ERROR)
 		    {
+		      gimplify_ctxp->into_ssa = saved_into_ssa;
 		      remove = true;
 		      break;
 		    }
+		  gimplify_ctxp->into_ssa = saved_into_ssa;
 		  v = TREE_OPERAND (decl, 1);
 		  if (DECL_P (v))
 		    {
@@ -8886,6 +8909,8 @@ gimplify_scan_omp_clauses (tree *list_p, gimple_seq *pre_p,
 	      remove = true;
 	      break;
 	    }
+	  if (code == OMP_TASK)
+	    ctx->has_depend = true;
 	  break;
 
 	case OMP_CLAUSE_TO:
@@ -9503,6 +9528,11 @@ gimplify_adjust_omp_clauses_1 (splay_tree_node n, void *data)
 	    return 0;
 	}
       code = OMP_CLAUSE_SHARED;
+      /* Don't optimize shared into firstprivate for read-only vars
+	 on tasks with depend clause, we shouldn't try to copy them
+	 until the dependencies are satisfied.  */
+      if (gimplify_omp_ctxp->has_depend)
+	flags |= GOVD_WRITTEN;
     }
   else if (flags & GOVD_PRIVATE)
     code = OMP_CLAUSE_PRIVATE;
@@ -9750,6 +9780,10 @@ gimplify_adjust_omp_clauses (gimple_seq *pre_p, gimple_seq body, tree *list_p,
 		  OMP_CLAUSE_SET_CODE (c, OMP_CLAUSE_PRIVATE);
 		  OMP_CLAUSE_PRIVATE_DEBUG (c) = 1;
 		}
+              if (OMP_CLAUSE_CODE (c) == OMP_CLAUSE_SHARED
+		  && ctx->has_depend
+		  && DECL_P (decl))
+		n->value |= GOVD_WRITTEN;
 	      if (OMP_CLAUSE_CODE (c) == OMP_CLAUSE_SHARED
 		  && (n->value & GOVD_WRITTEN) == 0
 		  && DECL_P (decl)

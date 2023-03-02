@@ -501,8 +501,11 @@ get_unique_type_string (char *string, gfc_symbol *derived)
 static void
 get_unique_hashed_string (char *string, gfc_symbol *derived)
 {
-  char tmp[2*GFC_MAX_SYMBOL_LEN+2];
+  /* Provide sufficient space to hold "symbol.symbol_symbol".  */
+  char tmp[3*GFC_MAX_SYMBOL_LEN+3];
   get_unique_type_string (&tmp[0], derived);
+  size_t len = strnlen (tmp, sizeof (tmp));
+  gcc_assert (len < sizeof (tmp));
   /* If string is too long, use hash value in hex representation (allow for
      extra decoration, cf. gfc_build_class_symbol & gfc_find_derived_vtab).
      We need space to for 15 characters "__class_" + symbol name + "_%d_%da",
@@ -523,11 +526,13 @@ unsigned int
 gfc_hash_value (gfc_symbol *sym)
 {
   unsigned int hash = 0;
-  char c[2*(GFC_MAX_SYMBOL_LEN+1)];
+  /* Provide sufficient space to hold "symbol.symbol_symbol".  */
+  char c[3*GFC_MAX_SYMBOL_LEN+3];
   int i, len;
 
   get_unique_type_string (&c[0], sym);
-  len = strlen (c);
+  len = strnlen (c, sizeof (c));
+  gcc_assert ((size_t) len < sizeof (c));
 
   for (i = 0; i < len; i++)
     hash = (hash << 6) + (hash << 16) - hash + c[i];
@@ -608,6 +613,7 @@ gfc_get_len_component (gfc_expr *e, int k)
    component '_vptr' which determines the dynamic type.  When this CLASS
    entity is unlimited polymorphic, then also add a component '_len' to
    store the length of string when that is stored in it.  */
+static int ctr = 0;
 
 bool
 gfc_build_class_symbol (gfc_typespec *ts, symbol_attribute *attr,
@@ -622,13 +628,6 @@ gfc_build_class_symbol (gfc_typespec *ts, symbol_attribute *attr,
   int rank;
 
   gcc_assert (as);
-
-  if (*as && (*as)->type == AS_ASSUMED_SIZE)
-    {
-      gfc_error ("Assumed size polymorphic objects or components, such "
-		 "as that at %C, have not yet been implemented");
-      return false;
-    }
 
   if (attr->class_ok)
     /* Class container has already been built.  */
@@ -667,7 +666,30 @@ gfc_build_class_symbol (gfc_typespec *ts, symbol_attribute *attr,
   else
     ns = ts->u.derived->ns;
 
-  gfc_find_symbol (name, ns, 0, &fclass);
+  /* Although this might seem to be counterintuitive, we can build separate
+     class types with different array specs because the TKR interface checks
+     work on the declared type. All array type other than deferred shape or
+     assumed rank are added to the function namespace to ensure that they
+     are properly distinguished.  */
+  if (attr->dummy && !attr->codimension && (*as)
+      && !((*as)->type == AS_DEFERRED || (*as)->type == AS_ASSUMED_RANK))
+    {
+      char *sname;
+      ns = gfc_current_ns;
+      gfc_find_symbol (name, ns, 0, &fclass);
+      /* If a local class type with this name already exists, update the
+	 name with an index.  */
+      if (fclass)
+	{
+	  fclass = NULL;
+	  sname = xasprintf ("%s_%d", name, ++ctr);
+	  free (name);
+	  name = sname;
+	}
+    }
+  else
+    gfc_find_symbol (name, ns, 0, &fclass);
+
   if (fclass == NULL)
     {
       gfc_symtree *st;
@@ -907,12 +929,18 @@ finalize_component (gfc_expr *expr, gfc_symbol *derived, gfc_component *comp,
 {
   gfc_expr *e;
   gfc_ref *ref;
+  gfc_was_finalized *f;
 
   if (!comp_is_finalizable (comp))
     return;
 
-  if (comp->finalized)
-    return;
+  /* If this expression with this component has been finalized
+     already in this namespace, there is nothing to do.  */
+  for (f = sub_ns->was_finalized; f; f = f->next)
+    {
+      if (f->e == expr && f->c == comp)
+	return;
+    }
 
   e = gfc_copy_expr (expr);
   if (!e->ref)
@@ -1002,6 +1030,7 @@ finalize_component (gfc_expr *expr, gfc_symbol *derived, gfc_component *comp,
 	}
       else
 	(*code) = cond;
+
     }
   else if (comp->ts.type == BT_DERIVED
 	    && comp->ts.u.derived->f2k_derived
@@ -1041,7 +1070,13 @@ finalize_component (gfc_expr *expr, gfc_symbol *derived, gfc_component *comp,
 			    sub_ns);
       gfc_free_expr (e);
     }
-  comp->finalized = true;
+
+  /* Record that this was finalized already in this namespace.  */
+  f = sub_ns->was_finalized;
+  sub_ns->was_finalized = XCNEW (gfc_was_finalized);
+  sub_ns->was_finalized->e = expr;
+  sub_ns->was_finalized->c = comp;
+  sub_ns->was_finalized->next = f;
 }
 
 
@@ -2244,6 +2279,9 @@ gfc_find_derived_vtab (gfc_symbol *derived)
   if (!derived)
     return NULL;
 
+  if (!derived->name)
+    return NULL;
+
   /* Find the gsymbol for the module of use associated derived types.  */
   if ((derived->attr.use_assoc || derived->attr.used_in_submodule)
        && !derived->attr.vtype && !derived->attr.is_class)
@@ -2864,7 +2902,9 @@ gfc_find_vtab (gfc_typespec *ts)
     case BT_DERIVED:
       return gfc_find_derived_vtab (ts->u.derived);
     case BT_CLASS:
-      if (ts->u.derived->components && ts->u.derived->components->ts.u.derived)
+      if (ts->u.derived->attr.is_class
+	  && ts->u.derived->components
+	  && ts->u.derived->components->ts.u.derived)
 	return gfc_find_derived_vtab (ts->u.derived->components->ts.u.derived);
       else
 	return NULL;

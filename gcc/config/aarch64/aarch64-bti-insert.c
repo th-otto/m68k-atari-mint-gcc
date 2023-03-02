@@ -118,6 +118,17 @@ aarch64_pac_insn_p (rtx x)
   return false;
 }
 
+/* Check if INSN is a BTI J insn.  */
+static bool
+aarch64_bti_j_insn_p (rtx_insn *insn)
+{
+  if (!insn || !INSN_P (insn))
+    return false;
+
+  rtx pat = PATTERN (insn);
+  return GET_CODE (pat) == UNSPEC_VOLATILE && XINT (pat, 1) == UNSPECV_BTI_J;
+}
+
 /* Insert the BTI instruction.  */
 /* This is implemented as a late RTL pass that runs before branch
    shortening and does the following.  */
@@ -130,22 +141,6 @@ rest_of_insert_bti (void)
   rtx_insn *insn;
   basic_block bb;
 
-  /* Since a Branch Target Exception can only be triggered by an indirect call,
-     we exempt function that are only called directly.  We also exempt
-     functions that are already protected by Return Address Signing (PACIASP/
-     PACIBSP).  For all other cases insert a BTI C at the beginning of the
-     function.  */
-  if (!cgraph_node::get (cfun->decl)->only_called_directly_p ())
-    {
-      bb = ENTRY_BLOCK_PTR_FOR_FN (cfun)->next_bb;
-      insn = BB_HEAD (bb);
-      if (!aarch64_pac_insn_p (get_first_nonnote_insn ()))
-	{
-	  bti_insn = gen_bti_c ();
-	  emit_insn_before (bti_insn, insn);
-	}
-    }
-
   bb = 0;
   FOR_EACH_BB_FN (bb, cfun)
     {
@@ -153,14 +148,10 @@ rest_of_insert_bti (void)
 	   insn = NEXT_INSN (insn))
 	{
 	  /* If a label is marked to be preserved or can be a non-local goto
-	     target, it must be protected with a BTI J.  The same applies to
-	     NOTE_INSN_DELETED_LABEL since they are basically labels that might
-	     be referenced via variables or constant pool.  */
-	  if ((LABEL_P (insn)
+	     target, it must be protected with a BTI J.  */
+	  if (LABEL_P (insn)
 	       && (LABEL_PRESERVE_P (insn)
 		   || bb->flags & BB_NON_LOCAL_GOTO_TARGET))
-	      || (NOTE_P (insn)
-		  && NOTE_KIND (insn) == NOTE_INSN_DELETED_LABEL))
 	    {
 	      bti_insn = gen_bti_j ();
 	      emit_insn_after (bti_insn, insn);
@@ -183,6 +174,10 @@ rest_of_insert_bti (void)
 		  for (j = GET_NUM_ELEM (vec) - 1; j >= 0; --j)
 		    {
 		      label = as_a <rtx_insn *> (XEXP (RTVEC_ELT (vec, j), 0));
+		      rtx_insn *next = next_nonnote_nondebug_insn (label);
+		      if (aarch64_bti_j_insn_p (next))
+			continue;
+
 		      bti_insn = gen_bti_j ();
 		      emit_insn_after (bti_insn, label);
 		    }
@@ -198,6 +193,22 @@ rest_of_insert_bti (void)
 	      emit_insn_after (bti_insn, insn);
 	      continue;
 	    }
+	}
+    }
+
+  /* Since a Branch Target Exception can only be triggered by an indirect call,
+     we exempt function that are only called directly.  We also exempt
+     functions that are already protected by Return Address Signing (PACIASP/
+     PACIBSP).  For all other cases insert a BTI C at the beginning of the
+     function.  */
+  if (!cgraph_node::get (cfun->decl)->only_called_directly_p ())
+    {
+      bb = ENTRY_BLOCK_PTR_FOR_FN (cfun)->next_bb;
+      insn = BB_HEAD (bb);
+      if (!aarch64_pac_insn_p (get_first_nonnote_insn ()))
+	{
+	  bti_insn = gen_bti_c ();
+	  emit_insn_before (bti_insn, insn);
 	}
     }
 

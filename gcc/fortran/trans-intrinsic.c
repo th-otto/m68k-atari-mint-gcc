@@ -4861,6 +4861,24 @@ gfc_conv_intrinsic_dot_product (gfc_se * se, gfc_expr * expr)
 }
 
 
+/* Remove unneeded kind= argument from actual argument list when the
+   result conversion is dealt with in a different place.  */
+
+static void
+strip_kind_from_actual (gfc_actual_arglist * actual)
+{
+  for (gfc_actual_arglist *a = actual; a; a = a->next)
+    {
+      gfc_actual_arglist *b = a->next;
+      if (b && b->name && strcmp (b->name, "kind") == 0)
+	{
+	  a->next = b->next;
+	  b->next = NULL;
+	  gfc_free_actual_arglist (b);
+	}
+    }
+}
+
 /* Emit code for minloc or maxloc intrinsic.  There are many different cases
    we need to handle.  For performance reasons we sometimes create two
    loops instead of one, where the second one is much simpler.
@@ -4996,6 +5014,7 @@ gfc_conv_intrinsic_minmaxloc (gfc_se * se, gfc_expr * expr, enum tree_code op)
     {
       gfc_actual_arglist *a, *b;
       a = actual;
+      strip_kind_from_actual (a);
       while (a->next)
 	{
 	  b = a->next;
@@ -8454,7 +8473,8 @@ gfc_conv_associated (gfc_se *se, gfc_expr *expr)
   else
     {
       /* An optional target.  */
-      if (arg2->expr->ts.type == BT_CLASS)
+      if (arg2->expr->ts.type == BT_CLASS
+	  && arg2->expr->expr_type != EXPR_FUNCTION)
 	gfc_add_data_component (arg2->expr);
 
       nonzero_charlen = NULL_TREE;
@@ -8482,6 +8502,11 @@ gfc_conv_associated (gfc_se *se, gfc_expr *expr)
 	      && arg2->expr->symtree->n.sym->attr.dummy)
 	    arg2se.expr = build_fold_indirect_ref_loc (input_location,
 						       arg2se.expr);
+	  if (arg2->expr->ts.type == BT_CLASS)
+	    {
+	      arg2se.expr = gfc_evaluate_now (arg2se.expr, &arg2se.pre);
+	      arg2se.expr = gfc_class_data_get (arg2se.expr);
+	    }
 	  gfc_add_block_to_block (&se->pre, &arg1se.pre);
 	  gfc_add_block_to_block (&se->post, &arg1se.post);
 	  gfc_add_block_to_block (&se->pre, &arg2se.pre);

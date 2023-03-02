@@ -7034,9 +7034,13 @@ c_parser_binary_expression (c_parser *parser, struct c_expr *after,
 	&& stack[1].expr.value != error_mark_node			      \
 	&& (c_tree_equal (stack[0].expr.value, omp_atomic_lhs)		      \
 	    || c_tree_equal (stack[1].expr.value, omp_atomic_lhs)))	      \
-      stack[0].expr.value						      \
-	= build2 (stack[1].op, TREE_TYPE (stack[0].expr.value),		      \
-		  stack[0].expr.value, stack[1].expr.value);		      \
+      {									      \
+	tree t = make_node (stack[1].op);				      \
+	TREE_TYPE (t) = TREE_TYPE (stack[0].expr.value);		      \
+	TREE_OPERAND (t, 0) = stack[0].expr.value;			      \
+	TREE_OPERAND (t, 1) = stack[1].expr.value;			      \
+	stack[0].expr.value = t;					      \
+      }									      \
     else								      \
       stack[sp - 1].expr = parser_build_binary_op (stack[sp].loc,	      \
 						   stack[sp].op,	      \
@@ -7586,6 +7590,7 @@ c_parser_has_attribute_expression (c_parser *parser)
 {
   gcc_assert (c_parser_next_token_is_keyword (parser,
 					      RID_BUILTIN_HAS_ATTRIBUTE));
+  location_t start = c_parser_peek_token (parser)->location;
   c_parser_consume_token (parser);
 
   c_inhibit_evaluation_warnings++;
@@ -7664,6 +7669,7 @@ c_parser_has_attribute_expression (c_parser *parser)
 
   parser->lex_untranslated_string = false;
 
+  location_t finish = c_parser_peek_token (parser)->location;
   if (c_parser_next_token_is (parser, CPP_CLOSE_PAREN))
     c_parser_consume_token (parser);
   else
@@ -7692,6 +7698,7 @@ c_parser_has_attribute_expression (c_parser *parser)
   else
     result.value =  boolean_false_node;
 
+  set_c_expr_source_range (&result, start, finish);
   return result;
 }
 
@@ -7784,7 +7791,7 @@ c_parser_generic_selection (c_parser *parser)
   struct c_expr selector, error_expr;
   tree selector_type;
   struct c_generic_association matched_assoc;
-  bool match_found = false;
+  int match_found = -1;
   location_t generic_loc, selector_loc;
 
   error_expr.original_code = ERROR_MARK;
@@ -7819,6 +7826,7 @@ c_parser_generic_selection (c_parser *parser)
       c_parser_skip_until_found (parser, CPP_CLOSE_PAREN, NULL);
       return selector;
     }
+  mark_exp_read (selector.value);
   selector_type = TREE_TYPE (selector.value);
   /* In ISO C terms, rvalues (including the controlling expression of
      _Generic) do not have qualified types.  */
@@ -7918,18 +7926,18 @@ c_parser_generic_selection (c_parser *parser)
 
       if (assoc.type == NULL_TREE)
 	{
-	  if (!match_found)
+	  if (match_found < 0)
 	    {
 	      matched_assoc = assoc;
-	      match_found = true;
+	      match_found = associations.length ();
 	    }
 	}
       else if (comptypes (assoc.type, selector_type))
 	{
-	  if (!match_found || matched_assoc.type == NULL_TREE)
+	  if (match_found < 0 || matched_assoc.type == NULL_TREE)
 	    {
 	      matched_assoc = assoc;
-	      match_found = true;
+	      match_found = associations.length ();
 	    }
 	  else
 	    {
@@ -7947,13 +7955,19 @@ c_parser_generic_selection (c_parser *parser)
       c_parser_consume_token (parser);
     }
 
+  unsigned int ix;
+  struct c_generic_association *iter;
+  FOR_EACH_VEC_ELT (associations, ix, iter)
+    if (ix != (unsigned) match_found)
+      mark_exp_read (iter->expression.value);
+
   if (!parens.require_close (parser))
     {
       c_parser_skip_until_found (parser, CPP_CLOSE_PAREN, NULL);
       return error_expr;
     }
 
-  if (!match_found)
+  if (match_found < 0)
     {
       error_at (selector_loc, "%<_Generic%> selector of type %qT is not "
 		"compatible with any association",
@@ -13379,7 +13393,7 @@ c_parser_oacc_clause_async (c_parser *parser, tree list)
     {
       c_parser_consume_token (parser);
 
-      t = c_parser_expression (parser).value;
+      t = c_parser_expr_no_commas (parser, NULL).value;
       if (!INTEGRAL_TYPE_P (TREE_TYPE (t)))
 	c_parser_error (parser, "expected integer expression");
       else if (t == error_mark_node

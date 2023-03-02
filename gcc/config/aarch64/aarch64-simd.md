@@ -1388,25 +1388,10 @@
 ;; On big-endian this is { zeroes, operand }
 
 (define_insn "move_lo_quad_internal_<mode>"
-  [(set (match_operand:VQ_NO2E 0 "register_operand" "=w,w,w")
-	(vec_concat:VQ_NO2E
+  [(set (match_operand:VQ 0 "register_operand" "=w,w,w")
+	(vec_concat:VQ
 	  (match_operand:<VHALF> 1 "register_operand" "w,r,r")
-	  (vec_duplicate:<VHALF> (const_int 0))))]
-  "TARGET_SIMD && !BYTES_BIG_ENDIAN"
-  "@
-   dup\\t%d0, %1.d[0]
-   fmov\\t%d0, %1
-   dup\\t%d0, %1"
-  [(set_attr "type" "neon_dup<q>,f_mcr,neon_dup<q>")
-   (set_attr "length" "4")
-   (set_attr "arch" "simd,fp,simd")]
-)
-
-(define_insn "move_lo_quad_internal_<mode>"
-  [(set (match_operand:VQ_2E 0 "register_operand" "=w,w,w")
-	(vec_concat:VQ_2E
-	  (match_operand:<VHALF> 1 "register_operand" "w,r,r")
-	  (const_int 0)))]
+	  (match_operand:<VHALF> 2 "aarch64_simd_or_scalar_imm_zero")))]
   "TARGET_SIMD && !BYTES_BIG_ENDIAN"
   "@
    dup\\t%d0, %1.d[0]
@@ -1418,24 +1403,9 @@
 )
 
 (define_insn "move_lo_quad_internal_be_<mode>"
-  [(set (match_operand:VQ_NO2E 0 "register_operand" "=w,w,w")
-	(vec_concat:VQ_NO2E
-	  (vec_duplicate:<VHALF> (const_int 0))
-	  (match_operand:<VHALF> 1 "register_operand" "w,r,r")))]
-  "TARGET_SIMD && BYTES_BIG_ENDIAN"
-  "@
-   dup\\t%d0, %1.d[0]
-   fmov\\t%d0, %1
-   dup\\t%d0, %1"
-  [(set_attr "type" "neon_dup<q>,f_mcr,neon_dup<q>")
-   (set_attr "length" "4")
-   (set_attr "arch" "simd,fp,simd")]
-)
-
-(define_insn "move_lo_quad_internal_be_<mode>"
-  [(set (match_operand:VQ_2E 0 "register_operand" "=w,w,w")
-	(vec_concat:VQ_2E
-	  (const_int 0)
+  [(set (match_operand:VQ 0 "register_operand" "=w,w,w")
+	(vec_concat:VQ
+	  (match_operand:<VHALF> 2 "aarch64_simd_or_scalar_imm_zero")
 	  (match_operand:<VHALF> 1 "register_operand" "w,r,r")))]
   "TARGET_SIMD && BYTES_BIG_ENDIAN"
   "@
@@ -1449,13 +1419,14 @@
 
 (define_expand "move_lo_quad_<mode>"
   [(match_operand:VQ 0 "register_operand")
-   (match_operand:VQ 1 "register_operand")]
+   (match_operand:<VHALF> 1 "register_operand")]
   "TARGET_SIMD"
 {
+  rtx zs = CONST0_RTX (<VHALF>mode);
   if (BYTES_BIG_ENDIAN)
-    emit_insn (gen_move_lo_quad_internal_be_<mode> (operands[0], operands[1]));
+    emit_insn (gen_move_lo_quad_internal_be_<mode> (operands[0], operands[1], zs));
   else
-    emit_insn (gen_move_lo_quad_internal_<mode> (operands[0], operands[1]));
+    emit_insn (gen_move_lo_quad_internal_<mode> (operands[0], operands[1], zs));
   DONE;
 }
 )
@@ -5220,6 +5191,28 @@
   [(set_attr "type" "neon_load1_3reg<q>")]
 )
 
+(define_expand "aarch64_ld1x4<VALLDIF:mode>"
+  [(match_operand:XI 0 "register_operand" "=w")
+   (match_operand:DI 1 "register_operand" "r")
+   (unspec:VALLDIF [(const_int 0)] UNSPEC_VSTRUCTDUMMY)]
+  "TARGET_SIMD"
+{
+  rtx mem = gen_rtx_MEM (XImode, operands[1]);
+  emit_insn (gen_aarch64_ld1_x4_<VALLDIF:mode> (operands[0], mem));
+  DONE;
+})
+
+(define_insn "aarch64_ld1_x4_<mode>"
+  [(set (match_operand:XI 0 "register_operand" "=w")
+	(unspec:XI
+	  [(match_operand:XI 1 "aarch64_simd_struct_operand" "Utv")
+	   (unspec:VALLDIF [(const_int 4)] UNSPEC_VSTRUCTDUMMY)]
+	UNSPEC_LD1))]
+  "TARGET_SIMD"
+  "ld1\\t{%S0.<Vtype> - %V0.<Vtype>}, %1"
+  [(set_attr "type" "neon_load1_4reg<q>")]
+)
+
 (define_expand "aarch64_st1x2<VALLDIF:mode>"
   [(match_operand:DI 0 "register_operand" "")
    (match_operand:OI 1 "register_operand" "")
@@ -5260,6 +5253,28 @@
   "TARGET_SIMD"
   "st1\\t{%S1.<Vtype> - %U1.<Vtype>}, %0"
   [(set_attr "type" "neon_store1_3reg<q>")]
+)
+
+(define_expand "aarch64_st1x4<VALLDIF:mode>"
+  [(match_operand:DI 0 "register_operand" "")
+   (match_operand:XI 1 "register_operand" "")
+   (unspec:VALLDIF [(const_int 0)] UNSPEC_VSTRUCTDUMMY)]
+  "TARGET_SIMD"
+{
+  rtx mem = gen_rtx_MEM (XImode, operands[0]);
+  emit_insn (gen_aarch64_st1_x4_<VALLDIF:mode> (mem, operands[1]));
+  DONE;
+})
+
+(define_insn "aarch64_st1_x4_<mode>"
+  [(set (match_operand:XI 0 "aarch64_simd_struct_operand" "=Utv")
+	(unspec:XI
+	   [(match_operand:XI 1 "register_operand" "w")
+	   (unspec:VALLDIF [(const_int 4)] UNSPEC_VSTRUCTDUMMY)]
+	UNSPEC_ST1))]
+  "TARGET_SIMD"
+  "st1\\t{%S1.<Vtype> - %V1.<Vtype>}, %0"
+  [(set_attr "type" "neon_store1_4reg<q>")]
 )
 
 (define_insn "*aarch64_mov<mode>"

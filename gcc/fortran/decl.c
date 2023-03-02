@@ -1033,6 +1033,11 @@ char_len_param_value (gfc_expr **expr, bool *deferred)
   if (!gfc_expr_check_typed (*expr, gfc_current_ns, false))
     return MATCH_ERROR;
 
+  /* If gfortran gets an EXPR_OP, try to simplifiy it.  This catches things
+     like CHARACTER(([1])).   */
+  if ((*expr)->expr_type == EXPR_OP)
+    gfc_simplify_expr (*expr, 1);
+
   if ((*expr)->expr_type == EXPR_FUNCTION)
     {
       if ((*expr)->ts.type == BT_INTEGER
@@ -1096,6 +1101,9 @@ char_len_param_value (gfc_expr **expr, bool *deferred)
 
       gfc_free_expr (e);
     }
+
+  if (gfc_seen_div0)
+    m = MATCH_ERROR;
 
   return m;
 
@@ -2033,6 +2041,24 @@ add_init_expr_to_sym (const char *name, gfc_expr **initp, locus *var_locus)
 	    }
 
 	  sym->as->type = AS_EXPLICIT;
+	}
+
+      /* Ensure that explicit bounds are simplified.  */
+      if (sym->attr.flavor == FL_PARAMETER && sym->attr.dimension
+	  && sym->as->type == AS_EXPLICIT)
+	{
+	  for (int dim = 0; dim < sym->as->rank; ++dim)
+	    {
+	      gfc_expr *e;
+
+	      e = sym->as->lower[dim];
+	      if (e->expr_type != EXPR_CONSTANT)
+		gfc_reduce_init_expr (e);
+
+	      e = sym->as->upper[dim];
+	      if (e->expr_type != EXPR_CONSTANT)
+		gfc_reduce_init_expr (e);
+	    }
 	}
 
       /* Need to check if the expression we initialized this
@@ -3984,7 +4010,8 @@ error_return:
 match
 gfc_match_decl_type_spec (gfc_typespec *ts, int implicit_flag)
 {
-  char name[GFC_MAX_SYMBOL_LEN + 1];
+  /* Provide sufficient space to hold "pdtsymbol".  */
+  char name[GFC_MAX_SYMBOL_LEN + 1 + 3];
   gfc_symbol *sym, *dt_sym;
   match m;
   char c;
@@ -4029,7 +4056,7 @@ gfc_match_decl_type_spec (gfc_typespec *ts, int implicit_flag)
       gfc_gobble_whitespace ();
       if (gfc_peek_ascii_char () == '*')
 	{
-	  if ((m = gfc_match ("*)")) != MATCH_YES)
+	  if ((m = gfc_match ("* ) ")) != MATCH_YES)
 	    return m;
 	  if (gfc_comp_struct (gfc_current_state ()))
 	    {
@@ -4186,7 +4213,11 @@ gfc_match_decl_type_spec (gfc_typespec *ts, int implicit_flag)
 	    return m;
 	  gcc_assert (!sym->attr.pdt_template && sym->attr.pdt_type);
 	  ts->u.derived = sym;
-	  strcpy (name, gfc_dt_lower_string (sym->name));
+	  const char* lower = gfc_dt_lower_string (sym->name);
+	  size_t len = strnlen (lower, sizeof (name));
+	  gcc_assert (len < sizeof (name));
+	  memcpy (name, lower, len);
+	  name[len] = '\0';
 	}
 
       if (sym && sym->attr.flavor == FL_STRUCT)
@@ -7297,6 +7328,7 @@ gfc_match_function_decl (void)
      procedure interface body.  */
     if (sym->attr.is_bind_c && sym->attr.module_procedure && sym->old_symbol
   	&& strcmp (sym->name, sym->old_symbol->name) == 0
+	&& sym->binding_label && sym->old_symbol->binding_label
 	&& strcmp (sym->binding_label, sym->old_symbol->binding_label) != 0)
       {
 	  const char *null = "NULL", *s1, *s2;
@@ -7812,6 +7844,7 @@ gfc_match_subroutine (void)
 	 procedure interface body.  */
       if (sym->attr.module_procedure && sym->old_symbol
   	  && strcmp (sym->name, sym->old_symbol->name) == 0
+	  && sym->binding_label && sym->old_symbol->binding_label
 	  && strcmp (sym->binding_label, sym->old_symbol->binding_label) != 0)
 	{
 	  const char *null = "NULL", *s1, *s2;
@@ -8978,7 +9011,7 @@ access_attr_decl (gfc_statement st)
 	  else
 	    {
 	      gfc_error ("Access specification of the .%s. operator at %C "
-			 "has already been specified", sym->name);
+			 "has already been specified", uop->name);
 	      goto done;
 	    }
 
@@ -9680,6 +9713,15 @@ gfc_match_submod_proc (void)
 
   if (gfc_match_eos () != MATCH_YES)
     {
+      /* Unset st->n.sym. Note: in reject_statement (), the symbol changes are
+	 undone, such that the st->n.sym->formal points to the original symbol;
+	 if now this namespace is finalized, the formal namespace is freed,
+	 but it might be still needed in the parent namespace.  */
+      gfc_symtree *st = gfc_find_symtree (gfc_current_ns->sym_root, sym->name);
+      st->n.sym = NULL;
+      gfc_free_symbol (sym->tlink);
+      sym->tlink = NULL;
+      sym->refs--;
       gfc_syntax_error (ST_MODULE_PROC);
       return MATCH_ERROR;
     }

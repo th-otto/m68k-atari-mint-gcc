@@ -4551,6 +4551,24 @@ parse_associate (void)
 	 in case of association to a derived-type.  */
       sym->ts = a->target->ts;
 
+      /* Don’t share the character length information between associate
+	 variable and target if the length is not a compile-time constant,
+	 as we don’t want to touch some other character length variable when
+	 we try to initialize the associate variable’s character length
+	 variable.
+	 We do it here rather than later so that expressions referencing the
+	 associate variable will automatically have the correctly setup length
+	 information.  If we did it at resolution stage the expressions would
+	 use the original length information, and the variable a new different
+	 one, but only the latter one would be correctly initialized at
+	 translation stage, and the former one would need some additional setup
+	 there.  */
+      if (sym->ts.type == BT_CHARACTER
+	  && sym->ts.u.cl
+	  && !(sym->ts.u.cl->length
+	       && sym->ts.u.cl->length->expr_type == EXPR_CONSTANT))
+	sym->ts.u.cl = gfc_new_charlen (gfc_current_ns, NULL);
+
       /* Check if the target expression is array valued.  This cannot always
 	 be done by looking at target.rank, because that might not have been
 	 set yet.  Therefore traverse the chain of refs, looking for the last
@@ -6310,6 +6328,11 @@ loop:
 
   gfc_resolve (gfc_current_ns);
 
+  /* Fix the implicit_pure attribute for those procedures who should
+     not have it.  */
+  while (gfc_fix_implicit_pure (gfc_current_ns))
+    ;
+
   /* Dump the parse tree if requested.  */
   if (flag_dump_fortran_original)
     gfc_dump_parse_tree (gfc_current_ns, stdout);
@@ -6354,6 +6377,24 @@ prog_units:
 done:
   /* Do the resolution.  */
   resolve_all_program_units (gfc_global_ns_list);
+
+  /* Go through all top-level namespaces and unset the implicit_pure
+     attribute for any procedures that call something not pure or
+     implicit_pure.  Because the a procedure marked as not implicit_pure
+     in one sweep may be called by another routine, we repeat this
+     process until there are no more changes.  */
+  bool changed;
+  do
+    {
+      changed = false;
+      for (gfc_current_ns = gfc_global_ns_list; gfc_current_ns;
+	   gfc_current_ns = gfc_current_ns->sibling)
+	{
+	  if (gfc_fix_implicit_pure (gfc_current_ns))
+	    changed = true;
+	}
+    }
+  while (changed);
 
   /* Do the parse tree dump.  */
   gfc_current_ns = flag_dump_fortran_original ? gfc_global_ns_list : NULL;

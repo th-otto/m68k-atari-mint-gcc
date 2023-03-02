@@ -23,7 +23,7 @@
 // <http://www.gnu.org/licenses/>.
 
 /** @file variant
- *  This is the <variant> C++ Library header.
+ *  This is the `<variant>` C++ Library header.
  */
 
 #ifndef _GLIBCXX_VARIANT
@@ -372,12 +372,16 @@ namespace __variant
   template<typename... _Types>
     struct _Variant_storage<false, _Types...>
     {
-      constexpr _Variant_storage() : _M_index(variant_npos) { }
+      constexpr
+      _Variant_storage()
+      : _M_index(static_cast<__index_type>(variant_npos))
+      { }
 
       template<size_t _Np, typename... _Args>
-	constexpr _Variant_storage(in_place_index_t<_Np>, _Args&&... __args)
+	constexpr
+	_Variant_storage(in_place_index_t<_Np>, _Args&&... __args)
 	: _M_u(in_place_index<_Np>, std::forward<_Args>(__args)...),
-	_M_index(_Np)
+	_M_index{_Np}
 	{ }
 
       constexpr void _M_reset_impl()
@@ -395,7 +399,7 @@ namespace __variant
       void _M_reset()
       {
 	_M_reset_impl();
-	_M_index = variant_npos;
+	_M_index = static_cast<__index_type>(variant_npos);
       }
 
       ~_Variant_storage()
@@ -424,16 +428,20 @@ namespace __variant
   template<typename... _Types>
     struct _Variant_storage<true, _Types...>
     {
-      constexpr _Variant_storage() : _M_index(variant_npos) { }
+      constexpr
+      _Variant_storage()
+      : _M_index(static_cast<__index_type>(variant_npos))
+      { }
 
       template<size_t _Np, typename... _Args>
-	constexpr _Variant_storage(in_place_index_t<_Np>, _Args&&... __args)
+	constexpr
+	_Variant_storage(in_place_index_t<_Np>, _Args&&... __args)
 	: _M_u(in_place_index<_Np>, std::forward<_Args>(__args)...),
-	_M_index(_Np)
+	_M_index{_Np}
 	{ }
 
       void _M_reset()
-      { _M_index = variant_npos; }
+      { _M_index = static_cast<__index_type>(variant_npos); }
 
       void*
       _M_storage() const
@@ -447,7 +455,7 @@ namespace __variant
       {
 	if constexpr (__never_valueless<_Types...>())
 	  return true;
-	return this->_M_index != __index_type(variant_npos);
+	return this->_M_index != static_cast<__index_type>(variant_npos);
       }
 
       _Variadic_union<_Types...> _M_u;
@@ -606,7 +614,8 @@ namespace __variant
 		      this->_M_destructive_copy(__rhs_index, __rhs_mem);
 		    else
 		      __variant_cast<_Types...>(*this)
-			= variant<_Types...>(__rhs_mem);
+			= variant<_Types...>(std::in_place_index<__rhs_index>,
+					     __rhs_mem);
 		  }
 	      }
 	    else
@@ -1030,6 +1039,14 @@ namespace __variant
 			      std::index_sequence<__indices...>>
     : _Base_dedup<__indices, __poison_hash<remove_const_t<_Types>>>... { };
 
+  template<size_t _Np, typename _Variant>
+    using __get_t = decltype(std::get<_Np>(std::declval<_Variant>()));
+
+  // Return type of std::visit.
+  template<typename _Visitor, typename... _Variants>
+    using __visit_result_t
+      = invoke_result_t<_Visitor, __get_t<0, _Variants>...>;
+
 } // namespace __variant
 } // namespace __detail
 
@@ -1182,7 +1199,8 @@ namespace __variant
 #undef _VARIANT_RELATION_FUNCTION_TEMPLATE
 
   template<typename _Visitor, typename... _Variants>
-    constexpr decltype(auto) visit(_Visitor&&, _Variants&&...);
+    constexpr __detail::__variant::__visit_result_t<_Visitor, _Variants...>
+    visit(_Visitor&&, _Variants&&...);
 
   template<typename... _Types>
     inline enable_if_t<(is_move_constructible_v<_Types> && ...)
@@ -1629,7 +1647,7 @@ namespace __variant
     __do_visit(_Visitor&& __visitor, _Variants&&... __variants)
     {
       using _Deduced_type = std::invoke_result<_Visitor,
-	decltype(std::get<0>(std::declval<_Variants>()))...>;
+	__detail::__variant::__get_t<0, _Variants>...>;
 
       using _Result_type = typename std::conditional_t<__use_index,
 	__detail::__variant::__variant_idx_cookie,
@@ -1645,14 +1663,14 @@ namespace __variant
     }
 
   template<typename _Visitor, typename... _Variants>
-    constexpr decltype(auto)
+    constexpr __detail::__variant::__visit_result_t<_Visitor, _Variants...>
     visit(_Visitor&& __visitor, _Variants&&... __variants)
     {
       if ((__variants.valueless_by_exception() || ...))
 	__throw_bad_variant_access("Unexpected index");
 
-      return __do_visit(std::forward<_Visitor>(__visitor),
-			std::forward<_Variants>(__variants)...);
+      return std::__do_visit(std::forward<_Visitor>(__visitor),
+			     std::forward<_Variants>(__variants)...);
     }
 
 #if __cplusplus > 201703L

@@ -11683,6 +11683,7 @@ build_call_expr_internal_loc_array (location_t loc, internal_fn ifn,
     CALL_EXPR_ARG (t, i) = args[i];
   SET_EXPR_LOCATION (t, loc);
   CALL_EXPR_IFN (t) = ifn;
+  process_call_operands (t);
   return t;
 }
 
@@ -12188,7 +12189,6 @@ walk_tree_1 (tree *tp, walk_tree_fn func, void *data,
     case INTEGER_CST:
     case REAL_CST:
     case FIXED_CST:
-    case VECTOR_CST:
     case STRING_CST:
     case BLOCK:
     case PLACEHOLDER_EXPR:
@@ -12217,6 +12217,18 @@ walk_tree_1 (tree *tp, walk_tree_fn func, void *data,
 
 	/* Now walk the first one as a tail call.  */
 	WALK_SUBTREE_TAIL (TREE_VEC_ELT (*tp, 0));
+      }
+
+    case VECTOR_CST:
+      {
+	unsigned len = vector_cst_encoded_nelts (*tp);
+	if (len == 0)
+	  break;
+	/* Walk all elements but the first.  */
+	while (--len)
+	  WALK_SUBTREE (VECTOR_CST_ENCODED_ELT (*tp, len));
+	/* Now walk the first one as a tail call.  */
+	WALK_SUBTREE_TAIL (VECTOR_CST_ENCODED_ELT (*tp, 0));
       }
 
     case COMPLEX_CST:
@@ -12328,7 +12340,6 @@ walk_tree_1 (tree *tp, walk_tree_fn func, void *data,
 	case OMP_CLAUSE_DEFAULTMAP:
 	case OMP_CLAUSE_AUTO:
 	case OMP_CLAUSE_SEQ:
-	case OMP_CLAUSE_TILE:
 	case OMP_CLAUSE__SIMT_:
 	case OMP_CLAUSE_IF_PRESENT:
 	case OMP_CLAUSE_FINALIZE:
@@ -12340,6 +12351,7 @@ walk_tree_1 (tree *tp, walk_tree_fn func, void *data,
 	  WALK_SUBTREE_TAIL (OMP_CLAUSE_CHAIN (*tp));
 
 	case OMP_CLAUSE_COLLAPSE:
+	case OMP_CLAUSE_TILE:
 	  {
 	    int i;
 	    for (i = 0; i < 3; i++)
@@ -12995,10 +13007,11 @@ lhd_gcc_personality (void)
    OBJ_TYPE_REF representing an virtual call of C++ method.
    (As opposed to OBJ_TYPE_REF representing objc calls
    through a cast where middle-end devirtualization machinery
-   can't apply.) */
+   can't apply.)  FOR_DUMP_P is true when being called from
+   the dump routines.  */
 
 bool
-virtual_method_call_p (const_tree target)
+virtual_method_call_p (const_tree target, bool for_dump_p)
 {
   if (TREE_CODE (target) != OBJ_TYPE_REF)
     return false;
@@ -13011,7 +13024,7 @@ virtual_method_call_p (const_tree target)
   /* If we do not have BINFO associated, it means that type was built
      without devirtualization enabled.  Do not consider this a virtual
      call.  */
-  if (!TYPE_BINFO (obj_type_ref_class (target)))
+  if (!TYPE_BINFO (obj_type_ref_class (target, for_dump_p)))
     return false;
   return true;
 }

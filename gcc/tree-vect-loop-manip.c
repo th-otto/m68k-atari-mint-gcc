@@ -1065,6 +1065,10 @@ slpeel_tree_duplicate_loop_to_edge_cfg (struct loop *loop,
 
   add_phi_args_after_copy (new_bbs, scalar_loop->num_nodes + 1, NULL);
 
+  /* Skip new preheader since it's deleted if copy loop is added at entry.  */
+  for (unsigned i = (at_exit ? 0 : 1); i < scalar_loop->num_nodes + 1; i++)
+    rename_variables_in_bb (new_bbs[i], duplicate_outer_loop);
+
   if (scalar_loop != loop)
     {
       /* If we copied from SCALAR_LOOP rather than LOOP, SSA_NAMEs from
@@ -1141,10 +1145,6 @@ slpeel_tree_duplicate_loop_to_edge_cfg (struct loop *loop,
       set_immediate_dominator (CDI_DOMINATORS, new_loop->header,
 			       loop_preheader_edge (new_loop)->src);
     }
-
-  /* Skip new preheader since it's deleted if copy loop is added at entry.  */
-  for (unsigned i = (at_exit ? 0 : 1); i < scalar_loop->num_nodes + 1; i++)
-    rename_variables_in_bb (new_bbs[i], duplicate_outer_loop);
 
   if (scalar_loop != loop)
     {
@@ -1774,7 +1774,8 @@ vect_update_inits_of_drs (loop_vec_info loop_vinfo, tree niters,
   FOR_EACH_VEC_ELT (datarefs, i, dr)
     {
       dr_vec_info *dr_info = loop_vinfo->lookup_dr (dr);
-      if (!STMT_VINFO_GATHER_SCATTER_P (dr_info->stmt))
+      if (!STMT_VINFO_GATHER_SCATTER_P (dr_info->stmt)
+	  && !STMT_VINFO_SIMD_LANE_ACCESS_P (dr_info->stmt))
 	vect_update_init_of_dr (dr, niters, code);
     }
 }
@@ -1986,13 +1987,29 @@ vect_gen_vector_loop_niters (loop_vec_info loop_vinfo, tree niters,
       niters_vector = force_gimple_operand (niters_vector, &stmts, true, var);
       gsi_insert_seq_on_edge_immediate (pe, stmts);
       /* Peeling algorithm guarantees that vector loop bound is at least ONE,
-	 we set range information to make niters analyzer's life easier.  */
+	 we set range information to make niters analyzer's life easier.
+	 Note the number of latch iteration value can be TYPE_MAX_VALUE so
+	 we have to represent the vector niter TYPE_MAX_VALUE + 1 >> log_vf.  */
       if (stmts != NULL && log_vf)
-	set_range_info (niters_vector, VR_RANGE,
-			wi::to_wide (build_int_cst (type, 1)),
-			wi::to_wide (fold_build2 (RSHIFT_EXPR, type,
-						  TYPE_MAX_VALUE (type),
-						  log_vf)));
+	{
+	  if (niters_no_overflow)
+	    set_range_info (niters_vector, VR_RANGE,
+			    wi::one (TYPE_PRECISION (type)),
+			    wi::rshift (wi::max_value (TYPE_PRECISION (type),
+						       TYPE_SIGN (type)),
+					exact_log2 (const_vf),
+					TYPE_SIGN (type)));
+	  /* For VF == 1 the vector IV might also overflow so we cannot
+	     assert a minimum value of 1.  */
+	  else if (const_vf > 1)
+	    set_range_info (niters_vector, VR_RANGE,
+			    wi::one (TYPE_PRECISION (type)),
+			    wi::rshift (wi::max_value (TYPE_PRECISION (type),
+						       TYPE_SIGN (type))
+					- (const_vf - 1),
+					exact_log2 (const_vf), TYPE_SIGN (type))
+			    + 1);
+	}
     }
   *niters_vector_ptr = niters_vector;
   *step_vector_ptr = step_vector;

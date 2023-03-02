@@ -87,24 +87,44 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 # define L
 # define M     0x000000
 # define N     0x000000
+# define BARRIER
 #elif MODEL == 2
 # define SUFF  _acq
 # define A     a
 # define L
 # define M     0x400000
 # define N     0x800000
+# define BARRIER
 #elif MODEL == 3
 # define SUFF  _rel
 # define A
 # define L     l
 # define M     0x008000
 # define N     0x400000
+# define BARRIER
 #elif MODEL == 4
 # define SUFF  _acq_rel
 # define A     a
 # define L     l
 # define M     0x408000
 # define N     0xc00000
+# define BARRIER
+#elif MODEL == 5
+# define SUFF  _sync
+#ifdef L_swp
+/* swp has _acq semantics.  */
+#  define A    a
+#  define L
+#  define M    0x400000
+#  define N    0x800000
+#else
+/* All other _sync functions have _seq semantics.  */
+#  define A    a
+#  define L    l
+#  define M    0x408000
+#  define N    0xc00000
+#endif
+# define BARRIER dmb		ish
 #else
 # error
 #endif
@@ -127,7 +147,12 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #endif
 
 #define NAME(BASE)		glue4(__aarch64_, BASE, SIZE, SUFF)
-#define LDXR			glue4(ld, A, xr, S)
+#if MODEL == 5
+/* Drop A for _sync functions.  */
+# define LDXR			glue3(ld, xr, S)
+#else
+# define LDXR			glue4(ld, A, xr, S)
+#endif
 #define STXR			glue4(st, L, xr, S)
 
 /* Temporary registers used.  Other than these, only the return value
@@ -135,6 +160,8 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #define tmp0	16
 #define tmp1	17
 #define tmp2	15
+
+#define BTI_C	hint	34
 
 /* Start and end a function.  */
 .macro	STARTFN name
@@ -145,6 +172,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 	.type	\name, %function
 	.cfi_startproc
 \name:
+	BTI_C
 .endm
 
 .macro	ENDFN name
@@ -180,10 +208,16 @@ STARTFN	NAME(cas)
 	bne		1f
 	STXR		w(tmp1), s(1), [x2]
 	cbnz		w(tmp1), 0b
-1:	ret
+1:	BARRIER
+	ret
 
 #else
-#define LDXP	glue3(ld, A, xp)
+#if MODEL == 5
+/* Drop A for _sync functions.  */
+# define LDXP	glue2(ld, xp)
+#else
+# define LDXP	glue3(ld, A, xp)
+#endif
 #define STXP	glue3(st, L, xp)
 #ifdef HAVE_AS_LSE
 # define CASP	glue3(casp, A, L)	x0, x1, x2, x3, [x4]
@@ -200,9 +234,10 @@ STARTFN	NAME(cas)
 	cmp		x0, x(tmp0)
 	ccmp		x1, x(tmp1), #0, eq
 	bne		1f
-	STXP		w(tmp2), x(tmp0), x(tmp1), [x4]
+	STXP		w(tmp2), x2, x3, [x4]
 	cbnz		w(tmp2), 0b
-1:	ret
+1:	BARRIER
+	ret
 
 #endif
 
@@ -226,6 +261,7 @@ STARTFN	NAME(swp)
 0:	LDXR		s(0), [x1]
 	STXR		w(tmp1), s(tmp0), [x1]
 	cbnz		w(tmp1), 0b
+	BARRIER
 	ret
 
 ENDFN	NAME(swp)
@@ -270,7 +306,35 @@ STARTFN	NAME(LDNM)
 	OP		s(tmp1), s(0), s(tmp0)
 	STXR		w(tmp2), s(tmp1), [x1]
 	cbnz		w(tmp2), 0b
+	BARRIER
 	ret
 
 ENDFN	NAME(LDNM)
+#endif
+
+/* GNU_PROPERTY_AARCH64_* macros from elf.h for use in asm code.  */
+#define FEATURE_1_AND 0xc0000000
+#define FEATURE_1_BTI 1
+#define FEATURE_1_PAC 2
+
+/* Add a NT_GNU_PROPERTY_TYPE_0 note.  */
+#define GNU_PROPERTY(type, value)	\
+  .section .note.gnu.property, "a";	\
+  .p2align 3;				\
+  .word 4;				\
+  .word 16;				\
+  .word 5;				\
+  .asciz "GNU";				\
+  .word type;				\
+  .word 4;				\
+  .word value;				\
+  .word 0;
+
+#if defined(__linux__) || defined(__FreeBSD__)
+.section .note.GNU-stack, "", %progbits
+
+/* Add GNU property note if built with branch protection.  */
+# ifdef __ARM_FEATURE_BTI_DEFAULT
+GNU_PROPERTY (FEATURE_1_AND, FEATURE_1_BTI)
+# endif
 #endif

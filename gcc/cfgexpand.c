@@ -2879,11 +2879,15 @@ asm_clobber_reg_is_valid (int regno, int nregs, const char *regname)
      as it was before, so no asm can validly clobber the stack pointer in
      the usual sense.  Adding the stack pointer to the clobber list has
      traditionally had some undocumented and somewhat obscure side-effects.  */
-  if (overlaps_hard_reg_set_p (regset, Pmode, STACK_POINTER_REGNUM)
-      && warning (OPT_Wdeprecated, "listing the stack pointer register"
-		  " %qs in a clobber list is deprecated", regname))
-    inform (input_location, "the value of the stack pointer after an %<asm%>"
-	    " statement must be the same as it was before the statement");
+  if (overlaps_hard_reg_set_p (regset, Pmode, STACK_POINTER_REGNUM))
+    {
+      crtl->sp_is_clobbered_by_asm = true;
+      if (warning (OPT_Wdeprecated, "listing the stack pointer register"
+		   " %qs in a clobber list is deprecated", regname))
+	inform (input_location, "the value of the stack pointer after"
+		" an %<asm%> statement must be the same as it was before"
+		" the statement");
+    }
 
   return is_valid;
 }
@@ -2946,6 +2950,7 @@ expand_asm_stmt (gasm *stmt)
   unsigned ninputs = gimple_asm_ninputs (stmt);
   unsigned nlabels = gimple_asm_nlabels (stmt);
   unsigned i;
+  bool error_seen = false;
 
   /* ??? Diagnose during gimplification?  */
   if (ninputs + noutputs + nlabels > MAX_RECOG_OPERANDS)
@@ -3004,6 +3009,7 @@ expand_asm_stmt (gasm *stmt)
 		{
 		  /* ??? Diagnose during gimplification?  */
 		  error ("unknown register name %qs in %<asm%>", regname);
+		  error_seen = true;
 		}
 	      else if (j == -4)
 		{
@@ -3067,7 +3073,10 @@ expand_asm_stmt (gasm *stmt)
 		&& REG_P (DECL_RTL (output_tvec[j]))
 		&& HARD_REGISTER_P (DECL_RTL (output_tvec[j]))
 		&& output_hregno == REGNO (DECL_RTL (output_tvec[j])))
-	      error ("invalid hard register usage between output operands");
+	      {
+		error ("invalid hard register usage between output operands");
+		error_seen = true;
+	      }
 
 	  /* Verify matching constraint operands use the same hard register
 	     and that the non-matching constraint operands do not use the same
@@ -3090,13 +3099,19 @@ expand_asm_stmt (gasm *stmt)
 		  }
 		if (i == match
 		    && output_hregno != input_hregno)
-		  error ("invalid hard register usage between output operand "
-			 "and matching constraint operand");
+		  {
+		    error ("invalid hard register usage between output "
+			   "operand and matching constraint operand");
+		    error_seen = true;
+		  }
 		else if (early_clobber_p
 			 && i != match
 			 && output_hregno == input_hregno)
-		  error ("invalid hard register usage between earlyclobber "
-			 "operand and input operand");
+		  {
+		    error ("invalid hard register usage between "
+			   "earlyclobber operand and input operand");
+		    error_seen = true;
+		  }
 	      }
 	}
 
@@ -3164,7 +3179,9 @@ expand_asm_stmt (gasm *stmt)
 		    && GET_MODE (DECL_RTL (val)) != TYPE_MODE (type)))
 	  || ! allows_reg
 	  || is_inout
-	  || TREE_ADDRESSABLE (type))
+	  || TREE_ADDRESSABLE (type)
+	  || (!tree_fits_poly_int64_p (TYPE_SIZE (type))
+	      && !known_size_p (max_int_size_in_bytes (type))))
 	{
 	  op = expand_expr (val, NULL_RTX, VOIDmode,
 			    !allows_reg ? EXPAND_MEMORY : EXPAND_WRITE);
@@ -3172,7 +3189,10 @@ expand_asm_stmt (gasm *stmt)
 	    op = validize_mem (op);
 
 	  if (! allows_reg && !MEM_P (op))
-	    error ("output number %d not directly addressable", i);
+	    {
+	      error ("output number %d not directly addressable", i);
+	      error_seen = true;
+	    }
 	  if ((! allows_mem && MEM_P (op) && GET_MODE (op) != BLKmode)
 	      || GET_CODE (op) == CONCAT)
 	    {
@@ -3210,6 +3230,19 @@ expand_asm_stmt (gasm *stmt)
 
       if (is_inout)
 	inout_opnum.safe_push (i);
+    }
+
+  const char *str = gimple_asm_string (stmt);
+  if (error_seen)
+    {
+      ninputs = 0;
+      noutputs = 0;
+      inout_opnum.truncate (0);
+      output_rvec.truncate (0);
+      clobber_rvec.truncate (0);
+      constraints.truncate (0);
+      CLEAR_HARD_REG_SET (clobbered_regs);
+      str = "";
     }
 
   auto_vec<rtx, MAX_RECOG_OPERANDS> input_rvec;
@@ -3269,7 +3302,7 @@ expand_asm_stmt (gasm *stmt)
     }
 
   /* For in-out operands, copy output rtx to input rtx.  */
-  unsigned ninout = inout_opnum.length();
+  unsigned ninout = inout_opnum.length ();
   for (i = 0; i < ninout; i++)
     {
       int j = inout_opnum[i];
@@ -3323,7 +3356,7 @@ expand_asm_stmt (gasm *stmt)
 
   rtx body = gen_rtx_ASM_OPERANDS ((noutputs == 0 ? VOIDmode
 				    : GET_MODE (output_rvec[0])),
-				   ggc_strdup (gimple_asm_string (stmt)),
+				   ggc_strdup (str),
 				   "", 0, argvec, constraintvec,
 				   labelvec, locus);
   MEM_VOLATILE_P (body) = gimple_asm_volatile_p (stmt);
@@ -4352,7 +4385,12 @@ expand_debug_expr (tree exp)
       op0 = DECL_RTL_IF_SET (exp);
 
       if (op0)
-	return op0;
+	{
+	  if (GET_MODE (op0) != mode)
+	    gcc_assert (VECTOR_TYPE_P (TREE_TYPE (exp)));
+	  else
+	    return op0;
+	}
 
       op0 = gen_rtx_DEBUG_EXPR (mode);
       DEBUG_EXPR_TREE_DECL (op0) = exp;
@@ -5769,7 +5807,7 @@ expand_gimple_basic_block (basic_block bb, bool disable_tail_calls)
 			  && !target_for_debug_bind (var))
 			goto delink_debug_stmt;
 
-		      if (DECL_P (var))
+		      if (DECL_P (var) && !VECTOR_TYPE_P (TREE_TYPE (var)))
 			mode = DECL_MODE (var);
 		      else
 			mode = TYPE_MODE (TREE_TYPE (var));
@@ -5786,7 +5824,10 @@ expand_gimple_basic_block (basic_block bb, bool disable_tail_calls)
 
 		      value = gimple_debug_source_bind_get_value (stmt);
 
-		      mode = DECL_MODE (var);
+		      if (!VECTOR_TYPE_P (TREE_TYPE (var)))
+			mode = DECL_MODE (var);
+		      else
+			mode = TYPE_MODE (TREE_TYPE (var));
 
 		      val = gen_rtx_VAR_LOCATION (mode, var, (rtx)value,
 						  VAR_INIT_STATUS_UNINITIALIZED);

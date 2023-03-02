@@ -1094,7 +1094,6 @@ typedef struct gfc_component
   struct gfc_typebound_proc *tb;
   /* When allocatable/pointer and in a coarray the associated token.  */
   tree caf_token;
-  bool finalized;
 }
 gfc_component;
 
@@ -1602,7 +1601,10 @@ typedef struct gfc_symbol
   /* Set if the symbol is used in a function result specification .  */
   unsigned fn_result_spec:1;
   /* Used to avoid multiple resolutions of a single symbol.  */
-  unsigned resolved:1;
+  /* = 2 if this has already been resolved as an intrinsic,
+       in gfc_resolve_intrinsic,
+     = 1 if it has been resolved in resolve_symbol.  */
+  unsigned resolve_symbol_called:2;
   /* Set if this is a module function or subroutine with the
      abreviated declaration in a submodule.  */
   unsigned abr_modproc_decl:1;
@@ -1650,7 +1652,8 @@ typedef struct gfc_common_head
   char use_assoc, saved, threadprivate;
   unsigned char omp_declare_target : 1;
   unsigned char omp_declare_target_link : 1;
-  char name[GFC_MAX_SYMBOL_LEN + 1];
+  /* Provide sufficient space to hold "symbol.eq.1234567890".  */
+  char name[GFC_MAX_SYMBOL_LEN + 1 + 14];
   struct gfc_symbol *head;
   const char* binding_label;
   int is_bind_c;
@@ -1746,6 +1749,16 @@ gfc_oacc_routine_name;
 
 #define gfc_get_oacc_routine_name() XCNEW (gfc_oacc_routine_name)
 
+/* Node in linked list to see what has already been finalized
+   earlier.  */
+
+typedef struct gfc_was_finalized {
+  gfc_expr *e;
+  gfc_component *c;
+  struct gfc_was_finalized *next;
+}
+gfc_was_finalized;
+
 /* A namespace describes the contents of procedure, module, interface block
    or BLOCK construct.  */
 /* ??? Anything else use these?  */
@@ -1837,6 +1850,11 @@ typedef struct gfc_namespace
 
   /* Linked list of !$omp declare simd constructs.  */
   struct gfc_omp_declare_simd *omp_declare_simd;
+
+  /* A hash set for the the gfc expressions that have already
+     been finalized in this namespace.  */
+
+  gfc_was_finalized *was_finalized;
 
   /* Set to 1 if namespace is a BLOCK DATA program unit.  */
   unsigned is_block_data:1;
@@ -2187,6 +2205,7 @@ typedef struct gfc_expr
   /* Set this if no warning should be given somewhere in a lower level.  */
 
   unsigned int do_not_warn : 1;
+
   /* If an expression comes from a Hollerith constant or compile-time
      evaluation of a transfer statement, it may have a prescribed target-
      memory representation, and these cannot always be backformed from
@@ -3340,6 +3359,7 @@ bool find_forall_index (gfc_expr *, gfc_symbol *, int);
 bool gfc_resolve_index (gfc_expr *, int);
 bool gfc_resolve_dim_arg (gfc_expr *);
 bool gfc_is_formal_arg (void);
+bool gfc_resolve_substring (gfc_ref *, bool *);
 void gfc_resolve_substring_charlen (gfc_expr *);
 match gfc_iso_c_sub_interface(gfc_code *, gfc_symbol *);
 gfc_expr *gfc_expr_to_initialize (gfc_expr *);
@@ -3545,6 +3565,7 @@ typedef int (*walk_expr_fn_t) (gfc_expr **, int *, void *);
 int gfc_dummy_code_callback (gfc_code **, int *, void *);
 int gfc_expr_walker (gfc_expr **, walk_expr_fn_t, void *);
 int gfc_code_walker (gfc_code **, walk_code_fn_t, walk_expr_fn_t, void *);
+bool gfc_fix_implicit_pure (gfc_namespace *);
 
 /* simplify.c */
 

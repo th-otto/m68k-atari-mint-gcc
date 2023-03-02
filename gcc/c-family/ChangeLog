@@ -1,3 +1,110 @@
+2022-05-27  Release Manager
+
+	* GCC 9.5.0 released.
+
+2022-05-11  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-04-11  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/105186
+	* c-common.c (c_common_nodes_and_builtins): After registering __int%d
+	and __int%d__ builtin types, initialize corresponding ridpointers
+	entry.
+
+2022-05-11  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-03-09  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/104711
+	* c-opts.c (c_common_post_options): Don't enable
+	-Wshift-negative-value from -Wextra for C++20 or later.
+	* c-ubsan.c (ubsan_instrument_shift): Adjust comments.
+	* c-warn.c (maybe_warn_shift_overflow): Use TYPE_OVERFLOW_WRAPS
+	instead of TYPE_UNSIGNED.
+
+2022-05-11  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-02-16  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/104510
+	* c-common.c (shorten_compare): Convert original arguments to
+	the original *restype_ptr when mixing binary and decimal float.
+
+2022-05-11  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-10-21  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/64888
+	* c-omp.c (c_omp_predefined_variable): Return true also for
+	ubsan_create_data created artificial variables.
+
+2022-05-11  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-10-01  Jakub Jelinek  <jakub@redhat.com>
+		    Richard Biener  <rguenther@suse.de>
+
+	PR sanitizer/102515
+	* c-ubsan.c (ubsan_instrument_division): Check the right
+	flag_sanitize_recover bit, depending on which sanitization
+	is done.
+
+2021-06-01  Release Manager
+
+	* GCC 9.4.0 released.
+
+2021-04-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-03-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/99324
+	* c-common.c (build_va_arg): Call c_common_mark_addressable_vec
+	instead of mark_addressable.  Fix a comment typo -
+	neutrallly -> neutrally.
+
+2021-04-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2021-01-06  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/98187
+	* c-pragma.c (omp_pragmas): Remove "master".
+	(omp_pragmas_simd): Add "master".
+
+2020-09-16  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-08-11  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/96545
+	* c-common.c (get_atomic_generic_size): Require that first argument's
+	type points to a complete type and use tree_fits_uhwi_p instead of
+	just INTEGER_CST TREE_CODE check for the TYPE_SIZE_UNIT.
+
+2020-09-16  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-06-27  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/95903
+	* c-common.c (pointer_int_sum): Use TYPE_OVERFLOW_UNDEFINED instead of
+	!TYPE_UNSIGNED check to see if we can apply distributive law and handle
+	smaller precision intop operands separately.
+
+2020-09-16  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2020-04-27  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/94755
+	* c-common.c (resolve_overloaded_builtin): Return error_mark_node for
+	fncode == BUILT_IN_NONE before initialization of first_param.
+
 2020-03-12  Release Manager
 
 	* GCC 9.3.0 released.

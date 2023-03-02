@@ -110,7 +110,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CXX11
 
     template<typename _Source>
       struct __constructible_from<_Source, void>
-      : decltype(__is_path_src(std::declval<_Source>(), 0))
+      : decltype(__is_path_src(std::declval<const _Source&>(), 0))
       { };
 
     template<typename _Tp1, typename _Tp2 = void>
@@ -545,7 +545,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CXX11
 
     template<typename _CharT, typename _Traits, typename _Allocator>
       static basic_string<_CharT, _Traits, _Allocator>
-      _S_str_convert(const string_type&, const _Allocator& __a);
+      _S_str_convert(basic_string_view<value_type>, const _Allocator&);
 
     void _M_split_cmpts();
 
@@ -583,10 +583,10 @@ _GLIBCXX_BEGIN_NAMESPACE_CXX11
       // All the member functions below here have a precondition !empty()
       // (and they should only be called from within the library).
 
-      iterator begin();
-      iterator end();
-      const_iterator begin() const;
-      const_iterator end() const;
+      iterator begin() noexcept;
+      iterator end() noexcept;
+      const_iterator begin() const noexcept;
+      const_iterator end() const noexcept;
 
       value_type& front() noexcept;
       value_type& back() noexcept;
@@ -953,7 +953,8 @@ _GLIBCXX_BEGIN_NAMESPACE_CXX11
 
   template<typename _CharT, typename _Traits, typename _Allocator>
     std::basic_string<_CharT, _Traits, _Allocator>
-    path::_S_str_convert(const string_type& __str, const _Allocator& __a)
+    path::_S_str_convert(basic_string_view<value_type> __str,
+			 const _Allocator& __a)
     {
       static_assert(!is_same_v<_CharT, value_type>);
 
@@ -1063,7 +1064,9 @@ _GLIBCXX_BEGIN_NAMESPACE_CXX11
 #else
       const value_type __slash = '/';
 #endif
-      string_type __str(__a);
+      using _Alloc2 = typename allocator_traits<_Allocator>::template
+	rebind_alloc<value_type>;
+      basic_string<value_type, char_traits<value_type>, _Alloc2> __str(__a);
 
       if (_M_type() == _Type::_Root_dir)
 	__str.assign(1, __slash);
@@ -1082,7 +1085,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CXX11
 #endif
 	      if (__add_slash)
 		__str += __slash;
-	      __str += __elem._M_pathname;
+	      __str += basic_string_view<value_type>(__elem._M_pathname);
 	      __add_slash = __elem._M_type() == _Type::_Filename;
 	    }
 	}
@@ -1263,7 +1266,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CXX11
     return _M_at_end == __rhs._M_at_end;
   }
 
-  // @} group filesystem
+  /// @} group filesystem
 _GLIBCXX_END_NAMESPACE_CXX11
 } // namespace filesystem
 
@@ -1271,7 +1274,7 @@ inline ptrdiff_t
 distance(filesystem::path::iterator __first, filesystem::path::iterator __last)
 { return __path_iter_distance(__first, __last); }
 
-template<typename _InputIterator, typename _Distance>
+template<typename _Distance>
   void
   advance(filesystem::path::iterator& __i, _Distance __n)
   { __path_iter_advance(__i, static_cast<ptrdiff_t>(__n)); }

@@ -234,7 +234,9 @@ extern unsigned aarch64_architecture_version;
 #define AARCH64_ISA_SHA3	   (aarch64_isa_flags & AARCH64_FL_SHA3)
 #define AARCH64_ISA_F16FML	   (aarch64_isa_flags & AARCH64_FL_F16FML)
 #define AARCH64_ISA_RCPC8_4	   (aarch64_isa_flags & AARCH64_FL_RCPC8_4)
+#define AARCH64_ISA_RNG		   (aarch64_isa_flags & AARCH64_FL_RNG)
 #define AARCH64_ISA_V8_5	   (aarch64_isa_flags & AARCH64_FL_V8_5)
+#define AARCH64_ISA_SB		   (aarch64_isa_flags & AARCH64_FL_SB)
 
 /* Crypto is an optional extension to AdvSIMD.  */
 #define TARGET_CRYPTO (TARGET_SIMD && AARCH64_ISA_CRYPTO)
@@ -273,8 +275,17 @@ extern unsigned aarch64_architecture_version;
 /* ARMv8.3-A features.  */
 #define TARGET_ARMV8_3	(AARCH64_ISA_V8_3)
 
+/* Javascript conversion instruction from Armv8.3-a.  */
+#define TARGET_JSCVT	(TARGET_FLOAT && AARCH64_ISA_V8_3)
+
 /* Armv8.3-a Complex number extension to AdvSIMD extensions.  */
 #define TARGET_COMPLEX (TARGET_SIMD && TARGET_ARMV8_3)
+
+/* Random number instructions from Armv8.5-a.  */
+#define TARGET_RNG (AARCH64_ISA_RNG)
+
+/* Floating-point rounding instructions from Armv8.5-a.  */
+#define TARGET_FRINT (AARCH64_ISA_V8_5 && TARGET_FLOAT)
 
 /* Make sure this is always defined so we don't have to check for ifdefs
    but rather use normal ifs.  */
@@ -284,6 +295,9 @@ extern unsigned aarch64_architecture_version;
 #undef TARGET_FIX_ERR_A53_835769_DEFAULT
 #define TARGET_FIX_ERR_A53_835769_DEFAULT 1
 #endif
+
+/* SB instruction is enabled through +sb.  */
+#define TARGET_SB (AARCH64_ISA_SB)
 
 /* Apply the workaround for Cortex-A53 erratum 835769.  */
 #define TARGET_FIX_ERR_A53_835769	\
@@ -536,6 +550,16 @@ extern unsigned aarch64_architecture_version;
 #define GP_REGNUM_P(REGNO)						\
   (((unsigned) (REGNO - R0_REGNUM)) <= (R30_REGNUM - R0_REGNUM))
 
+/* Registers known to be preserved over a BL instruction.  This consists of the
+   GENERAL_REGS without x16, x17, and x30.  The x30 register is changed by the
+   BL instruction itself, while the x16 and x17 registers may be used by
+   veneers which can be inserted by the linker.  */
+#define STUB_REGNUM_P(REGNO) \
+  (GP_REGNUM_P (REGNO) \
+   && (REGNO) != R16_REGNUM \
+   && (REGNO) != R17_REGNUM \
+   && (REGNO) != R30_REGNUM) \
+
 #define FP_REGNUM_P(REGNO)			\
   (((unsigned) (REGNO - V0_REGNUM)) <= (V31_REGNUM - V0_REGNUM))
 
@@ -557,6 +581,7 @@ enum reg_class
 {
   NO_REGS,
   TAILCALL_ADDR_REGS,
+  STUB_REGS,
   GENERAL_REGS,
   STACK_REG,
   POINTER_REGS,
@@ -576,6 +601,7 @@ enum reg_class
 {						\
   "NO_REGS",					\
   "TAILCALL_ADDR_REGS",				\
+  "STUB_REGS",					\
   "GENERAL_REGS",				\
   "STACK_REG",					\
   "POINTER_REGS",				\
@@ -592,6 +618,7 @@ enum reg_class
 {									\
   { 0x00000000, 0x00000000, 0x00000000 },	/* NO_REGS */		\
   { 0x00030000, 0x00000000, 0x00000000 },	/* TAILCALL_ADDR_REGS */\
+  { 0x3ffcffff, 0x00000000, 0x00000000 },	/* STUB_REGS */		\
   { 0x7fffffff, 0x00000000, 0x00000003 },	/* GENERAL_REGS */	\
   { 0x80000000, 0x00000000, 0x00000000 },	/* STACK_REG */		\
   { 0xffffffff, 0x00000000, 0x00000003 },	/* POINTER_REGS */	\
@@ -731,6 +758,8 @@ typedef struct GTY (()) machine_function
   struct aarch64_frame frame;
   /* One entry for each hard register.  */
   bool reg_is_wrapped_separately[LAST_SAVED_REGNUM];
+  /* One entry for each general purpose register.  */
+  rtx call_via[SP_REGNUM];
   bool label_is_assembled;
 } machine_function;
 #endif
@@ -931,8 +960,10 @@ typedef struct
 
 #define RETURN_ADDR_RTX aarch64_return_addr
 
-/* BTI c + 3 insns + 2 pointer-sized entries.  */
-#define TRAMPOLINE_SIZE	(TARGET_ILP32 ? 24 : 32)
+/* BTI c + 3 insns
+   + sls barrier of DSB + ISB.
+   + 2 pointer-sized entries.  */
+#define TRAMPOLINE_SIZE	(24 + (TARGET_ILP32 ? 8 : 16))
 
 /* Trampolines contain dwords, so must be dword aligned.  */
 #define TRAMPOLINE_ALIGNMENT 64
@@ -968,7 +999,7 @@ typedef struct
 #define PROFILE_HOOK(LABEL)						\
   {									\
     rtx fun, lr;							\
-    lr = get_hard_reg_initial_val (Pmode, LR_REGNUM);			\
+    lr = aarch64_return_addr_rtx ();					\
     fun = gen_rtx_SYMBOL_REF (Pmode, MCOUNT_NAME);			\
     emit_library_call (fun, LCT_NORMAL, VOIDmode, lr, Pmode);		\
   }
@@ -1036,12 +1067,14 @@ extern enum aarch64_code_model aarch64_cmodel;
 #define ENDIAN_LANE_N(NUNITS, N) \
   (BYTES_BIG_ENDIAN ? NUNITS - 1 - N : N)
 
-/* Support for a configure-time default CPU, etc.  We currently support
-   --with-arch and --with-cpu.  Both are ignored if either is specified
-   explicitly on the command line at run time.  */
+/* Support for configure-time --with-arch, --with-cpu and --with-tune.
+   --with-arch and --with-cpu are ignored if either -mcpu or -march is used.
+   --with-tune is ignored if either -mtune or -mcpu is used (but is not
+   affected by -march).  */
 #define OPTION_DEFAULT_SPECS				\
   {"arch", "%{!march=*:%{!mcpu=*:-march=%(VALUE)}}" },	\
-  {"cpu",  "%{!march=*:%{!mcpu=*:-mcpu=%(VALUE)}}" },
+  {"cpu",  "%{!march=*:%{!mcpu=*:-mcpu=%(VALUE)}}" },   \
+  {"tune", "%{!mcpu=*:%{!mtune=*:-mtune=%(VALUE)}}"},
 
 #define MCPU_TO_MARCH_SPEC \
    " %{mcpu=*:-march=%:rewrite_mcpu(%{mcpu=*:%*})}"

@@ -278,7 +278,8 @@ matmul_c10_avx (gfc_array_c10 * const restrict retarray,
 	}
     }
 
-  if (rxstride == 1 && axstride == 1 && bxstride == 1)
+  if (rxstride == 1 && axstride == 1 && bxstride == 1
+      && GFC_DESCRIPTOR_RANK (b) != 1)
     {
       /* This block of code implements a tuned matmul, derived from
          Superscalar GEMM-based level 3 BLAS,  Beta version 0.1
@@ -592,20 +593,6 @@ matmul_c10_avx (gfc_array_c10 * const restrict retarray,
 	    }
 	}
     }
-  else if (axstride < aystride)
-    {
-      for (y = 0; y < ycount; y++)
-	for (x = 0; x < xcount; x++)
-	  dest[x*rxstride + y*rystride] = (GFC_COMPLEX_10)0;
-
-      for (y = 0; y < ycount; y++)
-	for (n = 0; n < count; n++)
-	  for (x = 0; x < xcount; x++)
-	    /* dest[x,y] += a[x,n] * b[n,y] */
-	    dest[x*rxstride + y*rystride] +=
-					abase[x*axstride + n*aystride] *
-					bbase[n*bxstride + y*bystride];
-    }
   else if (GFC_DESCRIPTOR_RANK (a) == 1)
     {
       const GFC_COMPLEX_10 *restrict bbase_y;
@@ -619,6 +606,20 @@ matmul_c10_avx (gfc_array_c10 * const restrict retarray,
 	    s += abase[n*axstride] * bbase_y[n*bxstride];
 	  dest[y*rxstride] = s;
 	}
+    }
+  else if (axstride < aystride)
+    {
+      for (y = 0; y < ycount; y++)
+	for (x = 0; x < xcount; x++)
+	  dest[x*rxstride + y*rystride] = (GFC_COMPLEX_10)0;
+
+      for (y = 0; y < ycount; y++)
+	for (n = 0; n < count; n++)
+	  for (x = 0; x < xcount; x++)
+	    /* dest[x,y] += a[x,n] * b[n,y] */
+	    dest[x*rxstride + y*rystride] +=
+					abase[x*axstride + n*aystride] *
+					bbase[n*bxstride + y*bystride];
     }
   else
     {
@@ -848,7 +849,8 @@ matmul_c10_avx2 (gfc_array_c10 * const restrict retarray,
 	}
     }
 
-  if (rxstride == 1 && axstride == 1 && bxstride == 1)
+  if (rxstride == 1 && axstride == 1 && bxstride == 1
+      && GFC_DESCRIPTOR_RANK (b) != 1)
     {
       /* This block of code implements a tuned matmul, derived from
          Superscalar GEMM-based level 3 BLAS,  Beta version 0.1
@@ -1162,20 +1164,6 @@ matmul_c10_avx2 (gfc_array_c10 * const restrict retarray,
 	    }
 	}
     }
-  else if (axstride < aystride)
-    {
-      for (y = 0; y < ycount; y++)
-	for (x = 0; x < xcount; x++)
-	  dest[x*rxstride + y*rystride] = (GFC_COMPLEX_10)0;
-
-      for (y = 0; y < ycount; y++)
-	for (n = 0; n < count; n++)
-	  for (x = 0; x < xcount; x++)
-	    /* dest[x,y] += a[x,n] * b[n,y] */
-	    dest[x*rxstride + y*rystride] +=
-					abase[x*axstride + n*aystride] *
-					bbase[n*bxstride + y*bystride];
-    }
   else if (GFC_DESCRIPTOR_RANK (a) == 1)
     {
       const GFC_COMPLEX_10 *restrict bbase_y;
@@ -1189,6 +1177,20 @@ matmul_c10_avx2 (gfc_array_c10 * const restrict retarray,
 	    s += abase[n*axstride] * bbase_y[n*bxstride];
 	  dest[y*rxstride] = s;
 	}
+    }
+  else if (axstride < aystride)
+    {
+      for (y = 0; y < ycount; y++)
+	for (x = 0; x < xcount; x++)
+	  dest[x*rxstride + y*rystride] = (GFC_COMPLEX_10)0;
+
+      for (y = 0; y < ycount; y++)
+	for (n = 0; n < count; n++)
+	  for (x = 0; x < xcount; x++)
+	    /* dest[x,y] += a[x,n] * b[n,y] */
+	    dest[x*rxstride + y*rystride] +=
+					abase[x*axstride + n*aystride] *
+					bbase[n*bxstride + y*bystride];
     }
   else
     {
@@ -1418,7 +1420,8 @@ matmul_c10_avx512f (gfc_array_c10 * const restrict retarray,
 	}
     }
 
-  if (rxstride == 1 && axstride == 1 && bxstride == 1)
+  if (rxstride == 1 && axstride == 1 && bxstride == 1
+      && GFC_DESCRIPTOR_RANK (b) != 1)
     {
       /* This block of code implements a tuned matmul, derived from
          Superscalar GEMM-based level 3 BLAS,  Beta version 0.1
@@ -1732,20 +1735,6 @@ matmul_c10_avx512f (gfc_array_c10 * const restrict retarray,
 	    }
 	}
     }
-  else if (axstride < aystride)
-    {
-      for (y = 0; y < ycount; y++)
-	for (x = 0; x < xcount; x++)
-	  dest[x*rxstride + y*rystride] = (GFC_COMPLEX_10)0;
-
-      for (y = 0; y < ycount; y++)
-	for (n = 0; n < count; n++)
-	  for (x = 0; x < xcount; x++)
-	    /* dest[x,y] += a[x,n] * b[n,y] */
-	    dest[x*rxstride + y*rystride] +=
-					abase[x*axstride + n*aystride] *
-					bbase[n*bxstride + y*bystride];
-    }
   else if (GFC_DESCRIPTOR_RANK (a) == 1)
     {
       const GFC_COMPLEX_10 *restrict bbase_y;
@@ -1759,6 +1748,20 @@ matmul_c10_avx512f (gfc_array_c10 * const restrict retarray,
 	    s += abase[n*axstride] * bbase_y[n*bxstride];
 	  dest[y*rxstride] = s;
 	}
+    }
+  else if (axstride < aystride)
+    {
+      for (y = 0; y < ycount; y++)
+	for (x = 0; x < xcount; x++)
+	  dest[x*rxstride + y*rystride] = (GFC_COMPLEX_10)0;
+
+      for (y = 0; y < ycount; y++)
+	for (n = 0; n < count; n++)
+	  for (x = 0; x < xcount; x++)
+	    /* dest[x,y] += a[x,n] * b[n,y] */
+	    dest[x*rxstride + y*rystride] +=
+					abase[x*axstride + n*aystride] *
+					bbase[n*bxstride + y*bystride];
     }
   else
     {
@@ -2002,7 +2005,8 @@ matmul_c10_vanilla (gfc_array_c10 * const restrict retarray,
 	}
     }
 
-  if (rxstride == 1 && axstride == 1 && bxstride == 1)
+  if (rxstride == 1 && axstride == 1 && bxstride == 1
+      && GFC_DESCRIPTOR_RANK (b) != 1)
     {
       /* This block of code implements a tuned matmul, derived from
          Superscalar GEMM-based level 3 BLAS,  Beta version 0.1
@@ -2316,20 +2320,6 @@ matmul_c10_vanilla (gfc_array_c10 * const restrict retarray,
 	    }
 	}
     }
-  else if (axstride < aystride)
-    {
-      for (y = 0; y < ycount; y++)
-	for (x = 0; x < xcount; x++)
-	  dest[x*rxstride + y*rystride] = (GFC_COMPLEX_10)0;
-
-      for (y = 0; y < ycount; y++)
-	for (n = 0; n < count; n++)
-	  for (x = 0; x < xcount; x++)
-	    /* dest[x,y] += a[x,n] * b[n,y] */
-	    dest[x*rxstride + y*rystride] +=
-					abase[x*axstride + n*aystride] *
-					bbase[n*bxstride + y*bystride];
-    }
   else if (GFC_DESCRIPTOR_RANK (a) == 1)
     {
       const GFC_COMPLEX_10 *restrict bbase_y;
@@ -2343,6 +2333,20 @@ matmul_c10_vanilla (gfc_array_c10 * const restrict retarray,
 	    s += abase[n*axstride] * bbase_y[n*bxstride];
 	  dest[y*rxstride] = s;
 	}
+    }
+  else if (axstride < aystride)
+    {
+      for (y = 0; y < ycount; y++)
+	for (x = 0; x < xcount; x++)
+	  dest[x*rxstride + y*rystride] = (GFC_COMPLEX_10)0;
+
+      for (y = 0; y < ycount; y++)
+	for (n = 0; n < count; n++)
+	  for (x = 0; x < xcount; x++)
+	    /* dest[x,y] += a[x,n] * b[n,y] */
+	    dest[x*rxstride + y*rystride] +=
+					abase[x*axstride + n*aystride] *
+					bbase[n*bxstride + y*bystride];
     }
   else
     {
@@ -2646,7 +2650,8 @@ matmul_c10 (gfc_array_c10 * const restrict retarray,
 	}
     }
 
-  if (rxstride == 1 && axstride == 1 && bxstride == 1)
+  if (rxstride == 1 && axstride == 1 && bxstride == 1
+      && GFC_DESCRIPTOR_RANK (b) != 1)
     {
       /* This block of code implements a tuned matmul, derived from
          Superscalar GEMM-based level 3 BLAS,  Beta version 0.1
@@ -2960,20 +2965,6 @@ matmul_c10 (gfc_array_c10 * const restrict retarray,
 	    }
 	}
     }
-  else if (axstride < aystride)
-    {
-      for (y = 0; y < ycount; y++)
-	for (x = 0; x < xcount; x++)
-	  dest[x*rxstride + y*rystride] = (GFC_COMPLEX_10)0;
-
-      for (y = 0; y < ycount; y++)
-	for (n = 0; n < count; n++)
-	  for (x = 0; x < xcount; x++)
-	    /* dest[x,y] += a[x,n] * b[n,y] */
-	    dest[x*rxstride + y*rystride] +=
-					abase[x*axstride + n*aystride] *
-					bbase[n*bxstride + y*bystride];
-    }
   else if (GFC_DESCRIPTOR_RANK (a) == 1)
     {
       const GFC_COMPLEX_10 *restrict bbase_y;
@@ -2987,6 +2978,20 @@ matmul_c10 (gfc_array_c10 * const restrict retarray,
 	    s += abase[n*axstride] * bbase_y[n*bxstride];
 	  dest[y*rxstride] = s;
 	}
+    }
+  else if (axstride < aystride)
+    {
+      for (y = 0; y < ycount; y++)
+	for (x = 0; x < xcount; x++)
+	  dest[x*rxstride + y*rystride] = (GFC_COMPLEX_10)0;
+
+      for (y = 0; y < ycount; y++)
+	for (n = 0; n < count; n++)
+	  for (x = 0; x < xcount; x++)
+	    /* dest[x,y] += a[x,n] * b[n,y] */
+	    dest[x*rxstride + y*rystride] +=
+					abase[x*axstride + n*aystride] *
+					bbase[n*bxstride + y*bystride];
     }
   else
     {
