@@ -12547,14 +12547,14 @@ configure-gmp: stage_current
 maybe-configure-gmp: configure-gmp
 configure-gmp: 
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	test ! -f $(HOST_SUBDIR)/gmp/Makefile || exit 0; \
 	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp; \
 	$(HOST_EXPORTS)  \
 	echo Configuring in $(HOST_SUBDIR)/gmp; \
 	cd "$(HOST_SUBDIR)/gmp" || exit 1; \
 	case $(srcdir) in \
-	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  /* | [A-Za-z]:[\\/]*) topdir=$$s ;; \
 	  *) topdir=`echo $(HOST_SUBDIR)/gmp/ | \
 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
 	esac; \
@@ -12577,7 +12577,7 @@ configure-stage1-gmp:
 	@[ $(current_stage) = stage1 ] || $(MAKE) stage1-start
 	@$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGE1_TFLAGS)"; \
 	test ! -f $(HOST_SUBDIR)/gmp/Makefile || exit 0; \
 	$(HOST_EXPORTS) \
@@ -12588,7 +12588,7 @@ configure-stage1-gmp:
 	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp; \
 	cd $(HOST_SUBDIR)/gmp || exit 1; \
 	case $(srcdir) in \
-	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  /* | [A-Za-z]:[\\/]*) topdir=$$s ;; \
 	  *) topdir=`echo $(HOST_SUBDIR)/gmp/ | \
 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
 	esac; \
@@ -12610,7 +12610,7 @@ configure-stage2-gmp:
 	@[ $(current_stage) = stage2 ] || $(MAKE) stage2-start
 	@$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGE2_TFLAGS)"; \
 	test ! -f $(HOST_SUBDIR)/gmp/Makefile || exit 0; \
 	$(HOST_EXPORTS) \
@@ -12622,7 +12622,7 @@ configure-stage2-gmp:
 	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp; \
 	cd $(HOST_SUBDIR)/gmp || exit 1; \
 	case $(srcdir) in \
-	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  /* | [A-Za-z]:[\\/]*) topdir=$$s ;; \
 	  *) topdir=`echo $(HOST_SUBDIR)/gmp/ | \
 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
 	esac; \
@@ -12644,7 +12644,7 @@ configure-stage3-gmp:
 	@[ $(current_stage) = stage3 ] || $(MAKE) stage3-start
 	@$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGE3_TFLAGS)"; \
 	test ! -f $(HOST_SUBDIR)/gmp/Makefile || exit 0; \
 	$(HOST_EXPORTS) \
@@ -12656,7 +12656,7 @@ configure-stage3-gmp:
 	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp; \
 	cd $(HOST_SUBDIR)/gmp || exit 1; \
 	case $(srcdir) in \
-	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  /* | [A-Za-z]:[\\/]*) topdir=$$s ;; \
 	  *) topdir=`echo $(HOST_SUBDIR)/gmp/ | \
 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
 	esac; \
@@ -12678,7 +12678,7 @@ configure-stage4-gmp:
 	@[ $(current_stage) = stage4 ] || $(MAKE) stage4-start
 	@$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGE4_TFLAGS)"; \
 	test ! -f $(HOST_SUBDIR)/gmp/Makefile || exit 0; \
 	$(HOST_EXPORTS) \
@@ -12690,7 +12690,7 @@ configure-stage4-gmp:
 	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp; \
 	cd $(HOST_SUBDIR)/gmp || exit 1; \
 	case $(srcdir) in \
-	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  /* | [A-Za-z]:[\\/]*) topdir=$$s ;; \
 	  *) topdir=`echo $(HOST_SUBDIR)/gmp/ | \
 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
 	esac; \
@@ -12712,7 +12712,7 @@ configure-stageprofile-gmp:
 	@[ $(current_stage) = stageprofile ] || $(MAKE) stageprofile-start
 	@$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGEprofile_TFLAGS)"; \
 	test ! -f $(HOST_SUBDIR)/gmp/Makefile || exit 0; \
 	$(HOST_EXPORTS) \
@@ -12724,7 +12724,7 @@ configure-stageprofile-gmp:
 	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp; \
 	cd $(HOST_SUBDIR)/gmp || exit 1; \
 	case $(srcdir) in \
-	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  /* | [A-Za-z]:[\\/]*) topdir=$$s ;; \
 	  *) topdir=`echo $(HOST_SUBDIR)/gmp/ | \
 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
 	esac; \
@@ -12746,7 +12746,7 @@ configure-stagetrain-gmp:
 	@[ $(current_stage) = stagetrain ] || $(MAKE) stagetrain-start
 	@$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGEtrain_TFLAGS)"; \
 	test ! -f $(HOST_SUBDIR)/gmp/Makefile || exit 0; \
 	$(HOST_EXPORTS) \
@@ -12758,7 +12758,7 @@ configure-stagetrain-gmp:
 	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp; \
 	cd $(HOST_SUBDIR)/gmp || exit 1; \
 	case $(srcdir) in \
-	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  /* | [A-Za-z]:[\\/]*) topdir=$$s ;; \
 	  *) topdir=`echo $(HOST_SUBDIR)/gmp/ | \
 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
 	esac; \
@@ -12780,7 +12780,7 @@ configure-stagefeedback-gmp:
 	@[ $(current_stage) = stagefeedback ] || $(MAKE) stagefeedback-start
 	@$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGEfeedback_TFLAGS)"; \
 	test ! -f $(HOST_SUBDIR)/gmp/Makefile || exit 0; \
 	$(HOST_EXPORTS) \
@@ -12792,7 +12792,7 @@ configure-stagefeedback-gmp:
 	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp; \
 	cd $(HOST_SUBDIR)/gmp || exit 1; \
 	case $(srcdir) in \
-	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  /* | [A-Za-z]:[\\/]*) topdir=$$s ;; \
 	  *) topdir=`echo $(HOST_SUBDIR)/gmp/ | \
 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
 	esac; \
@@ -12814,7 +12814,7 @@ configure-stageautoprofile-gmp:
 	@[ $(current_stage) = stageautoprofile ] || $(MAKE) stageautoprofile-start
 	@$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGEautoprofile_TFLAGS)"; \
 	test ! -f $(HOST_SUBDIR)/gmp/Makefile || exit 0; \
 	$(HOST_EXPORTS) \
@@ -12826,7 +12826,7 @@ configure-stageautoprofile-gmp:
 	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp; \
 	cd $(HOST_SUBDIR)/gmp || exit 1; \
 	case $(srcdir) in \
-	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  /* | [A-Za-z]:[\\/]*) topdir=$$s ;; \
 	  *) topdir=`echo $(HOST_SUBDIR)/gmp/ | \
 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
 	esac; \
@@ -12848,7 +12848,7 @@ configure-stageautofeedback-gmp:
 	@[ $(current_stage) = stageautofeedback ] || $(MAKE) stageautofeedback-start
 	@$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGEautofeedback_TFLAGS)"; \
 	test ! -f $(HOST_SUBDIR)/gmp/Makefile || exit 0; \
 	$(HOST_EXPORTS) \
@@ -12860,7 +12860,7 @@ configure-stageautofeedback-gmp:
 	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/gmp; \
 	cd $(HOST_SUBDIR)/gmp || exit 1; \
 	case $(srcdir) in \
-	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  /* | [A-Za-z]:[\\/]*) topdir=$$s ;; \
 	  *) topdir=`echo $(HOST_SUBDIR)/gmp/ | \
 		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
 	esac; \
@@ -12888,7 +12888,7 @@ TARGET-gmp=all
 maybe-all-gmp: all-gmp
 all-gmp: configure-gmp
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	$(HOST_EXPORTS)  \
 	(cd $(HOST_SUBDIR)/gmp && \
 	  $(MAKE) $(BASE_FLAGS_TO_PASS) $(EXTRA_HOST_FLAGS) $(STAGE1_FLAGS_TO_PASS) AM_CFLAGS="-DNO_ASM" \
@@ -12908,7 +12908,7 @@ TARGET-stage1-gmp = $(TARGET-gmp)
 all-stage1-gmp: configure-stage1-gmp
 	@[ $(current_stage) = stage1 ] || $(MAKE) stage1-start
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGE1_TFLAGS)"; \
 	$(HOST_EXPORTS)  \
 	cd $(HOST_SUBDIR)/gmp && \
@@ -12952,7 +12952,7 @@ TARGET-stage2-gmp = $(TARGET-gmp)
 all-stage2-gmp: configure-stage2-gmp
 	@[ $(current_stage) = stage2 ] || $(MAKE) stage2-start
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGE2_TFLAGS)"; \
 	$(HOST_EXPORTS) \
 	$(POSTSTAGE1_HOST_EXPORTS)  \
@@ -12995,7 +12995,7 @@ TARGET-stage3-gmp = $(TARGET-gmp)
 all-stage3-gmp: configure-stage3-gmp
 	@[ $(current_stage) = stage3 ] || $(MAKE) stage3-start
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGE3_TFLAGS)"; \
 	$(HOST_EXPORTS) \
 	$(POSTSTAGE1_HOST_EXPORTS)  \
@@ -13038,7 +13038,7 @@ TARGET-stage4-gmp = $(TARGET-gmp)
 all-stage4-gmp: configure-stage4-gmp
 	@[ $(current_stage) = stage4 ] || $(MAKE) stage4-start
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGE4_TFLAGS)"; \
 	$(HOST_EXPORTS) \
 	$(POSTSTAGE1_HOST_EXPORTS)  \
@@ -13081,7 +13081,7 @@ TARGET-stageprofile-gmp = $(TARGET-gmp)
 all-stageprofile-gmp: configure-stageprofile-gmp
 	@[ $(current_stage) = stageprofile ] || $(MAKE) stageprofile-start
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGEprofile_TFLAGS)"; \
 	$(HOST_EXPORTS) \
 	$(POSTSTAGE1_HOST_EXPORTS)  \
@@ -13124,7 +13124,7 @@ TARGET-stagetrain-gmp = $(TARGET-gmp)
 all-stagetrain-gmp: configure-stagetrain-gmp
 	@[ $(current_stage) = stagetrain ] || $(MAKE) stagetrain-start
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGEtrain_TFLAGS)"; \
 	$(HOST_EXPORTS) \
 	$(POSTSTAGE1_HOST_EXPORTS)  \
@@ -13167,7 +13167,7 @@ TARGET-stagefeedback-gmp = $(TARGET-gmp)
 all-stagefeedback-gmp: configure-stagefeedback-gmp
 	@[ $(current_stage) = stagefeedback ] || $(MAKE) stagefeedback-start
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGEfeedback_TFLAGS)"; \
 	$(HOST_EXPORTS) \
 	$(POSTSTAGE1_HOST_EXPORTS)  \
@@ -13210,7 +13210,7 @@ TARGET-stageautoprofile-gmp = $(TARGET-gmp)
 all-stageautoprofile-gmp: configure-stageautoprofile-gmp
 	@[ $(current_stage) = stageautoprofile ] || $(MAKE) stageautoprofile-start
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGEautoprofile_TFLAGS)"; \
 	$(HOST_EXPORTS) \
 	$(POSTSTAGE1_HOST_EXPORTS)  \
@@ -13253,7 +13253,7 @@ TARGET-stageautofeedback-gmp = $(TARGET-gmp)
 all-stageautofeedback-gmp: configure-stageautofeedback-gmp
 	@[ $(current_stage) = stageautofeedback ] || $(MAKE) stageautofeedback-start
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	TFLAGS="$(STAGEautofeedback_TFLAGS)"; \
 	$(HOST_EXPORTS) \
 	$(POSTSTAGE1_HOST_EXPORTS)  \
@@ -13296,7 +13296,7 @@ maybe-check-gmp: check-gmp
 check-gmp:
 	@: $(MAKE); $(unstage)
 	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	$(HOST_EXPORTS) $(EXTRA_HOST_EXPORTS) \
 	(cd $(HOST_SUBDIR)/gmp && \
 	  $(MAKE) $(FLAGS_TO_PASS) AM_CFLAGS="-DNO_ASM" $(EXTRA_BOOTSTRAP_FLAGS) check)
@@ -13332,7 +13332,7 @@ info-gmp: \
     configure-gmp 
 	@[ -f ./gmp/Makefile ] || exit 0; \
 	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	$(HOST_EXPORTS) \
 	for flag in $(EXTRA_HOST_FLAGS) AM_CFLAGS="-DNO_ASM"; do \
 	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
@@ -13357,7 +13357,7 @@ dvi-gmp: \
     configure-gmp 
 	@[ -f ./gmp/Makefile ] || exit 0; \
 	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	$(HOST_EXPORTS) \
 	for flag in $(EXTRA_HOST_FLAGS) AM_CFLAGS="-DNO_ASM"; do \
 	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
@@ -13382,7 +13382,7 @@ pdf-gmp: \
     configure-gmp 
 	@[ -f ./gmp/Makefile ] || exit 0; \
 	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	$(HOST_EXPORTS) \
 	for flag in $(EXTRA_HOST_FLAGS) AM_CFLAGS="-DNO_ASM"; do \
 	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
@@ -13407,7 +13407,7 @@ html-gmp: \
     configure-gmp 
 	@[ -f ./gmp/Makefile ] || exit 0; \
 	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	$(HOST_EXPORTS) \
 	for flag in $(EXTRA_HOST_FLAGS) AM_CFLAGS="-DNO_ASM"; do \
 	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
@@ -13432,7 +13432,7 @@ TAGS-gmp: \
     configure-gmp 
 	@[ -f ./gmp/Makefile ] || exit 0; \
 	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	$(HOST_EXPORTS) \
 	for flag in $(EXTRA_HOST_FLAGS) AM_CFLAGS="-DNO_ASM"; do \
 	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
@@ -13458,7 +13458,7 @@ install-info-gmp: \
     info-gmp 
 	@[ -f ./gmp/Makefile ] || exit 0; \
 	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	$(HOST_EXPORTS) \
 	for flag in $(EXTRA_HOST_FLAGS) AM_CFLAGS="-DNO_ASM"; do \
 	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
@@ -13484,7 +13484,7 @@ install-pdf-gmp: \
     pdf-gmp 
 	@[ -f ./gmp/Makefile ] || exit 0; \
 	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	$(HOST_EXPORTS) \
 	for flag in $(EXTRA_HOST_FLAGS) AM_CFLAGS="-DNO_ASM"; do \
 	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
@@ -13510,7 +13510,7 @@ install-html-gmp: \
     html-gmp 
 	@[ -f ./gmp/Makefile ] || exit 0; \
 	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	$(HOST_EXPORTS) \
 	for flag in $(EXTRA_HOST_FLAGS) AM_CFLAGS="-DNO_ASM"; do \
 	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
@@ -13535,7 +13535,7 @@ installcheck-gmp: \
     configure-gmp 
 	@[ -f ./gmp/Makefile ] || exit 0; \
 	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	$(HOST_EXPORTS) \
 	for flag in $(EXTRA_HOST_FLAGS) AM_CFLAGS="-DNO_ASM"; do \
 	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
@@ -13559,7 +13559,7 @@ maybe-mostlyclean-gmp: mostlyclean-gmp
 mostlyclean-gmp: 
 	@[ -f ./gmp/Makefile ] || exit 0; \
 	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	$(HOST_EXPORTS) \
 	for flag in $(EXTRA_HOST_FLAGS) AM_CFLAGS="-DNO_ASM"; do \
 	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
@@ -13583,7 +13583,7 @@ maybe-clean-gmp: clean-gmp
 clean-gmp: 
 	@[ -f ./gmp/Makefile ] || exit 0; \
 	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	$(HOST_EXPORTS) \
 	for flag in $(EXTRA_HOST_FLAGS) AM_CFLAGS="-DNO_ASM"; do \
 	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
@@ -13607,7 +13607,7 @@ maybe-distclean-gmp: distclean-gmp
 distclean-gmp: 
 	@[ -f ./gmp/Makefile ] || exit 0; \
 	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	$(HOST_EXPORTS) \
 	for flag in $(EXTRA_HOST_FLAGS) AM_CFLAGS="-DNO_ASM"; do \
 	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
@@ -13631,7 +13631,7 @@ maybe-maintainer-clean-gmp: maintainer-clean-gmp
 maintainer-clean-gmp: 
 	@[ -f ./gmp/Makefile ] || exit 0; \
 	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	s=`cd $(srcdir); ${PWD_COMMAND} | sed -e 's@^/\(.\)/\(.*\)@\1:/\2@'`; export s; \
 	$(HOST_EXPORTS) \
 	for flag in $(EXTRA_HOST_FLAGS) AM_CFLAGS="-DNO_ASM"; do \
 	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
