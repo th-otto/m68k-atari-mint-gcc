@@ -331,6 +331,10 @@ do {									\
 #undef TARGET_INIT_LIBFUNCS
 #define TARGET_INIT_LIBFUNCS  m68k_init_libfuncs
 
+#define STACK_CHECK_ATARI
+#define STACK_CHECK_BUILTIN 1
+int m68k_emit_stack_check(void);
+
 #ifdef USING_ELFOS_H
 /*
  * Definitions for crtstuff.c.
