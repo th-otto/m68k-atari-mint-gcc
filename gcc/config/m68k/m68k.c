@@ -996,6 +996,8 @@ m68k_set_frame_related (rtx_insn *insn)
 
 /* Emit RTL for the "prologue" define_expand.  */
 
+#define IS_INTERRUPT(func_kind) (func_kind != m68k_fk_normal_function)
+
 void
 m68k_expand_prologue (void)
 {
@@ -1010,7 +1012,7 @@ m68k_expand_prologue (void)
 
   /* If the stack limit is a symbol, we can check it here,
      before actually allocating the space.  */
-  if (crtl->limit_stack
+  if (crtl->limit_stack && !IS_INTERRUPT(m68k_get_function_kind (current_function_decl))
       && GET_CODE (stack_limit_rtx) == SYMBOL_REF)
     {
       limit = plus_constant (Pmode, stack_limit_rtx, current_frame.size + 4);
@@ -1100,9 +1102,40 @@ m68k_expand_prologue (void)
 	}
     }
 
+#ifdef STACK_CHECK_ATARI
+  if (flag_stack_check == FULL_BUILTIN_STACK_CHECK &&
+        !IS_INTERRUPT(m68k_get_function_kind (current_function_decl)) &&
+        !DECL_NO_LIMIT_STACK(current_function_decl))
+  {
+        rtx_code_label *lab1;
+        rtx limit_mem;
+        rtx jump;
+
+        static rtx stack_limit_symbol;
+        static rtx stack_overflow_rtx;
+
+        if (stack_limit_symbol == 0)
+                stack_limit_symbol = gen_rtx_SYMBOL_REF (Pmode, "_StkLim");
+        if (stack_overflow_rtx == 0)
+                stack_overflow_rtx = gen_rtx_SYMBOL_REF (Pmode, "_StkOver");
+        lab1 = gen_label_rtx ();
+        limit_mem = gen_rtx_MEM (Pmode, stack_limit_symbol);
+        emit_cmp_and_jump_insns (limit_mem, stack_pointer_rtx, LTU, 0,
+                           Pmode, 1, lab1);
+        JUMP_LABEL (get_last_insn ()) = lab1;
+#if 0
+        funmem = gen_rtx_MEM (FUNCTION_MODE, stack_overflow_rtx);
+        jump = targetm.gen_call(funmem, const0_rtx, 0, 0);
+#endif
+        jump = gen_rtx_SET(pc_rtx, stack_overflow_rtx);
+        emit_insn(jump);
+        emit_barrier ();
+        emit_label(lab1);
+  } else
+#endif
   /* If the stack limit is not a symbol, check it here.
      This has the disadvantage that it may be too late...  */
-  if (crtl->limit_stack)
+  if (crtl->limit_stack && !IS_INTERRUPT(m68k_get_function_kind (current_function_decl)))
     {
       if (REG_P (stack_limit_rtx))
         emit_insn (gen_ctrapsi4 (gen_rtx_LTU (VOIDmode, stack_pointer_rtx,
@@ -1782,7 +1815,7 @@ output_btst (rtx *operands, rtx countop, rtx dataop, rtx_insn *insn, int signpos
 
   if (GET_CODE (countop) == CONST_INT)
     {
-      register int count = INTVAL (countop);
+      int count = INTVAL (countop);
       /* If COUNT is bigger than size of storage unit in use,
 	 advance to the containing unit of same size.  */
       if (count > signpos)
@@ -3669,9 +3702,9 @@ fp_reg_operand (rtx op, machine_mode mode ATTRIBUTE_UNUSED)
 int
 emit_move_sequence (rtx *operands, machine_mode mode, rtx scratch_reg)
 {
-  register rtx operand0 = operands[0];
-  register rtx operand1 = operands[1];
-  register rtx tem;
+  rtx operand0 = operands[0];
+  rtx operand1 = operands[1];
+  rtx tem;
 
   if (scratch_reg
       && reload_in_progress && GET_CODE (operand0) == REG
@@ -4963,7 +4996,7 @@ output_andsi3 (rtx *operands)
 const char *
 output_iorsi3 (rtx *operands)
 {
-  register int logval;
+  int logval;
   if (GET_CODE (operands[2]) == CONST_INT
       && INTVAL (operands[2]) >> 16 == 0
       && (DATA_REG_P (operands[0])
@@ -4999,7 +5032,7 @@ output_iorsi3 (rtx *operands)
 const char *
 output_xorsi3 (rtx *operands)
 {
-  register int logval;
+  int logval;
   if (GET_CODE (operands[2]) == CONST_INT
       && INTVAL (operands[2]) >> 16 == 0
       && (offsettable_memref_p (operands[0]) || DATA_REG_P (operands[0]))
