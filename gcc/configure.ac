@@ -3647,6 +3647,11 @@ AC_DEFINE_UNQUOTED(HAVE_GAS_SHF_MERGE,
     || test $gcc_cv_as_shf_merge_percent = yes; then echo 1; else echo 0; fi`],
 [Define 0/1 if your assembler supports marking sections with SHF_MERGE flag.])
 
+gcc_GAS_CHECK_FEATURE([stabs directive], gcc_cv_as_stabs_directive,,
+[.stabs "gcc2_compiled.",60,0,0,0],,
+[AC_DEFINE(HAVE_AS_STABS_DIRECTIVE, 1,
+  [Define if your assembler supports .stabs.])])
+
 gcc_GAS_CHECK_FEATURE([COMDAT group support (GNU as)],
  gcc_cv_as_comdat_group,
  [--fatal-warnings],
@@ -5980,6 +5985,12 @@ foo:
  compiler generated .debug_line.])
    fi
  fi
+
+ gcc_GAS_CHECK_FEATURE([--gstabs option],
+  gcc_cv_as_gstabs_flag,
+  [--gstabs], [$insn],,
+  [AC_DEFINE(HAVE_AS_GSTABS_DEBUG_FLAG, 1,
+[Define if your assembler supports the --gstabs option.])])
 
  gcc_GAS_CHECK_FEATURE([--debug-prefix-map option],
   gcc_cv_as_debug_prefix_map_flag,
