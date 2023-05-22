@@ -1431,6 +1431,7 @@ OBJS = \
 	data-streamer.o \
 	data-streamer-in.o \
 	data-streamer-out.o \
+	dbxout.o \
 	dbgcnt.o \
 	dce.o \
 	ddg.o \
@@ -2835,7 +2836,7 @@ GTFILES = $(CPPLIB_H) $(srcdir)/input.h $(srcdir)/coretypes.h \
   $(srcdir)/alias.cc $(srcdir)/attribs.cc \
   $(srcdir)/bitmap.cc $(srcdir)/cselib.cc $(srcdir)/cgraph.cc \
   $(srcdir)/ipa-prop.cc $(srcdir)/ipa-cp.cc $(srcdir)/ipa-utils.h \
-  $(srcdir)/ipa-param-manipulation.h $(srcdir)/ipa-sra.cc \
+  $(srcdir)/ipa-param-manipulation.h $(srcdir)/ipa-sra.cc $(srcdir)/dbxout.cc \
   $(srcdir)/ipa-modref.h $(srcdir)/ipa-modref.cc \
   $(srcdir)/ipa-modref-tree.h \
   $(srcdir)/signop.h \

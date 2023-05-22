@@ -122,6 +122,12 @@ uint32_t write_symbols = NO_DEBUG
 Variable
 enum debug_info_levels debug_info_level = DINFO_LEVEL_NONE
 
+; Nonzero means use GNU-only extensions in the generated symbolic
+; debugging information.  Currently, this only has an effect when
+; write_symbols is set to DBX_DEBUG or XCOFF_DEBUG.
+Variable
+bool use_gnu_debug_info_extensions
+
 ; Level of CTF debugging information we are producing.  See flag-types.h
 ; for the definitions of the different possible levels.
 Variable
@@ -3526,7 +3532,7 @@ Common Driver JoinedOrMissing RejectNegative
 Generate debug information in default version of DWARF format.
 
 gdwarf-
-Common Driver Joined UInteger Var(dwarf_version) Init(DWARF_VERSION_DEFAULT) RejectNegative
+Common Driver Joined UInteger Var(dwarf_version) Init(DWARF_VERSION_DEFAULT) RejectNegative Negative(gstabs)
 Generate debug information in DWARF v2 (or later) format.
 
 gdwarf32
@@ -3574,12 +3580,12 @@ Common Driver Var(dwarf_split_debug_info) Init(0)
 Generate debug information in separate .dwo files.
 
 gstabs
-Common Driver WarnRemoved
-Does nothing.  Preserved for backward compatibility.
+Common Driver JoinedOrMissing Negative(gstabs+)
+Generate debug information in STABS format.
 
 gstabs+
-Common Driver WarnRemoved
-Does nothing.  Preserved for backward compatibility.
+Common Driver JoinedOrMissing Negative(gvms)
+Generate debug information in extended STABS format.
 
 gstatement-frontiers
 Common Driver Var(debug_nonbind_markers_p) PerFunction
