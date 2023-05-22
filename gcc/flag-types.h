@@ -25,7 +25,8 @@ along with GCC; see the file COPYING3.  If not see
 enum debug_info_type
 {
   DINFO_TYPE_NONE,		  /* No debug info.  */
-  DINFO_TYPE_DWARF2,		  /* Dwarf v2 debug info.  */
+  DINFO_TYPE_DBX,		  /* BSD .stabs for DBX.  */
+  DINFO_TYPE_DWARF2,	  /* Dwarf v2 debug info.  */
   DINFO_TYPE_VMS,		  /* VMS debug info.  */
   DINFO_TYPE_CTF,		  /* CTF debug info.  */
   DINFO_TYPE_BTF,		  /* BTF debug info.  */
@@ -34,6 +35,8 @@ enum debug_info_type
 };
 
 #define NO_DEBUG      (0U)
+/* Write DBX debug info (using dbxout.cc).  */
+#define DBX_DEBUG     (1U << DINFO_TYPE_DBX)
 /* Write DWARF2 debug info (using dwarf2out.cc).  */
 #define DWARF2_DEBUG  (1U << DINFO_TYPE_DWARF2)
 /* Write VMS debug info (using vmsdbgout.cc).  */
