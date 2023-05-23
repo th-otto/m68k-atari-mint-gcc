@@ -204,16 +204,16 @@ extern int fprintf_unlocked (FILE *, const char *, ...);
 #ifdef INCLUDE_LIST
 # include <list>
 #endif
-#ifdef INCLUDE_MAP
+#if defined(INCLUDE_MAP) || defined(__APPLE__)
 # include <map>
 #endif
 #ifdef INCLUDE_SET
 # include <set>
 #endif
-#ifdef INCLUDE_STRING
+#if defined(INCLUDE_STRING) || defined(__APPLE__)
 # include <string>
 #endif
-#ifdef INCLUDE_VECTOR
+#if defined(INCLUDE_VECTOR) || defined(__APPLE__)
 # include <vector>
 #endif
 #ifdef INCLUDE_ARRAY
