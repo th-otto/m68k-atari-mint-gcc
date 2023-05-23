@@ -545,6 +545,7 @@ gfc_free_actual_arglist (gfc_actual_arglist *a1)
       a2 = a1->next;
       if (a1->expr)
 	gfc_free_expr (a1->expr);
+      free (a1->associated_dummy);
       free (a1);
       a1 = a2;
     }
@@ -564,6 +565,12 @@ gfc_copy_actual_arglist (gfc_actual_arglist *p)
     {
       new_arg = gfc_get_actual_arglist ();
       *new_arg = *p;
+
+      if (p->associated_dummy != NULL)
+	{
+	  new_arg->associated_dummy = gfc_get_dummy_arg ();
+	  *new_arg->associated_dummy = *p->associated_dummy;
+	}
 
       new_arg->expr = gfc_copy_expr (p->expr);
       new_arg->next = NULL;
@@ -1552,6 +1559,16 @@ find_array_section (gfc_expr *expr, gfc_ref *ref)
       lower = ref->u.ar.as->lower[d];
       upper = ref->u.ar.as->upper[d];
 
+      if (!lower || !upper
+	  || lower->expr_type != EXPR_CONSTANT
+	  || upper->expr_type != EXPR_CONSTANT
+	  || lower->ts.type != BT_INTEGER
+	  || upper->ts.type != BT_INTEGER)
+	{
+	  t = false;
+	  goto cleanup;
+	}
+
       if (ref->u.ar.dimen_type[d] == DIMEN_VECTOR)  /* Vector subscript.  */
 	{
 	  gfc_constructor *ci;
@@ -1594,9 +1611,7 @@ find_array_section (gfc_expr *expr, gfc_ref *ref)
 	{
 	  if ((begin && begin->expr_type != EXPR_CONSTANT)
 	      || (finish && finish->expr_type != EXPR_CONSTANT)
-	      || (step && step->expr_type != EXPR_CONSTANT)
-	      || !lower
-	      || !upper)
+	      || (step && step->expr_type != EXPR_CONSTANT))
 	    {
 	      t = false;
 	      goto cleanup;
@@ -2287,7 +2302,8 @@ gfc_simplify_expr (gfc_expr *p, int type)
 	 initialization expression, or we want a subsection.  */
       if (p->symtree->n.sym->attr.flavor == FL_PARAMETER
 	  && (gfc_init_expr_flag || p->ref
-	      || p->symtree->n.sym->value->expr_type != EXPR_ARRAY))
+	      || (p->symtree->n.sym->value
+		  && p->symtree->n.sym->value->expr_type != EXPR_ARRAY)))
 	{
 	  if (!simplify_parameter_variable (p, type))
 	    return false;
@@ -4991,14 +5007,14 @@ get_union_initializer (gfc_symbol *union_type, gfc_component **map_p)
 static bool
 class_allocatable (gfc_component *comp)
 {
-  return comp->ts.type == BT_CLASS && CLASS_DATA (comp)
+  return comp->ts.type == BT_CLASS && comp->attr.class_ok && CLASS_DATA (comp)
     && CLASS_DATA (comp)->attr.allocatable;
 }
 
 static bool
 class_pointer (gfc_component *comp)
 {
-  return comp->ts.type == BT_CLASS && CLASS_DATA (comp)
+  return comp->ts.type == BT_CLASS && comp->attr.class_ok && CLASS_DATA (comp)
     && CLASS_DATA (comp)->attr.pointer;
 }
 

@@ -5735,7 +5735,8 @@ cxx_eval_store_expression (const constexpr_ctx *ctx, tree t,
 	  *valp = build_constructor (type, NULL);
 	  CONSTRUCTOR_NO_CLEARING (*valp) = no_zero_init;
 	}
-      else if (TREE_CODE (*valp) == STRING_CST)
+      else if (STRIP_ANY_LOCATION_WRAPPER (*valp),
+	       TREE_CODE (*valp) == STRING_CST)
 	{
 	  /* An array was initialized with a string constant, and now
 	     we're writing into one of its elements.  Explode the
@@ -6039,6 +6040,18 @@ cxx_eval_increment_expression (const constexpr_ctx *ctx, tree t,
       if (!inc)
 	offset = fold_build1 (NEGATE_EXPR, TREE_TYPE (offset), offset);
       mod = fold_build2 (POINTER_PLUS_EXPR, type, val, offset);
+    }
+  else if (c_promoting_integer_type_p (type)
+	   && !TYPE_UNSIGNED (type)
+	   && TYPE_PRECISION (type) < TYPE_PRECISION (integer_type_node))
+    {
+      offset = fold_convert (integer_type_node, offset);
+      mod = fold_convert (integer_type_node, val);
+      tree t = fold_build2 (inc ? PLUS_EXPR : MINUS_EXPR, integer_type_node,
+			    mod, offset);
+      mod = fold_convert (type, t);
+      if (TREE_OVERFLOW_P (mod) && !TREE_OVERFLOW_P (t))
+	TREE_OVERFLOW (mod) = false;
     }
   else
     mod = fold_build2 (inc ? PLUS_EXPR : MINUS_EXPR, type, val, offset);
@@ -6840,16 +6853,23 @@ cxx_eval_constant_expression (const constexpr_ctx *ctx, tree t,
 					  non_constant_p, overflow_p);
 	if (*non_constant_p)
 	  break;
-	/* Adjust the type of the result to the type of the temporary.  */
-	r = adjust_temp_type (type, r);
+	/* If the initializer is complex, evaluate it to initialize slot.  */
+	bool is_complex = target_expr_needs_replace (t);
+	if (!is_complex)
+	  {
+	    r = unshare_constructor (r);
+	    /* Adjust the type of the result to the type of the temporary.  */
+	    r = adjust_temp_type (type, r);
+	    ctx->global->values.put (slot, r);
+	  }
 	if (TARGET_EXPR_CLEANUP (t) && !CLEANUP_EH_ONLY (t))
 	  ctx->global->cleanups->safe_push (TARGET_EXPR_CLEANUP (t));
-	r = unshare_constructor (r);
-	ctx->global->values.put (slot, r);
 	if (ctx->save_exprs)
 	  ctx->save_exprs->safe_push (slot);
 	if (lval)
 	  return slot;
+	if (is_complex)
+	  r = *ctx->global->values.get (slot);
       }
       break;
 
@@ -7298,7 +7318,18 @@ cxx_eval_constant_expression (const constexpr_ctx *ctx, tree t,
 	  }
 
 	if (TREE_CODE (op) == PTRMEM_CST && !TYPE_PTRMEM_P (type))
-	  op = cplus_expand_constant (op);
+	  {
+	    op = cplus_expand_constant (op);
+	    if (TREE_CODE (op) == PTRMEM_CST)
+	      {
+		if (!ctx->quiet)
+		  error_at (loc, "%qE is not a constant expression when the "
+			    "class %qT is still incomplete", op,
+			    PTRMEM_CST_CLASS (op));
+		*non_constant_p = true;
+		return t;
+	      }
+	  }
 
 	if (TREE_CODE (op) == PTRMEM_CST && tcode == NOP_EXPR)
 	  {
@@ -7584,6 +7615,51 @@ cxx_eval_constant_expression (const constexpr_ctx *ctx, tree t,
 	  return t;
 	}
       r = cxx_eval_bit_cast (ctx, t, non_constant_p, overflow_p);
+      break;
+
+    case OMP_PARALLEL:
+    case OMP_TASK:
+    case OMP_FOR:
+    case OMP_SIMD:
+    case OMP_DISTRIBUTE:
+    case OMP_TASKLOOP:
+    case OMP_LOOP:
+    case OMP_TEAMS:
+    case OMP_TARGET_DATA:
+    case OMP_TARGET:
+    case OMP_SECTIONS:
+    case OMP_ORDERED:
+    case OMP_CRITICAL:
+    case OMP_SINGLE:
+    case OMP_SCAN:
+    case OMP_SCOPE:
+    case OMP_SECTION:
+    case OMP_MASTER:
+    case OMP_MASKED:
+    case OMP_TASKGROUP:
+    case OMP_TARGET_UPDATE:
+    case OMP_TARGET_ENTER_DATA:
+    case OMP_TARGET_EXIT_DATA:
+    case OMP_ATOMIC:
+    case OMP_ATOMIC_READ:
+    case OMP_ATOMIC_CAPTURE_OLD:
+    case OMP_ATOMIC_CAPTURE_NEW:
+    case OMP_DEPOBJ:
+    case OACC_PARALLEL:
+    case OACC_KERNELS:
+    case OACC_SERIAL:
+    case OACC_DATA:
+    case OACC_HOST_DATA:
+    case OACC_LOOP:
+    case OACC_CACHE:
+    case OACC_DECLARE:
+    case OACC_ENTER_DATA:
+    case OACC_EXIT_DATA:
+    case OACC_UPDATE:
+      if (!ctx->quiet)
+	error_at (EXPR_LOCATION (t),
+		  "statement is not a constant expression");
+      *non_constant_p = true;
       break;
 
     default:
@@ -8068,6 +8144,19 @@ fold_simple (tree t)
   return t;
 }
 
+/* Try folding the expression T to a simple constant.
+   Returns that constant, otherwise returns T.  */
+
+tree
+fold_to_constant (tree t)
+{
+  tree r = fold (t);
+  if (CONSTANT_CLASS_P (r) && !TREE_OVERFLOW (r))
+    return r;
+  else
+    return t;
+}
+
 /* If T is a constant expression, returns its reduced value.
    Otherwise, if T does not have TREE_CONSTANT set, returns T.
    Otherwise, returns a version of T without TREE_CONSTANT.
@@ -8102,15 +8191,20 @@ maybe_constant_value (tree t, tree decl, bool manifestly_const_eval)
       r = *cached;
       if (r != t)
 	{
+	  /* Clear processing_template_decl for sake of break_out_target_exprs;
+	     entries in the cv_cache are non-templated.  */
+	  processing_template_decl_sentinel ptds;
+
 	  r = break_out_target_exprs (r, /*clear_loc*/true);
 	  protected_set_expr_location (r, EXPR_LOCATION (t));
 	}
       return r;
     }
 
-  /* Don't evaluate an unevaluated operand.  */
+  /* Don't constant evaluate an unevaluated non-manifestly-constant operand,
+     but at least try folding it to a simple constant.  */
   if (cp_unevaluated_operand)
-    return t;
+    return fold_to_constant (t);
 
   uid_sensitive_constexpr_evaluation_checker c;
   r = cxx_eval_outermost_constant_expr (t, true, true, false, false, decl);
@@ -8174,9 +8268,14 @@ fold_non_dependent_expr_template (tree t, tsubst_flags_t complain,
 	    }
 	  return t;
 	}
-
-      if (cp_unevaluated_operand && !manifestly_const_eval)
+      else if (CONSTANT_CLASS_P (t))
+	/* No evaluation needed.  */
 	return t;
+
+      /* Don't constant evaluate an unevaluated non-manifestly-constant operand,
+	 but at least try folding it to a simple constant.  */
+      if (cp_unevaluated_operand && !manifestly_const_eval)
+	return fold_to_constant (t);
 
       tree r = cxx_eval_outermost_constant_expr (t, true, true,
 						 manifestly_const_eval,
@@ -8678,8 +8777,12 @@ potential_constant_expression_1 (tree t, bool want_rval, bool strict, bool now,
 	  }
 	else if (fun)
           {
-	    if (RECUR (fun, rval))
-	      /* Might end up being a constant function pointer.  */;
+	    if (RECUR (fun, FUNCTION_POINTER_TYPE_P (fun) ? rval : any))
+	      /* Might end up being a constant function pointer.  But it
+		 could also be a function object with constexpr op(), so
+		 we pass 'any' so that the underlying VAR_DECL is deemed
+		 as potentially-constant even though it wasn't declared
+		 constexpr.  */;
 	    else
 	      return false;
           }
@@ -9029,6 +9132,8 @@ potential_constant_expression_1 (tree t, bool want_rval, bool strict, bool now,
     case OMP_ORDERED:
     case OMP_CRITICAL:
     case OMP_SINGLE:
+    case OMP_SCAN:
+    case OMP_SCOPE:
     case OMP_SECTION:
     case OMP_MASTER:
     case OMP_MASKED:

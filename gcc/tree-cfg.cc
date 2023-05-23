@@ -3475,7 +3475,7 @@ verify_gimple_call (gcall *stmt)
       if (is_constant_size_arg0 && is_constant_size_lhs)
 	if (maybe_ne (size_from_arg0, size_from_lhs))
 	  {
-	    error ("%<DEFFERED_INIT%> calls should have same "
+	    error ("%<DEFERRED_INIT%> calls should have same "
 		   "constant size for the first argument and LHS");
 	    return true;
 	  }
@@ -7737,6 +7737,8 @@ move_sese_region_to_fn (struct function *dest_cfun, basic_block entry_bb,
       if (bb->loop_father->header == bb)
 	{
 	  class loop *this_loop = bb->loop_father;
+	  /* Avoid the need to remap SSA names used in nb_iterations.  */
+	  free_numbers_of_iterations_estimates (this_loop);
 	  class loop *outer = loop_outer (this_loop);
 	  if (outer == loop
 	      /* If the SESE region contains some bbs ending with

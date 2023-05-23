@@ -6152,6 +6152,8 @@ lower_rec_input_clauses (tree clauses, gimple_seq *ilist, gimple_seq *dlist,
 		      && gimple_omp_for_combined_into_p (ctx->stmt))
 		    {
 		      tree t = OMP_CLAUSE_LINEAR_STEP (c);
+		      if (DECL_P (t))
+			t = build_outer_var_ref (t, ctx);
 		      tree stept = TREE_TYPE (t);
 		      tree ct = omp_find_clause (clauses,
 						 OMP_CLAUSE__LOOPTEMP_);
@@ -7579,6 +7581,7 @@ lower_oacc_reductions (location_t loc, tree clauses, tree level, bool inner,
 	      incoming = build_simple_mem_ref (incoming);
 	  }
 	else
+	  /* Note that 'var' might be a mem ref.  */
 	  v1 = v2 = v3 = var;
 
 	/* Determine position in reduction buffer, which may be used
@@ -7607,26 +7610,28 @@ lower_oacc_reductions (location_t loc, tree clauses, tree level, bool inner,
 	  = build_call_expr_internal_loc (loc, IFN_GOACC_REDUCTION,
 					  TREE_TYPE (var), 6, setup_code,
 					  unshare_expr (ref_to_res),
-					  incoming, level, op, off);
+					  unshare_expr (incoming),
+					  level, op, off);
 	tree init_call
 	  = build_call_expr_internal_loc (loc, IFN_GOACC_REDUCTION,
 					  TREE_TYPE (var), 6, init_code,
 					  unshare_expr (ref_to_res),
-					  v1, level, op, off);
+					  unshare_expr (v1), level, op, off);
 	tree fini_call
 	  = build_call_expr_internal_loc (loc, IFN_GOACC_REDUCTION,
 					  TREE_TYPE (var), 6, fini_code,
 					  unshare_expr (ref_to_res),
-					  v2, level, op, off);
+					  unshare_expr (v2), level, op, off);
 	tree teardown_call
 	  = build_call_expr_internal_loc (loc, IFN_GOACC_REDUCTION,
 					  TREE_TYPE (var), 6, teardown_code,
-					  ref_to_res, v3, level, op, off);
+					  ref_to_res, unshare_expr (v3),
+					  level, op, off);
 
-	gimplify_assign (v1, setup_call, &before_fork);
-	gimplify_assign (v2, init_call, &after_fork);
-	gimplify_assign (v3, fini_call, &before_join);
-	gimplify_assign (outgoing, teardown_call, &after_join);
+	gimplify_assign (unshare_expr (v1), setup_call, &before_fork);
+	gimplify_assign (unshare_expr (v2), init_call, &after_fork);
+	gimplify_assign (unshare_expr (v3), fini_call, &before_join);
+	gimplify_assign (unshare_expr (outgoing), teardown_call, &after_join);
       }
 
   /* Now stitch things together.  */
@@ -9672,7 +9677,6 @@ lower_omp_taskgroup (gimple_stmt_iterator *gsi_p, omp_context *ctx)
   gimple_bind_add_seq (bind, gimple_omp_body (stmt));
   gimple_omp_set_body (stmt, NULL);
 
-  gimple_bind_add_stmt (bind, gimple_build_omp_return (true));
   gimple_bind_add_seq (bind, dseq);
 
   pop_gimplify_context (bind);
@@ -10653,6 +10657,28 @@ oacc_privatization_candidate_p (const location_t loc, const tree c,
 	  dump_printf (l_dump_flags,
 		       "isn%'t candidate for adjusting OpenACC privatization level: %s\n",
 		       "not addressable");
+	}
+    }
+
+  /* If an artificial variable has been added to a bind, e.g.
+     a compiler-generated temporary structure used by the Fortran front-end, do
+     not consider it as a privatization candidate.  Note that variables on
+     the stack are private per-thread by default: making them "gang-private"
+     for OpenACC actually means to share a single instance of a variable
+     amongst all workers and threads spawned within each gang.
+     At present, no compiler-generated artificial variables require such
+     sharing semantics, so this is safe.  */
+
+  if (res && block && DECL_ARTIFICIAL (decl))
+    {
+      res = false;
+
+      if (dump_enabled_p ())
+	{
+	  oacc_privatization_begin_diagnose_var (l_dump_flags, loc, c, decl);
+	  dump_printf (l_dump_flags,
+		       "isn%'t candidate for adjusting OpenACC privatization "
+		       "level: %s\n", "artificial");
 	}
     }
 
@@ -13741,7 +13767,8 @@ lower_omp_target (gimple_stmt_iterator *gsi_p, omp_context *ctx)
 	      }
 	    tree present;
 	    present = ((do_optional_check
-			&& OMP_CLAUSE_CODE (c) != OMP_CLAUSE_HAS_DEVICE_ADDR)
+			&& OMP_CLAUSE_CODE (c) != OMP_CLAUSE_HAS_DEVICE_ADDR
+			&& OMP_CLAUSE_CODE (c) != OMP_CLAUSE_IS_DEVICE_PTR)
 		       ? omp_check_optional_argument (OMP_CLAUSE_DECL (c), true)
 		       : NULL_TREE);
 	    if (present)

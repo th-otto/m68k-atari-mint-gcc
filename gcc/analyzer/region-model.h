@@ -247,6 +247,7 @@ public:
   /* svalue consolidation.  */
   const svalue *get_or_create_constant_svalue (tree cst_expr);
   const svalue *get_or_create_int_cst (tree type, poly_int64);
+  const svalue *get_or_create_null_ptr (tree pointer_type);
   const svalue *get_or_create_unknown_svalue (tree type);
   const svalue *get_or_create_setjmp_svalue (const setjmp_record &r,
 					     tree type);
@@ -665,7 +666,8 @@ class region_model
   function * get_current_function () const;
   void pop_frame (tree result_lvalue,
 		  const svalue **out_result,
-		  region_model_context *ctxt);
+		  region_model_context *ctxt,
+		  bool eval_return_svalue = true);
   int get_stack_depth () const;
   const frame_region *get_frame_at_index (int index) const;
 
@@ -821,7 +823,9 @@ class region_model
   int poison_any_pointers_to_descendents (const region *reg,
 					  enum poison_kind pkind);
 
-  void on_top_level_param (tree param, region_model_context *ctxt);
+  void on_top_level_param (tree param,
+			   bool nonnull,
+			   region_model_context *ctxt);
 
   bool called_from_main_p () const;
   const svalue *get_initial_value_for_global (const region *reg) const;

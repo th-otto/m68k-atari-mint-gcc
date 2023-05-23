@@ -441,11 +441,23 @@ grok_array_decl (location_t loc, tree array_expr, tree index_exp,
 					     &overload, complain);
 		}
 	      else
-		/* If it would be valid albeit deprecated expression in C++20,
-		   just pedwarn on it and treat it as if wrapped in ().  */
-		pedwarn (loc, OPT_Wcomma_subscript,
-			 "top-level comma expression in array subscript "
-			 "changed meaning in C++23");
+		{
+		  /* If it would be valid albeit deprecated expression in
+		     C++20, just pedwarn on it and treat it as if wrapped
+		     in ().  */
+		  pedwarn (loc, OPT_Wcomma_subscript,
+			   "top-level comma expression in array subscript "
+			   "changed meaning in C++23");
+		  if (processing_template_decl)
+		    {
+		      orig_index_exp
+			= build_x_compound_expr_from_vec (orig_index_exp_list,
+							  NULL, complain);
+		      if (orig_index_exp == error_mark_node)
+			expr = error_mark_node;
+		      release_tree_vector (orig_index_exp_list);
+		    }
+		}
 	    }
 	}
     }
@@ -486,6 +498,15 @@ grok_array_decl (location_t loc, tree array_expr, tree index_exp,
 	      return error_mark_node;
 	    }
 	  index_exp = idx;
+	  if (processing_template_decl)
+	    {
+	      orig_index_exp
+		= build_x_compound_expr_from_vec (orig_index_exp_list,
+						  NULL, complain);
+	      release_tree_vector (orig_index_exp_list);
+	      if (orig_index_exp == error_mark_node)
+		return error_mark_node;
+	    }
 	}
 
       if (TREE_CODE (TREE_TYPE (index_exp)) == ARRAY_TYPE)
@@ -3604,7 +3625,7 @@ var_defined_without_dynamic_init (tree var)
 /* Returns true iff VAR is a variable that needs uses to be
    wrapped for possible dynamic initialization.  */
 
-static bool
+bool
 var_needs_tls_wrapper (tree var)
 {
   return (!error_operand_p (var)
@@ -5779,7 +5800,7 @@ mark_single_function (tree expr, tsubst_flags_t complain)
 
   if (is_overloaded_fn (expr) == 1
       && !mark_used (expr, complain)
-      && (complain & tf_error))
+      && !(complain & tf_error))
     return false;
   return true;
 }

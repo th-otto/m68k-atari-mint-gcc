@@ -1,3 +1,81 @@
+2023-05-08  Release Manager
+
+	* GCC 12.3.0 released.
+
+2023-03-19  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-03-10  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/108079
+	* c-decl.cc (pop_scope): Suppress OPT_Wunused_variable warning
+	after diagnosing it.
+
+2023-02-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-01-16  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/105593
+	* c-parser.cc (c_parser_initializer): Check warning_enabled_at
+	at the DECL_SOURCE_LOCATION (decl) for OPT_Winit_self instead
+	of warn_init_self.
+
+2023-02-10  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2022-08-11  Marek Polacek  <polacek@redhat.com>
+
+	PR middle-end/102633
+	* c-parser.cc (c_parser_initializer): Add new tree parameter.  Use it.
+	Call suppress_warning.
+	(c_parser_declaration_or_fndef): Pass d down to c_parser_initializer.
+	(c_parser_omp_declare_reduction): Pass omp_priv down to
+	c_parser_initializer.
+
+2023-02-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-01-11  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/105972
+	* c-parser.cc (c_parser_declaration_or_fndef): Disable debug non-bind
+	markers for K&R function parameter declarations of nested functions.
+
+2023-01-31  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/107593
+	PR c++/108597
+	* c-objc-common.cc (instantiation_dependent_expression_p): New.
+
+2022-11-03  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-10-24  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/107358
+	* c-typeck.cc (build_binary_op): Pass operands before excess precision
+	promotions to scalar_to_vector call.
+
+2022-11-03  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-09-24  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/106981
+	* c-typeck.cc (c_tree_equal): Only strip NON_LVALUE_EXPRs at the
+	start.  For CONSTANT_CLASS_P or CASE_CONVERT: return false if t1 and
+	t2 have different types.
+
+2022-09-19  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2022-09-19  Marek Polacek  <polacek@redhat.com>
+
+	PR c/106947
+	* c-typeck.cc (maybe_warn_for_null_address): Don't emit stray
+	notes.
+
 2022-08-19  Release Manager
 
 	* GCC 12.2.0 released.

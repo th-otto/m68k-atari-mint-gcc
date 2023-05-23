@@ -852,6 +852,12 @@ requirements of the license of GCC.
 		    by the resolution of the DR.
     </para></listitem></varlistentry>
 
+    <varlistentry xml:id="manual.bugs.dr1203"><term><link xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="&DR;#1203">1203</link>:
+       <emphasis>More useful rvalue stream insertion</emphasis>
+    </term>
+    <listitem><para>Return the stream as its original type, not the base class.
+    </para></listitem></varlistentry>
+
     <varlistentry xml:id="manual.bugs.dr1339"><term><link xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="&DR;#1339">1339</link>:
        <emphasis>uninitialized_fill_n should return the end of its range</emphasis>
     </term>
@@ -1155,6 +1161,15 @@ requirements of the license of GCC.
     </term>
     <listitem><para>Avoid using <code>dynamic_cast</code> when it would be
     ill-formed.
+    </para></listitem></varlistentry>
+
+    <varlistentry xml:id="manual.bugs.dr2487"><term><link xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="&DR;#2487">2487</link>:
+       <emphasis><code>bind()</code> should be <code>const</code>-overloaded
+      not cv-overloaded
+       </emphasis>
+    </term>
+    <listitem><para>Deprecate volatile-qualified <code>operator()</code>
+    for C++17, make it ill-formed for C++20.
     </para></listitem></varlistentry>
 
     <varlistentry xml:id="manual.bugs.dr2499"><term><link xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="&DR;#2499">2499</link>:

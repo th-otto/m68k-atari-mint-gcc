@@ -2596,6 +2596,18 @@ dependent_name (tree x)
   return NULL_TREE;
 }
 
+/* Like dependent_name, but instead takes a CALL_EXPR and also checks
+   its dependence.  */
+
+tree
+call_expr_dependent_name (tree x)
+{
+  if (TREE_TYPE (x) != NULL_TREE)
+    /* X isn't dependent, so its callee isn't a dependent name.  */
+    return NULL_TREE;
+  return dependent_name (CALL_EXPR_FN (x));
+}
+
 /* Returns true iff X is an expression for an overloaded function
    whose type cannot be known without performing overload
    resolution.  */
@@ -3330,6 +3342,10 @@ break_out_target_exprs (tree t, bool clear_location /* = false */)
   static int target_remap_count;
   static splay_tree target_remap;
 
+  /* We shouldn't be called on templated trees, nor do we want to
+     produce them.  */
+  gcc_checking_assert (!processing_template_decl);
+
   if (!target_remap_count++)
     target_remap = splay_tree_new (splay_tree_compare_pointers,
 				   /*splay_tree_delete_key_fn=*/NULL,
@@ -3829,16 +3845,18 @@ decl_anon_ns_mem_p (const_tree decl)
   return !TREE_PUBLIC (decl);
 }
 
-/* Subroutine of cp_tree_equal: t1 and t2 are the CALL_EXPR_FNs of two
-   CALL_EXPRS.  Return whether they are equivalent.  */
+/* Subroutine of cp_tree_equal: t1 and t2 are two CALL_EXPRs.
+   Return whether their CALL_EXPR_FNs are equivalent.  */
 
 static bool
 called_fns_equal (tree t1, tree t2)
 {
   /* Core 1321: dependent names are equivalent even if the overload sets
      are different.  But do compare explicit template arguments.  */
-  tree name1 = dependent_name (t1);
-  tree name2 = dependent_name (t2);
+  tree name1 = call_expr_dependent_name (t1);
+  tree name2 = call_expr_dependent_name (t2);
+  t1 = CALL_EXPR_FN (t1);
+  t2 = CALL_EXPR_FN (t2);
   if (name1 || name2)
     {
       tree targs1 = NULL_TREE, targs2 = NULL_TREE;
@@ -3952,7 +3970,7 @@ cp_tree_equal (tree t1, tree t2)
 	if (KOENIG_LOOKUP_P (t1) != KOENIG_LOOKUP_P (t2))
 	  return false;
 
-	if (!called_fns_equal (CALL_EXPR_FN (t1), CALL_EXPR_FN (t2)))
+	if (!called_fns_equal (t1, t2))
 	  return false;
 
 	call_expr_arg_iterator iter1, iter2;
@@ -4745,7 +4763,7 @@ record_has_unique_obj_representations (const_tree t, const_tree sz)
 						    DECL_SIZE (field)))
 	  return false;
       }
-    else if (DECL_C_BIT_FIELD (field))
+    else if (DECL_C_BIT_FIELD (field) && !DECL_UNNAMED_BIT_FIELD (field))
       {
 	tree btype = DECL_BIT_FIELD_TYPE (field);
 	if (!type_has_unique_obj_representations (btype))
@@ -4756,7 +4774,7 @@ record_has_unique_obj_representations (const_tree t, const_tree sz)
 
   offset_int cur = 0;
   for (tree field = TYPE_FIELDS (t); field; field = DECL_CHAIN (field))
-    if (TREE_CODE (field) == FIELD_DECL)
+    if (TREE_CODE (field) == FIELD_DECL && !DECL_UNNAMED_BIT_FIELD (field))
       {
 	offset_int fld = wi::to_offset (DECL_FIELD_OFFSET (field));
 	offset_int bitpos = wi::to_offset (DECL_FIELD_BIT_OFFSET (field));
@@ -5488,15 +5506,18 @@ cp_walk_subtrees (tree *tp, int *walk_subtrees_p, walk_tree_fn func,
       break;
  
     case REQUIRES_EXPR:
-      // Only recurse through the nested expression. Do not
-      // walk the parameter list. Doing so causes false
-      // positives in the pack expansion checker since the
-      // requires parameters are introduced as pack expansions.
-      ++cp_unevaluated_operand;
-      result = cp_walk_tree (&REQUIRES_EXPR_REQS (*tp), func, data, pset);
-      --cp_unevaluated_operand;
-      *walk_subtrees_p = 0;
-      break;
+      {
+	cp_unevaluated u;
+	for (tree parm = REQUIRES_EXPR_PARMS (*tp); parm; parm = DECL_CHAIN (parm))
+	  /* Walk the types of each parameter, but not the parameter itself,
+	     since doing so would cause false positives in the unexpanded pack
+	     checker if the requires-expr introduces a function parameter pack,
+	     e.g. requires (Ts... ts) { }.   */
+	  WALK_SUBTREE (TREE_TYPE (parm));
+	WALK_SUBTREE (REQUIRES_EXPR_REQS (*tp));
+	*walk_subtrees_p = 0;
+	break;
+      }
 
     case DECL_EXPR:
       /* User variables should be mentioned in BIND_EXPR_VARS

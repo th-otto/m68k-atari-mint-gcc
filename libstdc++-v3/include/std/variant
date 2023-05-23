@@ -1480,7 +1480,9 @@ namespace __variant
 			    || !is_nothrow_move_constructible_v<_Tj>)
 		this->emplace<__index>(std::forward<_Tp>(__rhs));
 	      else
-		operator=(variant(std::forward<_Tp>(__rhs)));
+		// _GLIBCXX_RESOLVE_LIB_DEFECTS
+		// 3585. converting assignment with immovable alternative
+		this->emplace<__index>(_Tj(std::forward<_Tp>(__rhs)));
 	    }
 	  return *this;
 	}
@@ -1730,7 +1732,12 @@ namespace __variant
     {
       // Get the silly case of visiting no variants out of the way first.
       if constexpr (sizeof...(_Variants) == 0)
-	return std::forward<_Visitor>(__visitor)();
+	{
+	  if constexpr (is_void_v<_Result_type>)
+	    return (void) std::forward<_Visitor>(__visitor)();
+	  else
+	    return std::forward<_Visitor>(__visitor)();
+	}
       else
 	{
 	  constexpr size_t __max = 11; // "These go to eleven."

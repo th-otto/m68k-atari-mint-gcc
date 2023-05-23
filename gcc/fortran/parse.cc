@@ -3911,7 +3911,7 @@ match_deferred_characteristics (gfc_typespec * ts)
   m = gfc_match_prefix (ts);
   gfc_buffer_error (false);
 
-  if (ts->type == BT_DERIVED)
+  if (ts->type == BT_DERIVED || ts->type == BT_CLASS)
     {
       ts->kind = 0;
 
@@ -3948,21 +3948,30 @@ match_deferred_characteristics (gfc_typespec * ts)
    For return types specified in a FUNCTION prefix, the IMPLICIT rules of the
    scope are not yet parsed so this has to be delayed up to parse_spec.  */
 
-static void
+static bool
 check_function_result_typed (void)
 {
   gfc_typespec ts;
 
   gcc_assert (gfc_current_state () == COMP_FUNCTION);
 
-  if (!gfc_current_ns->proc_name->result) return;
+  if (!gfc_current_ns->proc_name->result)
+    return true;
 
   ts = gfc_current_ns->proc_name->result->ts;
 
   /* Check type-parameters, at the moment only CHARACTER lengths possible.  */
   /* TODO:  Extend when KIND type parameters are implemented.  */
   if (ts.type == BT_CHARACTER && ts.u.cl && ts.u.cl->length)
-    gfc_expr_check_typed (ts.u.cl->length, gfc_current_ns, true);
+    {
+      /* Reject invalid type of specification expression for length.  */
+      if (ts.u.cl->length->ts.type != BT_INTEGER)
+	  return false;
+
+      gfc_expr_check_typed (ts.u.cl->length, gfc_current_ns, true);
+    }
+
+  return true;
 }
 
 
@@ -4070,10 +4079,7 @@ loop:
 	}
 
       if (verify_now)
-	{
-	  check_function_result_typed ();
-	  function_result_typed = true;
-	}
+	function_result_typed = check_function_result_typed ();
     }
 
   switch (st)
@@ -4084,10 +4090,7 @@ loop:
     case ST_IMPLICIT_NONE:
     case ST_IMPLICIT:
       if (!function_result_typed)
-	{
-	  check_function_result_typed ();
-	  function_result_typed = true;
-	}
+	function_result_typed = check_function_result_typed ();
       goto declSt;
 
     case ST_FORMAT:
@@ -4192,7 +4195,7 @@ declSt:
   if (bad_characteristic)
     {
       ts = &gfc_current_block ()->result->ts;
-      if (ts->type != BT_DERIVED)
+      if (ts->type != BT_DERIVED && ts->type != BT_CLASS)
 	gfc_error ("Bad kind expression for function %qs at %L",
 		   gfc_current_block ()->name,
 		   &gfc_current_block ()->declared_at);
@@ -5708,7 +5711,7 @@ parse_omp_structured_block (gfc_statement omp_st, bool workshare_stmts_only)
 	    }
 	  return st;
 	}
-      else if (st != omp_end_st)
+      else if (st != omp_end_st || block_construct)
 	{
 	  unexpected_statement (st);
 	  st = next_statement ();
@@ -6450,7 +6453,6 @@ parse_module (void)
 {
   gfc_statement st;
   gfc_gsymbol *s;
-  bool error;
 
   s = gfc_get_gsymbol (gfc_new_block->name, false);
   if (s->defined || (s->type != GSYM_UNKNOWN && s->type != GSYM_MODULE))
@@ -6473,7 +6475,6 @@ parse_module (void)
 
   st = parse_spec (ST_NONE);
 
-  error = false;
 loop:
   switch (st)
     {
@@ -6492,16 +6493,11 @@ loop:
     default:
       gfc_error ("Unexpected %s statement in MODULE at %C",
 		 gfc_ascii_statement (st));
-
-      error = true;
       reject_statement ();
       st = next_statement ();
       goto loop;
     }
-
-  /* Make sure not to free the namespace twice on error.  */
-  if (!error)
-    s->ns = gfc_current_ns;
+  s->ns = gfc_current_ns;
 }
 
 

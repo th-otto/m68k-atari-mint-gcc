@@ -183,7 +183,16 @@ tree_vec_extract (gimple_stmt_iterator *gsi, tree type,
   opr.resimplify (NULL, follow_all_ssa_edges);
   gimple_seq stmts = NULL;
   tree res = maybe_push_res_to_seq (&opr, &stmts);
-  gcc_assert (res);
+  if (!res)
+    {
+      /* This can happen if SSA_NAME_OCCURS_IN_ABNORMAL_PHI are
+	 used.  Build BIT_FIELD_REF manually otherwise.  */
+      t = build3 (BIT_FIELD_REF, type, t, bitsize, bitpos);
+      res = make_ssa_name (type);
+      gimple *g = gimple_build_assign (res, t);
+      gsi_insert_before (gsi, g, GSI_SAME_STMT);
+      return res;
+    }
   gsi_insert_seq_before (gsi, stmts, GSI_SAME_STMT);
   return res;
 }
@@ -1071,6 +1080,15 @@ expand_vector_condition (gimple_stmt_iterator *gsi, bitmap dce_ssa_names)
       gcc_assert (TREE_CODE (a) == SSA_NAME || TREE_CODE (a) == VECTOR_CST);
       return true;
     }
+
+  /* If a has vector boolean type and is a comparison, above
+     expand_vec_cond_expr_p might fail, even if both the comparison and
+     VEC_COND_EXPR could be supported individually.  See PR109176.  */
+  if (a_is_comparison
+      && VECTOR_BOOLEAN_TYPE_P (TREE_TYPE (a))
+      && expand_vec_cond_expr_p (type, TREE_TYPE (a), SSA_NAME)
+      && expand_vec_cmp_expr_p (TREE_TYPE (a1), TREE_TYPE (a), code))
+    return true;
 
   /* Handle vector boolean types with bitmasks.  If there is a comparison
      and we can expand the comparison into the vector boolean bitmask,

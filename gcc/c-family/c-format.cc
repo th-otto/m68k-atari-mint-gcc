@@ -1205,7 +1205,7 @@ check_function_format (const_tree fntype, tree attrs, int nargs,
 	      for (c = TYPE_ATTRIBUTES (TREE_TYPE (current_function_decl));
 		   c;
 		   c = TREE_CHAIN (c))
-		if (is_attribute_p ("format", TREE_PURPOSE (c))
+		if (is_attribute_p ("format", get_attribute_name (c))
 		    && (decode_format_type (IDENTIFIER_POINTER
 					    (TREE_VALUE (TREE_VALUE (c))))
 			== info.format_type))
@@ -2933,7 +2933,6 @@ static const token_t c_keywords[] =
    NAME ("noinline", NULL),
    NAME ("nonnull", NULL),
    NAME ("noreturn", NULL),
-   NAME ("nothrow", NULL),
    NAME ("offsetof", NULL),
    NAME ("readonly", "read-only"),
    NAME ("readwrite", "read-write"),

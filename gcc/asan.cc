@@ -64,6 +64,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree-inline.h"
 #include "tree-ssa.h"
 #include "tree-eh.h"
+#include "diagnostic-core.h"
 
 /* AddressSanitizer finds out-of-bounds and use-after-free bugs
    with <2x slowdown on average.
@@ -1818,6 +1819,11 @@ asan_emit_stack_protection (rtx base, rtx pbase, unsigned int alignb,
   tree str_cst, decl, id;
   int use_after_return_class = -1;
 
+  /* Don't emit anything when doing error recovery, the assertions
+     might fail e.g. if a function had a frame offset overflow.  */
+  if (seen_error ())
+    return NULL;
+
   if (shadow_ptr_types[0] == NULL_TREE)
     asan_init_shadow_ptr_types ();
 
@@ -3240,7 +3246,17 @@ asan_add_global (tree decl, tree type, vec<constructor_elt, va_gc> *v)
     pp_string (&asan_pp, "<unknown>");
   str_cst = asan_pp_string (&asan_pp);
 
-  pp_string (&module_name_pp, main_input_filename);
+  if (!in_lto_p)
+    pp_string (&module_name_pp, main_input_filename);
+  else
+    {
+      const_tree tu = get_ultimate_context ((const_tree)decl);
+      if (tu != NULL_TREE)
+	pp_string (&module_name_pp, IDENTIFIER_POINTER (DECL_NAME (tu)));
+      else
+	pp_string (&module_name_pp, aux_base_name);
+    }
+
   module_name_cst = asan_pp_string (&module_name_pp);
 
   if (asan_needs_local_alias (decl))

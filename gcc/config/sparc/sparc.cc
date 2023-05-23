@@ -6050,6 +6050,9 @@ sparc_expand_prologue (void)
 	}
 
       RTX_FRAME_RELATED_P (insn) = 1;
+
+      /* Ensure no memory access is done before the frame is established.  */
+      emit_insn (gen_frame_blockage ());
     }
   else
     {
@@ -6064,13 +6067,7 @@ sparc_expand_prologue (void)
 	  /* %sp is not the CFA register anymore.  */
 	  emit_insn (gen_stack_pointer_inc (GEN_INT (4096 - size)));
 
-	  /* Make sure no %fp-based store is issued until after the frame is
-	     established.  The offset between the frame pointer and the stack
-	     pointer is calculated relative to the value of the stack pointer
-	     at the end of the function prologue, and moving instructions that
-	     access the stack via the frame pointer between the instructions
-	     that decrement the stack pointer could result in accessing the
-	     register window save area, which is volatile.  */
+	  /* Likewise.  */
 	  emit_insn (gen_frame_blockage ());
 	}
       else
@@ -6166,8 +6163,8 @@ sparc_flat_expand_prologue (void)
 	}
       RTX_FRAME_RELATED_P (insn) = 1;
 
-      /* Ensure nothing is scheduled until after the frame is established.  */
-      emit_insn (gen_blockage ());
+      /* Ensure no memory access is done before the frame is established.  */
+      emit_insn (gen_frame_blockage ());
 
       if (frame_pointer_needed)
 	{
@@ -6254,6 +6251,9 @@ sparc_expand_epilogue (bool for_eh)
     ; /* do nothing.  */
   else if (sparc_leaf_function_p)
     {
+      /* Ensure no memory access is done after the frame is destroyed.  */
+      emit_insn (gen_frame_blockage ());
+
       if (size <= 4096)
 	emit_insn (gen_stack_pointer_inc (GEN_INT (size)));
       else if (size <= 8192)
@@ -6304,15 +6304,15 @@ sparc_flat_expand_epilogue (bool for_eh)
     ; /* do nothing.  */
   else if (frame_pointer_needed)
     {
-      /* Make sure the frame is destroyed after everything else is done.  */
-      emit_insn (gen_blockage ());
+      /* Ensure no memory access is done after the frame is destroyed.  */
+      emit_insn (gen_frame_blockage ());
 
       emit_move_insn (stack_pointer_rtx, gen_rtx_REG (Pmode, 1));
     }
   else
     {
       /* Likewise.  */
-      emit_insn (gen_blockage ());
+      emit_insn (gen_frame_blockage ());
 
       if (size <= 4096)
 	emit_insn (gen_stack_pointer_inc (GEN_INT (size)));
@@ -13657,18 +13657,16 @@ sparc_expand_conditional_move (machine_mode mode, rtx *operands)
 void
 sparc_expand_vcond (machine_mode mode, rtx *operands, int ccode, int fcode)
 {
+  enum rtx_code code = signed_condition (GET_CODE (operands[3]));
   rtx mask, cop0, cop1, fcmp, cmask, bshuf, gsr;
-  enum rtx_code code = GET_CODE (operands[3]);
 
   mask = gen_reg_rtx (Pmode);
   cop0 = operands[4];
   cop1 = operands[5];
   if (code == LT || code == GE)
     {
-      rtx t;
-
       code = swap_condition (code);
-      t = cop0; cop0 = cop1; cop1 = t;
+      std::swap (cop0, cop1);
     }
 
   gsr = gen_rtx_REG (DImode, SPARC_GSR_REG);

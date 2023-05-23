@@ -43,6 +43,14 @@ along with GCC; see the file COPYING3.  If not see
 #include "omp-general.h"
 #include "opts.h"
 
+struct cp_fold_data
+{
+  hash_set<tree> pset;
+  bool genericize; // called from cp_fold_function?
+
+  cp_fold_data (bool g): genericize (g) {}
+};
+
 /* Forward declarations.  */
 
 static tree cp_genericize_r (tree *, int *, void *);
@@ -176,6 +184,12 @@ genericize_if_stmt (tree *stmt_p)
     }
   else if (IF_STMT_CONSTEXPR_P (stmt))
     stmt = integer_nonzerop (cond) ? then_ : else_;
+  /* ??? This optimization doesn't seem to belong here, but removing it
+     causes -Wreturn-type regressions (e.g. 107310).  */
+  else if (integer_nonzerop (cond) && !TREE_SIDE_EFFECTS (else_))
+    stmt = then_;
+  else if (integer_zerop (cond) && !TREE_SIDE_EFFECTS (then_))
+    stmt = else_;
   else
     stmt = build3 (COND_EXPR, void_type_node, cond, then_, else_);
   protected_set_expr_location_if_unset (stmt, locus);
@@ -481,8 +495,8 @@ cp_gimplify_expr (tree *expr_p, gimple_seq *pre_p, gimple_seq *post_p)
 	*expr_p = expand_vec_init_expr (NULL_TREE, *expr_p,
 					tf_warning_or_error);
 
-	hash_set<tree> pset;
-	cp_walk_tree (expr_p, cp_fold_r, &pset, NULL);
+	cp_fold_data data (/*genericize*/true);
+	cp_walk_tree (expr_p, cp_fold_r, &data, NULL);
 	cp_genericize_tree (expr_p, false);
 	copy_if_shared (expr_p);
 	ret = GS_OK;
@@ -915,6 +929,7 @@ cp_genericize_init (tree *replace, tree from, tree to)
 static void
 cp_genericize_init_expr (tree *stmt_p)
 {
+  iloc_sentinel ils = EXPR_LOCATION (*stmt_p);
   tree to = TREE_OPERAND (*stmt_p, 0);
   tree from = TREE_OPERAND (*stmt_p, 1);
   if (SIMPLE_TARGET_EXPR_P (from)
@@ -930,6 +945,7 @@ cp_genericize_init_expr (tree *stmt_p)
 static void
 cp_genericize_target_expr (tree *stmt_p)
 {
+  iloc_sentinel ils = EXPR_LOCATION (*stmt_p);
   tree slot = TARGET_EXPR_SLOT (*stmt_p);
   cp_genericize_init (&TARGET_EXPR_INITIAL (*stmt_p),
 		      TARGET_EXPR_INITIAL (*stmt_p), slot);
@@ -954,14 +970,6 @@ struct cp_genericize_data
      the middle-end.  As for now we have most foldings only on GENERIC
      in fold-const, we need to perform this before transformation to
      GIMPLE-form.  */
-
-struct cp_fold_data
-{
-  hash_set<tree> pset;
-  bool genericize; // called from cp_fold_function?
-
-  cp_fold_data (bool g): genericize (g) {}
-};
 
 static tree
 cp_fold_r (tree *stmt_p, int *walk_subtrees, void *data_)
@@ -1002,6 +1010,20 @@ cp_fold_r (tree *stmt_p, int *walk_subtrees, void *data_)
 	if (DECL_IMMEDIATE_FUNCTION_P (fndecl)
 	    && source_location_current_p (fndecl))
 	  *stmt_p = stmt = cxx_constant_value (stmt);
+      break;
+
+    case VAR_DECL:
+      /* In initializers replace anon union artificial VAR_DECLs
+	 with their DECL_VALUE_EXPRs, as nothing will do it later.
+	 Ditto for structured bindings.  */
+      if (!data->genericize
+	  && DECL_HAS_VALUE_EXPR_P (stmt)
+	  && (DECL_ANON_UNION_VAR_P (stmt)
+	      || (DECL_DECOMPOSITION_P (stmt) && DECL_DECOMP_BASE (stmt))))
+	{
+	  *stmt_p = stmt = unshare_expr (DECL_VALUE_EXPR (stmt));
+	  break;
+	}
       break;
 
     default:
@@ -1434,6 +1456,8 @@ cp_genericize_r (tree *stmt_p, int *walk_subtrees, void *data)
 		tree using_directive = make_node (IMPORTED_DECL);
 		TREE_TYPE (using_directive) = void_type_node;
 		DECL_CONTEXT (using_directive) = current_function_decl;
+		DECL_SOURCE_LOCATION (using_directive)
+		  = cp_expr_loc_or_input_loc (stmt);
 
 		IMPORTED_DECL_ASSOCIATED_DECL (using_directive) = decl;
 		DECL_CHAIN (using_directive) = BLOCK_VARS (block);

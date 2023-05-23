@@ -1354,6 +1354,13 @@ region_model::on_call_pre (const gcall *call, region_model_context *ctxt,
       && gimple_call_internal_fn (call) == IFN_DEFERRED_INIT)
     return false;
 
+  /* Get svalues for all of the arguments at the callsite, to ensure that we
+     complain about any uninitialized arguments.  This might lead to
+     duplicates if any of the handling below also looks up the svalues,
+     but the deduplication code should deal with that.  */
+  if (ctxt)
+    check_call_args (cd);
+
   /* Some of the cases below update the lhs of the call based on the
      return value, but not all.  Provide a default value, which may
      get overwritten below.  */
@@ -1469,7 +1476,6 @@ region_model::on_call_pre (const gcall *call, region_model_context *ctxt,
 	    /* These stdio builtins have external effects that are out
 	       of scope for the analyzer: we only want to model the effects
 	       on the return value.  */
-	    check_call_args (cd);
 	    break;
 	  }
       else if (is_named_call_p (callee_fndecl, "malloc", call, 1))
@@ -1980,7 +1986,7 @@ region_model::on_longjmp (const gcall *longjmp_call, const gcall *setjmp_call,
      setjmp was called.  */
   gcc_assert (get_stack_depth () >= setjmp_stack_depth);
   while (get_stack_depth () > setjmp_stack_depth)
-    pop_frame (NULL, NULL, ctxt);
+    pop_frame (NULL, NULL, ctxt, false);
 
   gcc_assert (get_stack_depth () == setjmp_stack_depth);
 
@@ -2231,9 +2237,16 @@ region_model::get_rvalue_1 (path_var pv, region_model_context *ctxt) const
 	return get_rvalue_for_bits (TREE_TYPE (expr), reg, bits, ctxt);
       }
 
-    case SSA_NAME:
     case VAR_DECL:
+      if (DECL_HARD_REGISTER (pv.m_tree))
+	{
+	  /* If it has a hard register, it doesn't have a memory region
+	     and can't be referred to as an lvalue.  */
+	  return m_mgr->get_or_create_unknown_svalue (TREE_TYPE (pv.m_tree));
+	}
+      /* Fall through. */
     case PARM_DECL:
+    case SSA_NAME:
     case RESULT_DECL:
     case ARRAY_REF:
       {
@@ -2986,10 +2999,19 @@ region_model::eval_condition_without_cm (const svalue *lhs,
 	/* Otherwise, only known through constraints.  */
       }
 
-  /* If we have a pair of constants, compare them.  */
   if (const constant_svalue *cst_lhs = lhs->dyn_cast_constant_svalue ())
-    if (const constant_svalue *cst_rhs = rhs->dyn_cast_constant_svalue ())
-      return constant_svalue::eval_condition (cst_lhs, op, cst_rhs);
+    {
+      /* If we have a pair of constants, compare them.  */
+      if (const constant_svalue *cst_rhs = rhs->dyn_cast_constant_svalue ())
+	return constant_svalue::eval_condition (cst_lhs, op, cst_rhs);
+      else
+	{
+	  /* When we have one constant, put it on the RHS.  */
+	  std::swap (lhs, rhs);
+	  op = swap_tree_comparison (op);
+	}
+    }
+  gcc_assert (lhs->get_kind () != SK_CONSTANT);
 
   /* Handle comparison against zero.  */
   if (const constant_svalue *cst_rhs = rhs->dyn_cast_constant_svalue ())
@@ -3031,6 +3053,19 @@ region_model::eval_condition_without_cm (const svalue *lhs,
 		tristate lhs_ts
 		  = eval_condition_without_cm (binop->get_arg0 (),
 					       op, rhs);
+		if (lhs_ts.is_known ())
+		  return lhs_ts;
+	      }
+	  }
+	else if (const unaryop_svalue *unaryop
+		   = lhs->dyn_cast_unaryop_svalue ())
+	  {
+	    if (unaryop->get_op () == NEGATE_EXPR)
+	      {
+		/* e.g. "-X <= 0" is equivalent to X >= 0".  */
+		tristate lhs_ts = eval_condition (unaryop->get_arg (),
+						  swap_tree_comparison (op),
+						  rhs);
 		if (lhs_ts.is_known ())
 		  return lhs_ts;
 	      }
@@ -3881,11 +3916,13 @@ region_model::apply_constraints_for_exception (const gimple *last_stmt,
    PARAM has a defined but unknown initial value.
    Anything it points to has escaped, since the calling context "knows"
    the pointer, and thus calls to unknown functions could read/write into
-   the region.  */
+   the region.
+   If NONNULL is true, then assume that PARAM must be non-NULL.  */
 
 void
 region_model::on_top_level_param (tree param,
-				   region_model_context *ctxt)
+				  bool nonnull,
+				  region_model_context *ctxt)
 {
   if (POINTER_TYPE_P (TREE_TYPE (param)))
     {
@@ -3894,6 +3931,12 @@ region_model::on_top_level_param (tree param,
 	= m_mgr->get_or_create_initial_value (param_reg);
       const region *pointee_reg = m_mgr->get_symbolic_region (init_ptr_sval);
       m_store.mark_as_escaped (pointee_reg);
+      if (nonnull)
+	{
+	  const svalue *null_ptr_sval
+	    = m_mgr->get_or_create_null_ptr (TREE_TYPE (param));
+	  add_constraint (init_ptr_sval, NE_EXPR, null_ptr_sval, ctxt);
+	}
     }
 }
 
@@ -3938,14 +3981,27 @@ region_model::push_frame (function *fun, const vec<const svalue *> *arg_svals,
 	 have defined but unknown initial values.
 	 Anything they point to has escaped.  */
       tree fndecl = fun->decl;
+
+      /* Handle "__attribute__((nonnull))".   */
+      tree fntype = TREE_TYPE (fndecl);
+      bitmap nonnull_args = get_nonnull_args (fntype);
+
+      unsigned parm_idx = 0;
       for (tree iter_parm = DECL_ARGUMENTS (fndecl); iter_parm;
 	   iter_parm = DECL_CHAIN (iter_parm))
 	{
+	  bool non_null = (nonnull_args
+			   ? (bitmap_empty_p (nonnull_args)
+			      || bitmap_bit_p (nonnull_args, parm_idx))
+			   : false);
 	  if (tree parm_default_ssa = ssa_default_def (fun, iter_parm))
-	    on_top_level_param (parm_default_ssa, ctxt);
+	    on_top_level_param (parm_default_ssa, non_null, ctxt);
 	  else
-	    on_top_level_param (iter_parm, ctxt);
+	    on_top_level_param (iter_parm, non_null, ctxt);
+	  parm_idx++;
 	}
+
+      BITMAP_FREE (nonnull_args);
     }
 
   return m_current_frame;
@@ -3970,6 +4026,10 @@ region_model::get_current_function () const
    If OUT_RESULT is non-null, copy any return value from the frame
    into *OUT_RESULT.
 
+   If EVAL_RETURN_SVALUE is false, then don't evaluate the return value.
+   This is for use when unwinding frames e.g. due to longjmp, to suppress
+   erroneously reporting uninitialized return values.
+
    Purge the frame region and all its descendent regions.
    Convert any pointers that point into such regions into
    POISON_KIND_POPPED_STACK svalues.  */
@@ -3977,7 +4037,8 @@ region_model::get_current_function () const
 void
 region_model::pop_frame (tree result_lvalue,
 			 const svalue **out_result,
-			 region_model_context *ctxt)
+			 region_model_context *ctxt,
+			 bool eval_return_svalue)
 {
   gcc_assert (m_current_frame);
 
@@ -3986,7 +4047,9 @@ region_model::pop_frame (tree result_lvalue,
   tree fndecl = m_current_frame->get_function ()->decl;
   tree result = DECL_RESULT (fndecl);
   const svalue *retval = NULL;
-  if (result && TREE_TYPE (result) != void_type_node)
+  if (result
+      && TREE_TYPE (result) != void_type_node
+      && eval_return_svalue)
     {
       retval = get_rvalue (result, ctxt);
       if (out_result)
@@ -3998,6 +4061,8 @@ region_model::pop_frame (tree result_lvalue,
 
   if (result_lvalue && retval)
     {
+      gcc_assert (eval_return_svalue);
+
       /* Compute result_dst_reg using RESULT_LVALUE *after* popping
 	 the frame, but before poisoning pointers into the old frame.  */
       const region *result_dst_reg = get_lvalue (result_lvalue, ctxt);

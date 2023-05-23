@@ -1596,14 +1596,16 @@ vect_update_ivs_after_vectorizer (loop_vec_info loop_vinfo,
 
       init_expr = PHI_ARG_DEF_FROM_EDGE (phi, loop_preheader_edge (loop));
 
-      off = fold_build2 (MULT_EXPR, TREE_TYPE (step_expr),
-			 fold_convert (TREE_TYPE (step_expr), niters),
-			 step_expr);
+      tree stype = TREE_TYPE (step_expr);
+      off = fold_build2 (MULT_EXPR, stype,
+			 fold_convert (stype, niters), step_expr);
       if (POINTER_TYPE_P (type))
 	ni = fold_build_pointer_plus (init_expr, off);
       else
-	ni = fold_build2 (PLUS_EXPR, type,
-			  init_expr, fold_convert (type, off));
+	ni = fold_convert (type,
+			   fold_build2 (PLUS_EXPR, stype,
+					fold_convert (stype, init_expr),
+					off));
 
       var = create_tmp_var (type, "tmp");
 
@@ -3448,7 +3450,7 @@ vect_loop_versioning (loop_vec_info loop_vinfo,
   tree cost_name = NULL_TREE;
   profile_probability prob2 = profile_probability::uninitialized ();
   if (cond_expr
-      && !integer_truep (cond_expr)
+      && EXPR_P (cond_expr)
       && (version_niter
 	  || version_align
 	  || version_alias
@@ -3682,6 +3684,7 @@ vect_loop_versioning (loop_vec_info loop_vinfo,
   if (cost_name && TREE_CODE (cost_name) == SSA_NAME)
     {
       gimple *def = SSA_NAME_DEF_STMT (cost_name);
+      gcc_assert (gimple_bb (def) == condition_bb);
       /* All uses of the cost check are 'true' after the check we
 	 are going to insert.  */
       replace_uses_by (cost_name, boolean_true_node);

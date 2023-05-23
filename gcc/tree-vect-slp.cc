@@ -2468,7 +2468,9 @@ vect_print_slp_tree (dump_flags_t dump_kind, dump_location_t loc,
 
   dump_metadata_t metadata (dump_kind, loc.get_impl_location ());
   dump_user_location_t user_loc = loc.get_user_location ();
-  dump_printf_loc (metadata, user_loc, "node%s %p (max_nunits=%u, refcnt=%u)",
+  dump_printf_loc (metadata, user_loc,
+		   "node%s %p (max_nunits=" HOST_WIDE_INT_PRINT_UNSIGNED
+		   ", refcnt=%u)",
 		   SLP_TREE_DEF_TYPE (node) == vect_external_def
 		   ? " (external)"
 		   : (SLP_TREE_DEF_TYPE (node) == vect_constant_def
@@ -4385,6 +4387,15 @@ vect_detect_hybrid_slp (loop_vec_info loop_vinfo)
 	 to use walk_gimple_op.  */
       wi.is_lhs = 0;
       walk_gimple_op (stmt_info->stmt, vect_detect_hybrid_slp, &wi);
+      /* For gather/scatter make sure to walk the offset operand, that
+	 can be a scaling and conversion away.  */
+      gather_scatter_info gs_info;
+      if (STMT_VINFO_GATHER_SCATTER_P (stmt_info)
+	  && vect_check_gather_scatter (stmt_info, loop_vinfo, &gs_info))
+	{
+	  int dummy;
+	  vect_detect_hybrid_slp (&gs_info.offset, &dummy, &wi);
+	}
     }
 }
 
@@ -4493,9 +4504,23 @@ vect_slp_analyze_node_operations_1 (vec_info *vinfo, slp_tree node,
 
   /* Handle purely internal nodes.  */
   if (SLP_TREE_CODE (node) == VEC_PERM_EXPR)
-    return vectorizable_slp_permutation (vinfo, NULL, node, cost_vec);
+    {
+      if (!vectorizable_slp_permutation (vinfo, NULL, node, cost_vec))
+	return false;
 
-  gcc_assert (STMT_SLP_TYPE (stmt_info) != loop_vect);
+      stmt_vec_info slp_stmt_info;
+      unsigned int i;
+      FOR_EACH_VEC_ELT (SLP_TREE_SCALAR_STMTS (node), i, slp_stmt_info)
+	{
+	  if (STMT_VINFO_LIVE_P (slp_stmt_info)
+	      && !vectorizable_live_operation (vinfo,
+					       slp_stmt_info, NULL, node,
+					       node_instance, i,
+					       false, cost_vec))
+	    return false;
+	}
+      return true;
+    }
 
   bool dummy;
   return vect_analyze_stmt (vinfo, stmt_info, &dummy,
@@ -6193,10 +6218,23 @@ vect_slp_function (function *fun)
 	{
 	  r |= vect_slp_bbs (bbs, NULL);
 	  bbs.truncate (0);
-	  bbs.quick_push (bb);
 	}
-      else
-	bbs.safe_push (bb);
+
+      /* We need to be able to insert at the head of the region which
+	 we cannot for region starting with a returns-twice call.  */
+      if (bbs.is_empty ())
+	if (gcall *first = safe_dyn_cast <gcall *> (first_stmt (bb)))
+	  if (gimple_call_flags (first) & ECF_RETURNS_TWICE)
+	    {
+	      if (dump_enabled_p ())
+		dump_printf_loc (MSG_MISSED_OPTIMIZATION, vect_location,
+				 "skipping bb%d as start of region as it "
+				 "starts with returns-twice call\n",
+				 bb->index);
+	      continue;
+	    }
+
+      bbs.safe_push (bb);
 
       /* When we have a stmt ending this block and defining a
 	 value we have to insert on edges when inserting after it for
@@ -7333,8 +7371,6 @@ vect_schedule_slp_node (vec_info *vinfo,
 	}
     }
 
-  bool done_p = false;
-
   /* Handle purely internal nodes.  */
   if (SLP_TREE_CODE (node) == VEC_PERM_EXPR)
     {
@@ -7345,9 +7381,18 @@ vect_schedule_slp_node (vec_info *vinfo,
 	 but open-code it here (partly).  */
       bool done = vectorizable_slp_permutation (vinfo, &si, node, NULL);
       gcc_assert (done);
-      done_p = true;
+      stmt_vec_info slp_stmt_info;
+      unsigned int i;
+      FOR_EACH_VEC_ELT (SLP_TREE_SCALAR_STMTS (node), i, slp_stmt_info)
+	if (STMT_VINFO_LIVE_P (slp_stmt_info))
+	  {
+	    done = vectorizable_live_operation (vinfo,
+						slp_stmt_info, &si, node,
+						instance, i, true, NULL);
+	    gcc_assert (done);
+	  }
     }
-  if (!done_p)
+  else
     vect_transform_stmt (vinfo, stmt_info, &si, node, instance);
 }
 

@@ -742,6 +742,7 @@ gfc_finish_var_decl (tree decl, gfc_symbol * sym)
   /* Keep variables larger than max-stack-var-size off stack.  */
   if (!(sym->ns->proc_name && sym->ns->proc_name->attr.recursive)
       && !sym->attr.automatic
+      && !sym->attr.associate_var
       && sym->attr.save != SAVE_EXPLICIT
       && sym->attr.save != SAVE_IMPLICIT
       && INTEGER_CST_P (DECL_SIZE_UNIT (decl))
@@ -4835,7 +4836,7 @@ gfc_trans_deferred_vars (gfc_symbol * proc_sym, gfc_wrapped_block * block)
       else if ((!sym->attr.dummy || sym->ts.deferred)
 		&& (sym->ts.type == BT_CLASS
 		&& CLASS_DATA (sym)->attr.class_pointer))
-	continue;
+	gfc_trans_class_array (sym, block);
       else if ((!sym->attr.dummy || sym->ts.deferred)
 		&& (sym->attr.allocatable
 		    || (sym->attr.pointer && sym->attr.result)
@@ -4918,6 +4919,10 @@ gfc_trans_deferred_vars (gfc_symbol * proc_sym, gfc_wrapped_block * block)
 		  gfc_restore_backend_locus (&loc);
 		  tmp = NULL_TREE;
 		}
+
+	      /* Initialize descriptor's TKR information.  */
+	      if (sym->ts.type == BT_CLASS)
+		gfc_trans_class_array (sym, block);
 
 	      /* Deallocate when leaving the scope. Nullifying is not
 		 needed.  */
@@ -5331,7 +5336,11 @@ gfc_trans_use_stmts (gfc_namespace * ns)
 	      /* Sometimes, generic interfaces wind up being over-ruled by a
 		 local symbol (see PR41062).  */
 	      if (!st->n.sym->attr.use_assoc)
-		continue;
+		{
+		  *slot = error_mark_node;
+		  entry->decls->clear_slot (slot);
+		  continue;
+		}
 
 	      if (st->n.sym->backend_decl
 		  && DECL_P (st->n.sym->backend_decl)
@@ -5529,6 +5538,7 @@ generate_coarray_sym_init (gfc_symbol *sym)
 
   if (sym->attr.dummy || sym->attr.allocatable || !sym->attr.codimension
       || sym->attr.use_assoc || !sym->attr.referenced
+      || sym->attr.associate_var
       || sym->attr.select_type_temporary)
     return;
 

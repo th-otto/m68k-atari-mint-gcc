@@ -3110,7 +3110,9 @@ gfc_trans_omp_clauses (stmtblock_t *block, gfc_omp_clauses *clauses,
 			       || GFC_DECL_CRAY_POINTEE (decl)
 			       || GFC_DESCRIPTOR_TYPE_P
 					     (TREE_TYPE (TREE_TYPE (decl)))
-			       || n->sym->ts.type == BT_DERIVED))
+			       || (n->sym->ts.type == BT_DERIVED
+				   && (n->sym->ts.u.derived->ts.f90_type
+				       != BT_VOID))))
 		    {
 		      tree orig_decl = decl;
 
@@ -6070,6 +6072,8 @@ gfc_split_omp_clauses (gfc_code *code,
 	    = code->ext.omp_clauses->lists[OMP_LIST_MAP];
 	  clausesa[GFC_OMP_SPLIT_TARGET].lists[OMP_LIST_IS_DEVICE_PTR]
 	    = code->ext.omp_clauses->lists[OMP_LIST_IS_DEVICE_PTR];
+	  clausesa[GFC_OMP_SPLIT_TARGET].lists[OMP_LIST_HAS_DEVICE_ADDR]
+	    = code->ext.omp_clauses->lists[OMP_LIST_HAS_DEVICE_ADDR];
 	  clausesa[GFC_OMP_SPLIT_TARGET].device
 	    = code->ext.omp_clauses->device;
 	  clausesa[GFC_OMP_SPLIT_TARGET].thread_limit

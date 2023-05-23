@@ -779,6 +779,7 @@ bool aarch64_const_vec_all_same_in_range_p (rtx, HOST_WIDE_INT,
 bool aarch64_constant_address_p (rtx);
 bool aarch64_emit_approx_div (rtx, rtx, rtx);
 bool aarch64_emit_approx_sqrt (rtx, rtx, bool);
+tree aarch64_vector_load_decl (tree);
 void aarch64_expand_call (rtx, rtx, rtx, bool);
 bool aarch64_expand_cpymem (rtx *);
 bool aarch64_expand_setmem (rtx *);
@@ -1049,10 +1050,6 @@ enum aarch64_parse_opt_result aarch64_parse_extension (const char *,
 void aarch64_get_all_extension_candidates (auto_vec<const char *> *candidates);
 std::string aarch64_get_extension_string_for_isa_flags (uint64_t, uint64_t);
 
-/* Defined in aarch64-d.cc  */
-extern void aarch64_d_target_versions (void);
-extern void aarch64_d_register_target_info (void);
-
 rtl_opt_pass *make_pass_fma_steering (gcc::context *);
 rtl_opt_pass *make_pass_track_speculation (gcc::context *);
 rtl_opt_pass *make_pass_tag_collision_avoidance (gcc::context *);
@@ -1082,5 +1079,7 @@ const char *aarch64_sls_barrier (int);
 const char *aarch64_indirect_call_asm (rtx);
 extern bool aarch64_harden_sls_retbr_p (void);
 extern bool aarch64_harden_sls_blr_p (void);
+
+extern void aarch64_output_patchable_area (unsigned int, bool);
 
 #endif /* GCC_AARCH64_PROTOS_H */

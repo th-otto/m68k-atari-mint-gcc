@@ -105,6 +105,18 @@ ubsan_walk_array_refs_r (tree *tp, int *walk_subtrees, void *data)
     }
   else if (TREE_CODE (*tp) == ARRAY_REF)
     ubsan_maybe_instrument_array_ref (tp, false);
+  else if (TREE_CODE (*tp) == MODIFY_EXPR)
+    {
+      /* Since r7-1900, we gimplify RHS before LHS.  Consider
+	   a[b] |= c;
+	 wherein we can have a single shared tree a[b] in both LHS and RHS.
+	 If we only instrument the LHS and the access is invalid, the program
+	 could crash before emitting a UBSan error.  So instrument the RHS
+	 first.  */
+      *walk_subtrees = 0;
+      walk_tree (&TREE_OPERAND (*tp, 1), ubsan_walk_array_refs_r, pset, pset);
+      walk_tree (&TREE_OPERAND (*tp, 0), ubsan_walk_array_refs_r, pset, pset);
+    }
   return NULL_TREE;
 }
 
@@ -510,12 +522,15 @@ c_genericize_control_stmt (tree *stmt_p, int *walk_subtrees, void *data,
 	     STATEMENT_LIST wouldn't be present at all the resulting
 	     expression wouldn't have TREE_SIDE_EFFECTS set, so make sure
 	     to clear it even on the STATEMENT_LIST in such cases.  */
+	  hash_set<tree> *pset = (c_dialect_cxx ()
+				  ? nullptr
+				  : static_cast<hash_set<tree> *>(data));
 	  for (i = tsi_start (stmt); !tsi_end_p (i); tsi_next (&i))
 	    {
 	      tree t = tsi_stmt (i);
 	      if (TREE_CODE (t) != DEBUG_BEGIN_STMT && nondebug_stmts < 2)
 		nondebug_stmts++;
-	      walk_tree_1 (tsi_stmt_ptr (i), func, data, NULL, lh);
+	      walk_tree_1 (tsi_stmt_ptr (i), func, data, pset, lh);
 	      if (TREE_CODE (t) != DEBUG_BEGIN_STMT
 		  && (nondebug_stmts > 1 || TREE_SIDE_EFFECTS (tsi_stmt (i))))
 		clear_side_effects = false;
@@ -570,8 +585,9 @@ c_genericize (tree fndecl)
       bc_state_t save_state;
       push_cfun (DECL_STRUCT_FUNCTION (fndecl));
       save_bc_state (&save_state);
-      walk_tree (&DECL_SAVED_TREE (fndecl), c_genericize_control_r,
-		 NULL, NULL);
+      hash_set<tree> pset;
+      walk_tree (&DECL_SAVED_TREE (fndecl), c_genericize_control_r, &pset,
+		 &pset);
       restore_bc_state (&save_state);
       pop_cfun ();
     }
@@ -703,18 +719,6 @@ c_gimplify_expr (tree *expr_p, gimple_seq *pre_p ATTRIBUTE_UNUSED,
 	  *op1_p = unshare_expr (convert (unsigned_type_node, *op1_p));
 	break;
       }
-
-    case DECL_EXPR:
-      /* This is handled mostly by gimplify.cc, but we have to deal with
-	 not warning about int x = x; as it is a GCC extension to turn off
-	 this warning but only if warn_init_self is zero.  */
-      if (VAR_P (DECL_EXPR_DECL (*expr_p))
-	  && !DECL_EXTERNAL (DECL_EXPR_DECL (*expr_p))
-	  && !TREE_STATIC (DECL_EXPR_DECL (*expr_p))
-	  && (DECL_INITIAL (DECL_EXPR_DECL (*expr_p)) == DECL_EXPR_DECL (*expr_p))
-	  && !warn_init_self)
-	suppress_warning (DECL_EXPR_DECL (*expr_p), OPT_Winit_self);
-      break;
 
     case PREINCREMENT_EXPR:
     case PREDECREMENT_EXPR:

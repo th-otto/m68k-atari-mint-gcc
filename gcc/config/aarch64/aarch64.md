@@ -303,6 +303,7 @@
     UNSPEC_TAG_SPACE		; Translate address to MTE tag address space.
     UNSPEC_LD1RO
     UNSPEC_SALT_ADDR
+    UNSPECV_PATCHABLE_AREA
 ])
 
 (define_c_enum "unspecv" [
@@ -1586,6 +1587,7 @@
      [(set (match_operand 2) (const_int 0))
       (clobber (match_dup 3))
       (clobber (match_dup 4))
+      (clobber (reg:CC CC_REGNUM))
       (set (match_operand 0)
 	   (unspec:BLK [(match_operand 1) (match_dup 2)] UNSPEC_CPYMEM))])]
   "TARGET_MOPS"
@@ -1599,6 +1601,7 @@
   [(set (match_operand:DI 2 "register_operand" "+&r") (const_int 0))
    (clobber (match_operand:DI 0 "register_operand" "+&r"))
    (clobber (match_operand:DI 1 "register_operand" "+&r"))
+   (clobber (reg:CC CC_REGNUM))
    (set (mem:BLK (match_dup 0))
         (unspec:BLK [(mem:BLK (match_dup 1)) (match_dup 2)] UNSPEC_CPYMEM))]
   "TARGET_MOPS"
@@ -1629,6 +1632,7 @@
    (set (match_operand:DI 2 "register_operand" "+&r") (const_int 0))
    (clobber (match_operand:DI 0 "register_operand" "+&r"))
    (clobber (match_operand:DI 1 "register_operand" "+&r"))
+   (clobber (reg:CC CC_REGNUM))
    (set (mem:BLK (match_dup 0))
         (unspec:BLK [(mem:BLK (match_dup 1)) (match_dup 2)] UNSPEC_MOVMEM))])]
  "TARGET_MOPS"
@@ -1674,6 +1678,7 @@
   [(parallel
      [(set (match_operand 2) (const_int 0))
       (clobber (match_dup 3))
+      (clobber (reg:CC CC_REGNUM))
       (set (match_operand 0)
 	   (unspec:BLK [(match_operand 1)
 			(match_dup 2)] UNSPEC_SETMEM))])]
@@ -1686,6 +1691,7 @@
 (define_insn "*aarch64_setmemdi"
   [(set (match_operand:DI 2 "register_operand" "+&r") (const_int 0))
    (clobber (match_operand:DI 0 "register_operand" "+&r"))
+   (clobber (reg:CC CC_REGNUM))
    (set (mem:BLK (match_dup 0))
         (unspec:BLK [(match_operand:QI 1 "aarch64_reg_or_zero" "rZ")
 		     (match_dup 2)] UNSPEC_SETMEM))]
@@ -7703,6 +7709,19 @@
   "TARGET_LS64"
   "st64bv0\\t%0, %2, [%1]"
   [(set_attr "type" "ls64")]
+)
+
+(define_insn "patchable_area"
+  [(unspec_volatile [(match_operand 0 "const_int_operand")
+		     (match_operand 1 "const_int_operand")]
+		    UNSPECV_PATCHABLE_AREA)]
+  ""
+{
+  aarch64_output_patchable_area (INTVAL (operands[0]),
+			         INTVAL (operands[1]) != 0);
+  return "";
+}
+  [(set (attr "length") (symbol_ref "INTVAL (operands[0])"))]
 )
 
 ;; AdvSIMD Stuff

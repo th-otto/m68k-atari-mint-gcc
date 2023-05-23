@@ -593,7 +593,25 @@ vect_widened_op_tree (vec_info *vinfo, stmt_vec_info stmt_info, tree_code code,
 	  if (shift_p && i == 1)
 	    return 0;
 
-	  if (!vect_look_through_possible_promotion (vinfo, op, this_unprom))
+	  if (rhs_code != code)
+	    {
+	      /* If rhs_code is widened_code, don't look through further
+		 possible promotions, there is a promotion already embedded
+		 in the WIDEN_*_EXPR.  */
+	      if (TREE_CODE (op) != SSA_NAME
+		  || !INTEGRAL_TYPE_P (TREE_TYPE (op)))
+		return 0;
+
+	      stmt_vec_info def_stmt_info;
+	      gimple *def_stmt;
+	      vect_def_type dt;
+	      if (!vect_is_simple_use (op, vinfo, &dt, &def_stmt_info,
+				       &def_stmt))
+		return 0;
+	      this_unprom->set_op (op, dt, NULL);
+	    }
+	  else if (!vect_look_through_possible_promotion (vinfo, op,
+							  this_unprom))
 	    return 0;
 
 	  if (TYPE_PRECISION (this_unprom->type) == TYPE_PRECISION (type))
@@ -1772,7 +1790,9 @@ vect_recog_widen_sum_pattern (vec_info *vinfo,
      of the above pattern.  */
 
   if (!vect_reassociating_reduction_p (vinfo, stmt_vinfo, PLUS_EXPR,
-				       &oprnd0, &oprnd1))
+				       &oprnd0, &oprnd1)
+      || TREE_CODE (oprnd0) != SSA_NAME
+      || !vinfo->lookup_def (oprnd0))
     return NULL;
 
   type = TREE_TYPE (gimple_get_lhs (last_stmt));
@@ -4603,6 +4623,8 @@ vect_recog_mask_conversion_pattern (vec_info *vinfo,
       else
 	{
 	  lhs = gimple_call_lhs (last_stmt);
+	  if (!lhs)
+	    return NULL;
 	  vectype1 = get_vectype_for_scalar_type (vinfo, TREE_TYPE (lhs));
 	}
 

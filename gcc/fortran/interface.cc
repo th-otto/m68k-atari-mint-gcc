@@ -2354,7 +2354,23 @@ compare_parameter (gfc_symbol *formal, gfc_expr *actual,
       && formal->ts.u.derived && formal->ts.u.derived->ts.is_iso_c
       && actual->ts.type == BT_DERIVED
       && actual->ts.u.derived && actual->ts.u.derived->ts.is_iso_c)
-    return true;
+    {
+      if (formal->ts.u.derived->intmod_sym_id
+	  != actual->ts.u.derived->intmod_sym_id)
+	return false;
+
+      if (ranks_must_agree
+	  && symbol_rank (formal) != actual->rank
+	  && symbol_rank (formal) != -1)
+	{
+	  if (where)
+	    argument_rank_mismatch (formal->name, &actual->where,
+				    symbol_rank (formal), actual->rank,
+				    NULL);
+	  return false;
+	}
+      return true;
+    }
 
   if (formal->ts.type == BT_CLASS && actual->ts.type == BT_DERIVED)
     /* Make sure the vtab symbol is present when
@@ -2843,7 +2859,8 @@ get_expr_storage_size (gfc_expr *e)
   if (e->ts.type == BT_CHARACTER)
     {
       if (e->ts.u.cl && e->ts.u.cl->length
-          && e->ts.u.cl->length->expr_type == EXPR_CONSTANT)
+	  && e->ts.u.cl->length->expr_type == EXPR_CONSTANT
+	  && e->ts.u.cl->length->ts.type == BT_INTEGER)
 	strlen = mpz_get_si (e->ts.u.cl->length->value.integer);
       else if (e->expr_type == EXPR_CONSTANT
 	       && (e->ts.u.cl == NULL || e->ts.u.cl->length == NULL))
@@ -2894,7 +2911,8 @@ get_expr_storage_size (gfc_expr *e)
 
 	    if (ref->u.ar.stride[i])
 	      {
-		if (ref->u.ar.stride[i]->expr_type == EXPR_CONSTANT)
+		if (ref->u.ar.stride[i]->expr_type == EXPR_CONSTANT
+		    && ref->u.ar.stride[i]->ts.type == BT_INTEGER)
 		  stride = mpz_get_si (ref->u.ar.stride[i]->value.integer);
 		else
 		  return 0;
@@ -2902,26 +2920,30 @@ get_expr_storage_size (gfc_expr *e)
 
 	    if (ref->u.ar.start[i])
 	      {
-		if (ref->u.ar.start[i]->expr_type == EXPR_CONSTANT)
+		if (ref->u.ar.start[i]->expr_type == EXPR_CONSTANT
+		    && ref->u.ar.start[i]->ts.type == BT_INTEGER)
 		  start = mpz_get_si (ref->u.ar.start[i]->value.integer);
 		else
 		  return 0;
 	      }
 	    else if (ref->u.ar.as->lower[i]
-		     && ref->u.ar.as->lower[i]->expr_type == EXPR_CONSTANT)
+		     && ref->u.ar.as->lower[i]->expr_type == EXPR_CONSTANT
+		     && ref->u.ar.as->lower[i]->ts.type == BT_INTEGER)
 	      start = mpz_get_si (ref->u.ar.as->lower[i]->value.integer);
 	    else
 	      return 0;
 
 	    if (ref->u.ar.end[i])
 	      {
-		if (ref->u.ar.end[i]->expr_type == EXPR_CONSTANT)
+		if (ref->u.ar.end[i]->expr_type == EXPR_CONSTANT
+		    && ref->u.ar.end[i]->ts.type == BT_INTEGER)
 		  end = mpz_get_si (ref->u.ar.end[i]->value.integer);
 		else
 		  return 0;
 	      }
 	    else if (ref->u.ar.as->upper[i]
-		     && ref->u.ar.as->upper[i]->expr_type == EXPR_CONSTANT)
+		     && ref->u.ar.as->upper[i]->expr_type == EXPR_CONSTANT
+		     && ref->u.ar.as->upper[i]->ts.type == BT_INTEGER)
 	      end = mpz_get_si (ref->u.ar.as->upper[i]->value.integer);
 	    else
 	      return 0;
@@ -2962,7 +2984,9 @@ get_expr_storage_size (gfc_expr *e)
 		  || ref->u.ar.as->upper[i] == NULL
 		  || ref->u.ar.as->lower[i] == NULL
 		  || ref->u.ar.as->upper[i]->expr_type != EXPR_CONSTANT
-		  || ref->u.ar.as->lower[i]->expr_type != EXPR_CONSTANT)
+		  || ref->u.ar.as->lower[i]->expr_type != EXPR_CONSTANT
+		  || ref->u.ar.as->upper[i]->ts.type != BT_INTEGER
+		  || ref->u.ar.as->lower[i]->ts.type != BT_INTEGER)
 		return 0;
 
 	      elements
@@ -2984,7 +3008,9 @@ get_expr_storage_size (gfc_expr *e)
 	    {
 	      if (!as->upper[i] || !as->lower[i]
 		  || as->upper[i]->expr_type != EXPR_CONSTANT
-		  || as->lower[i]->expr_type != EXPR_CONSTANT)
+		  || as->lower[i]->expr_type != EXPR_CONSTANT
+		  || as->upper[i]->ts.type != BT_INTEGER
+		  || as->lower[i]->ts.type != BT_INTEGER)
 		return 0;
 
 	      elements = elements
@@ -4133,6 +4159,14 @@ gfc_procedure_use (gfc_symbol *sym, gfc_actual_arglist **ap, locus *where)
 	    {
 	      gfc_error ("MOLD argument to NULL required at %L",
 			 &a->expr->where);
+	      a->expr->error = 1;
+	      return false;
+	    }
+
+	  if (a->expr && a->expr->expr_type == EXPR_NULL)
+	    {
+	      gfc_error ("Passing intrinsic NULL as actual argument at %L "
+			 "requires an explicit interface", &a->expr->where);
 	      a->expr->error = 1;
 	      return false;
 	    }
