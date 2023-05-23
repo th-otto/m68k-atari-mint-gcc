@@ -46,6 +46,7 @@ else
   PLUGINLDFLAGS = -Wl,-undefined,dynamic_lookup
   PLUGINLDFLAGS += -Wl,-install_name,m2rte$(soext)
   PLUGINLDFLAGS += -nodefaultlibs
+  PLUGINLDFLAGS += -lSystem
   PLUGINLDFLAGS += -lc
 endif
 
