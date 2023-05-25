@@ -27,6 +27,7 @@ VAR
    linkFunction,
    finiFunction,
    initFunction,
+   main__Function,
    mainFunction: CARDINAL ;
 
 
@@ -70,5 +71,7 @@ PROCEDURE ForeachModuleCallInit (tok: CARDINAL; argc, argv, envp: CARDINAL) ;
 
 PROCEDURE ForeachModuleCallFinish (tok: CARDINAL; argc, argv, envp: CARDINAL) ;
 
+
+PROCEDURE SetNeedsMain();
 
 END M2Scaffold.

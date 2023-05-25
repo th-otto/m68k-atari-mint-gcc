@@ -137,5 +137,7 @@ EXTERN char *M2Options_GetM2Prefix (void);
 EXTERN void M2Options_SetM2PathName (const char *arg);
 EXTERN char *M2Options_GetM2PathName (void);
 
+EXTERN void M2Scaffold_SetNeedsMain(void);
+
 #undef EXTERN
 #endif /* m2options_h.  */

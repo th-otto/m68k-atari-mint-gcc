@@ -161,6 +161,12 @@ gm2_langhook_init_options_struct (struct gcc_options *opts)
   /* Exceptions are used.  */
   opts->x_flag_exceptions = 1;
   init_FrontEndInit ();
+#if (defined(INVOKE__main)				\
+     || (!defined(HAS_INIT_SECTION)			\
+	 && !defined(INIT_SECTION_ASM_OP)		\
+	 && !defined(INIT_ARRAY_SECTION_ASM_OP)))
+  M2Scaffold_SetNeedsMain();
+#endif
 }
 
 /* Infrastructure for a VEC of bool values.  */
