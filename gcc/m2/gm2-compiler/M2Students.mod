@@ -105,9 +105,13 @@ BEGIN
    THEN
       IF IsNotADuplicateName (name)
       THEN
+         (* do not warn about "in" because that is implemented in ISO standard *)
+         IF token <> intok
+         THEN
          MetaErrorString0 (Sprintf2 (Mark (InitString ('either the identifier has the same name as a keyword or alternatively a keyword has the wrong case ({%%K%s} and {!%%O:{%%K%s}})')),
                                      upperS, orig)) ;
-         MetaErrorString0 (Sprintf1 (Mark (InitString ('the symbol name {!%%O:{%%K%s}} is legal as an identifier, however as such it might cause confusion and is considered bad programming practice')), orig))
+         MetaErrorString0 (Sprintf1 (Mark (InitString ('the symbol name {!%%O:{%%K%s}} is legal as an identifier, however as such it might cause confusion and is considered bad programming practice')), orig));
+         END
       END
    END ;
    upperS := KillString (upperS) ;
