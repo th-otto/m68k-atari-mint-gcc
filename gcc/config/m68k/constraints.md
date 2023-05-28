@@ -20,8 +20,14 @@
 (define_register_constraint "a" "ADDR_REGS"
   "Address register.")
 
+(define_register_constraint "AR" "ADDR0_REG"
+  "Address register 0.")
+
 (define_register_constraint "d" "DATA_REGS"
   "Data register.")
+
+(define_register_constraint "DR" "DATA0_REG"
+  "Data register 0.")
 
 (define_register_constraint "f" "TARGET_HARD_FLOAT ? FP_REGS : NO_REGS"
   "Floating point register.")
