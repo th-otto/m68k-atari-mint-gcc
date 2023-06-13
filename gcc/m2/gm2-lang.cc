@@ -1158,6 +1158,11 @@ gm2_langhook_new_dispose_storage_substitution (void)
   return true;
 }
 
+static bool gm2_langhook_complain_wrong_lang (const struct cl_option *option ATTRIBUTE_UNUSED)
+{
+  return false;
+}
+
 #undef LANG_HOOKS_NAME
 #undef LANG_HOOKS_INIT
 #undef LANG_HOOKS_INIT_OPTIONS
@@ -1175,6 +1180,7 @@ gm2_langhook_new_dispose_storage_substitution (void)
 #undef LANG_HOOKS_GIMPLIFY_EXPR
 #undef LANG_HOOKS_EH_PERSONALITY
 #undef LANG_HOOKS_NEW_DISPOSE_STORAGE_SUBSTITUTION
+#undef LANG_HOOKS_COMPLAIN_WRONG_LANG_P
 
 #define LANG_HOOKS_NAME "GNU Modula-2"
 #define LANG_HOOKS_INIT gm2_langhook_init
@@ -1194,6 +1200,7 @@ gm2_langhook_new_dispose_storage_substitution (void)
 #define LANG_HOOKS_EH_PERSONALITY gm2_langhook_eh_personality
 #define LANG_HOOKS_NEW_DISPOSE_STORAGE_SUBSTITUTION \
   gm2_langhook_new_dispose_storage_substitution
+#define LANG_HOOKS_COMPLAIN_WRONG_LANG_P gm2_langhook_complain_wrong_lang
 
 struct lang_hooks lang_hooks = LANG_HOOKS_INITIALIZER;
 
