@@ -12074,9 +12074,9 @@ BEGIN
    GetConstructorFromFifoQueue (constValue) ;
    IF type # GetSType (constValue)
    THEN
-      MetaErrorT3 (cbratokpos,
+      (* MetaErrorT3 (cbratokpos,
                    '{%E}the constructor type is {%1ad} and this is different from the constant {%2ad} which has a type {%2tad}',
-                   type, constValue, constValue)
+                   type, constValue, constValue) *)
    END ;
    PushTtok (constValue, cbratokpos) ;
    PushConstructor (type)
