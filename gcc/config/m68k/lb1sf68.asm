@@ -3012,8 +3012,8 @@ Laddsf$a$small:
 	| XXX if frame pointer is ever removed, stack pointer must
 	| be adjusted here.
 #endif
-	unlk	a6		| and return
-	rts
+	unlk	a6
+	rts		| and return
 
 Laddsf$b$small:
 	movel	a6@(8),d0
@@ -3026,8 +3026,8 @@ Laddsf$b$small:
 	| XXX if frame pointer is ever removed, stack pointer must
 	| be adjusted here.
 #endif
-	unlk	a6		| and return
-	rts
+	unlk	a6
+	rts		| and return
 
 | If the numbers are denormalized remember to put exponent equal to 1.
 
@@ -3089,8 +3089,8 @@ Laddsf$ret:
 	| XXX if frame pointer is ever removed, stack pointer must
 	| be adjusted here.
 #endif
-	unlk	a6		| and return
-	rts
+	unlk	a6
+	rts		| and return
 
 Laddsf$ret$den:
 | Return a denormalized number (for addition we don't signal underflow) '

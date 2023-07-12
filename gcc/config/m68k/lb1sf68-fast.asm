@@ -26,7 +26,11 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 	.text
 	FUNC(__mulsi3)
 	.globl	SYM (__mulsi3)
+#ifdef __ELF__
+	.hidden	SYM (__mulsi3_internal)
+#endif
 SYM (__mulsi3):
+SYM (__mulsi3_internal):
 	move.l  d2,-(a7)
 	movel   d0, a0          | d0a0 = x0:x1
 	movel   d1, a1		| d1a1 = y0:y1
@@ -55,7 +59,12 @@ SYM (__mulsi3):
 	.text
 	FUNC(__udivsi3)
 	.globl	SYM (__udivsi3)
+	.globl	SYM (__udivsi3_internal)
+#ifdef __ELF__
+	.hidden	SYM (__udivsi3_internal)
+#endif
 SYM (__udivsi3):
+SYM (__udivsi3_internal):
 #ifndef __mcoldfire__
 	move.l  d2,-(a7)
 	movel	d0, a0
@@ -127,7 +136,12 @@ udivsi3_fast_L2:	subql	IMM (1),d4
 	.text
 	FUNC(__divsi3)
 	.globl	SYM (__divsi3)
+	.globl	SYM (__divsi3_internal)
+#ifdef __ELF__
+	.hidden	SYM (__divsi3_internal)
+#endif
 SYM (__divsi3):
+SYM (__divsi3_internal):
 	move.l  d2,-(a7)
 	moveq	IMM (1), d2	/* sign of result stored in d2 (=1 or =-1) */
 	tstl	d1
@@ -148,7 +162,7 @@ divsi3_fast_L1:	tstl	d0		/* d0 = dividend */
 #endif
 
 divsi3_fast_L2:	movew	d2,a1		/* Called function MUST NOT clobber a1 */
-	PICCALL	SYM (__udivsi3)	/* divide abs(dividend) by abs(divisor) */
+	PICCALL	SYM (__udivsi3_internal)	/* divide abs(dividend) by abs(divisor) */
 
 	movew	a1,d2
 	jpl	divsi3_fast_L3
@@ -167,10 +181,10 @@ SYM (__umodsi3):
 	move.l  d2,-(a7)
 	movel	d0, d2
 	movel	d1, a1		/* a1 MUST NOT be clobbered by calls*/
-	PICCALL	SYM (__udivsi3)
+	PICCALL	SYM (__udivsi3_internal)
 	movel	a1, d1		/* d1 = divisor */
 #ifndef __mcoldfire__
-	PICCALL	SYM (__mulsi3)	/* d0 = (a/b)*b */
+	PICCALL	SYM (__mulsi3_internal)	/* d0 = (a/b)*b */
 #else
 	mulsl	d1,d0
 #endif
@@ -189,10 +203,10 @@ SYM (__modsi3):
 	move.l  d2,-(a7)
 	movel	d0, sp@-
 	movel	d1, sp@-
-	PICCALL	SYM (__divsi3)
+	PICCALL	SYM (__divsi3_internal)
 	movel	sp@+, d1	/* d1 = divisor */
 #ifndef __mcoldfire__
-	PICCALL	SYM (__mulsi3)	/* d0 = (a/b)*b */
+	PICCALL	SYM (__mulsi3_internal)	/* d0 = (a/b)*b */
 #else
 	mulsl	d1,d0
 #endif
@@ -233,7 +247,7 @@ SYM (__modsi3):
 | float __subsf3(float, float);
 	FUNC(__subsf3)
 SYM (__subsf3):
-	negl	d1       	| change sign of second operand
+	bchg	IMM (31),d1   	| change sign of second operand
 				| and fall through
 |=============================================================================
 |                              __addsf3
@@ -588,10 +602,10 @@ Laddsf$a$small:
 	moveml	sp@+,d2-d7/a2-a5	| restore data registers
 #else
 	moveml	sp@,d2-d7/a2-a5
-	lea	a6@(28),a6	
 	| XXX if frame pointer is ever removed, stack pointer must
 	| be adjusted here.
 #endif
+	unlk	a6
 	rts		| and return
 
 Laddsf$b$small:
@@ -602,10 +616,10 @@ Laddsf$b$small:
 	moveml	sp@+,d2-d7/a2-a5	| restore data registers
 #else
 	moveml	sp@,d2-d7/a2-a5
-	lea	a6@(28),a6	
 	| XXX if frame pointer is ever removed, stack pointer must
 	| be adjusted here.
 #endif
+	unlk	a6
 	rts		| and return
 
 | If the numbers are denormalized remember to put exponent equal to 1.
@@ -668,8 +682,8 @@ Laddsf$ret:
 	| XXX if frame pointer is ever removed, stack pointer must
 	| be adjusted here.
 #endif
-	unlk	a6		| and return
-	rts
+	unlk	a6
+	rts		| and return
 
 Laddsf$ret$den:
 | Return a denormalized number (for addition we don't signal underflow) '
