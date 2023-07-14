@@ -189,9 +189,9 @@
 #undef __FP_FRAC_ADDI_2
 #define __FP_FRAC_ADDI_2(xh, xl, i)	add_ssaaaa(xh, xl, xh, xl, 0, i)
 #undef __FP_FRAC_ADD_2
-#define __FP_FRAC_ADD_2			add_ssaaaa
+#define __FP_FRAC_ADD_2(rh, rl, xh, xl, yh, yl) add_ssaaaa(rh, rl, xh, xl, yh, yl)
 #undef __FP_FRAC_SUB_2
-#define __FP_FRAC_SUB_2			sub_ddmmss
+#define __FP_FRAC_SUB_2(rh, rl, xh, xl, yh, yl) sub_ddmmss(rh, rl, xh, xl, yh, yl)
 #undef __FP_FRAC_DEC_2
 #define __FP_FRAC_DEC_2(xh, xl, yh, yl)	sub_ddmmss(xh, xl, xh, xl, yh, yl)
 

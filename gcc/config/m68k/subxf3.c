@@ -1,8 +1,7 @@
 /* Software floating-point emulation.
-   Return a converted to IEEE quad
-   Copyright (C) 2007 Free Software Foundation, Inc.
+   Return a - b
+   Copyright (C) 1997-2022 Free Software Foundation, Inc.
    This file is part of the GNU C Library.
-   Contributed by Uros Bizjak (ubizjak@gmail.com).
 
    The GNU C Library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Lesser General Public
@@ -24,31 +23,21 @@
    Lesser General Public License for more details.
 
    You should have received a copy of the GNU Lesser General Public
-   License along with the GNU C Library; if not, write to the Free
-   Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+   License along with the GNU C Library; if not, see
+   <https://www.gnu.org/licenses/>.  */
 
-#define FP_NO_EXACT_UNDERFLOW
-#include "soft-fp.h"
-#include "extended.h"
-#include "quad.h"
+long double __subxf3 (long double x1, long double x2);
+long double __addxf3 (long double x1, long double x2);
 
-TFtype __extendxftf2(XFtype a)
+long double
+__subxf3 (long double a, long double b)
 {
-  FP_DECL_EX;
-  FP_DECL_E(A);
-  FP_DECL_Q(R);
-  TFtype r;
-
-  FP_INIT_ROUNDMODE;
-  FP_UNPACK_RAW_E(A, a);
-#if (2 * _FP_W_TYPE_SIZE) < _FP_FRACBITS_Q
-  FP_EXTEND(Q,E,4,4,R,A);
-#else
-  FP_EXTEND(Q,E,2,2,R,A);
-#endif
-  FP_PACK_RAW_Q(r, R);
-  FP_HANDLE_EXCEPTIONS;
-
-  return r;
+	(void)a;
+	__asm__ __volatile__(
+		"bchg #7,%0\n\t"
+		"jmp (%1)"
+	:
+	: "m"(b), "a"(__addxf3)
+	: "cc", "memory");
+	__builtin_unreachable();
 }

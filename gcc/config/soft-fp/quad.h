@@ -165,6 +165,7 @@ union _FP_UNION_Q
 #define FP_FROM_INT_Q(X,r,rs,rt)	_FP_FROM_INT(Q,4,X,r,rs,rt)
 
 #define _FP_FRAC_HIGH_Q(X)	_FP_FRAC_HIGH_4(X)
+#define _FP_FRAC_ZEROHIGH_Q(X)
 #define _FP_FRAC_HIGH_RAW_Q(X)	_FP_FRAC_HIGH_4(X)
 
 #else   /* not _FP_W_TYPE_SIZE < 64 */
@@ -266,6 +267,7 @@ union _FP_UNION_Q
 #define FP_FROM_INT_Q(X,r,rs,rt)	_FP_FROM_INT(Q,2,X,r,rs,rt)
 
 #define _FP_FRAC_HIGH_Q(X)	_FP_FRAC_HIGH_2(X)
+#define _FP_FRAC_ZEROHIGH_Q(X)
 #define _FP_FRAC_HIGH_RAW_Q(X)	_FP_FRAC_HIGH_2(X)
 
 #endif /* not _FP_W_TYPE_SIZE < 64 */
