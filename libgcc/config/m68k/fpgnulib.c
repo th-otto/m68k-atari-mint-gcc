@@ -53,6 +53,7 @@
 #define EXCESS		126L
 #define SIGNBIT		0x80000000L
 #define HIDDEN		(1L << 23L)
+#define EXPFMASK	0xFFL
 #define SIGN(fp)	((fp) & SIGNBIT)
 #define EXP(fp)		(((fp) >> 23L) & 0xFF)
 #define MANT(fp)	(((fp) & 0x7FFFFFL) | HIDDEN)
@@ -272,10 +273,10 @@ __floatsisf (long l)
 double
 __extendsfdf2 (float a1)
 {
-  register union float_long fl1;
-  register union double_long dl;
-  register long exp;
-  register long mant;
+  union float_long fl1;
+  union double_long dl;
+  long exp;
+  long mant;
 
   fl1.f = a1;
 
@@ -288,7 +289,7 @@ __extendsfdf2 (float a1)
 
   exp = EXP(fl1.l);
   mant = MANT (fl1.l) & ~HIDDEN;
-  if (exp == 0)
+  if (exp == 0) /* case of mant == 0 has already been catched above */
     {
       /* Denormal.  */
       exp = 1;
@@ -299,7 +300,10 @@ __extendsfdf2 (float a1)
 	}
       mant &= ~HIDDEN;
     }
-  exp = exp - EXCESS + EXCESSD;
+  if (exp == EXPFMASK)
+    exp = EXPDMASK;
+  else
+    exp = exp - EXCESS + EXCESSD;
   dl.l.upper |= exp << 20;
   dl.l.upper |= mant >> 3;
   dl.l.lower = mant << 29;
@@ -311,10 +315,10 @@ __extendsfdf2 (float a1)
 float
 __truncdfsf2 (double a1)
 {
-  register long exp;
-  register long mant;
-  register union float_long fl;
-  register union double_long dl1;
+  long exp;
+  long mant;
+  union float_long fl;
+  union double_long dl1;
   int sticky;
   int shift;
 
@@ -349,7 +353,15 @@ __truncdfsf2 (double a1)
 	}
       exp = 0;
     }
-  
+  else if (exp >= EXPFMASK)
+    {
+      if (exp == EXPDMASK - EXCESSD + EXCESS)
+        mant &= ~3; /* was already inf or nan; do not round */
+      else
+        mant = 0; /* just overflowed */
+      exp = EXPFMASK;
+    }
+
   /* now round */
   shift = 1;
   if ((mant & 1) && (sticky || (mant & 2)))
@@ -379,9 +391,9 @@ __truncdfsf2 (double a1)
 long
 __fixdfsi (double a1)
 {
-  register union double_long dl1;
-  register long exp;
-  register long l;
+  union double_long dl1;
+  long exp;
+  long l;
 
   dl1.d = a1;
 
@@ -445,9 +457,9 @@ __unordxf2(long double a, long double b)
 long double
 __extenddfxf2 (double d)
 {
-  register union double_long dl;
-  register union long_double_long ldl;
-  register long exp;
+  union double_long dl;
+  union long_double_long ldl;
+  long exp;
 
   dl.d = d;
   /*printf ("dfxf in: %g\n", d);*/
@@ -460,7 +472,11 @@ __extenddfxf2 (double d)
       return ldl.ld;
     }
 
-  exp = EXPD (dl) - EXCESSD + EXCESSX;
+  exp = EXPD (dl);
+  if (exp == EXPDMASK)
+    exp = EXPXMASK;
+  else
+    exp = exp - EXCESSD + EXCESSX;
   ldl.l.upper |= exp << 16;
   ldl.l.middle = HIDDENX;
   /* 31-20: # mantissa bits in ldl.l.middle - # mantissa bits in dl.l.upper */
@@ -478,9 +494,9 @@ __extenddfxf2 (double d)
 double
 __truncxfdf2 (long double ld)
 {
-  register long exp;
-  register union double_long dl;
-  register union long_double_long ldl;
+  long exp;
+  union double_long dl;
+  union long_double_long ldl;
 
   ldl.ld = ld;
   /*printf ("xfdf in: %s\n", dumpxf (ld));*/
@@ -496,13 +512,26 @@ __truncxfdf2 (long double ld)
       if (exp == EXPXMASK)
         {
           exp = EXPDMASK;
+          ldl.l.middle = 0;
+          ldl.l.lower = 0;
         }
       else
         {
           exp = exp - EXCESSX + EXCESSD;
           /* ??? quick and dirty: keep `exp' sane */
           if (exp >= EXPDMASK)
-            exp = EXPDMASK - 1;
+          {
+          	/* overflow: return infinity */
+            exp = EXPDMASK;
+            ldl.l.middle = 0;
+            ldl.l.lower = 0;
+          } else if (exp <= 0)
+          {
+          	/* underflow */
+            exp = 0;
+            ldl.l.middle = 0;
+            ldl.l.lower = 0;
+          }
         }
       dl.l.upper |= exp << (32 - (EXPDBITS + 1));
       /* +1-1: add one for sign bit, but take one off for explicit-integer-bit */
