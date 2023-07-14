@@ -53,6 +53,7 @@
 #define EXCESS		126L
 #define SIGNBIT		0x80000000L
 #define HIDDEN		(1L << 23L)
+#define EXPFMASK	0xFFL
 #define SIGN(fp)	((fp) & SIGNBIT)
 #define EXP(fp)		(((fp) >> 23L) & 0xFF)
 #define MANT(fp)	(((fp) & 0x7FFFFFL) | HIDDEN)
@@ -102,6 +103,44 @@ union long_double_long
       unsigned long lower;
     } l;
 };
+
+/* Prototypes for functions defined here in case we use them.  */
+int __unordsf2(float a, float b);
+int __unorddf2(double a, double b);
+double __floatunsidf (unsigned long a1);
+double __floatsidf (long a1);
+float __floatunsisf (unsigned long l);
+float __floatsisf (long l);
+double __extendsfdf2 (float a1);
+float __truncdfsf2 (double a1);
+long __fixdfsi (double a1);
+long __fixsfsi (float a1);
+long __cmpdf2 (double x1, double x2);
+
+#if defined(EXTFLOAT) && !defined (__mcoldfire__)
+int __unordxf2(long double a, long double b);
+long double __extenddfxf2 (double d);
+double __truncxfdf2 (long double ld);
+long double __extendsfxf2 (float f);
+float __truncxfsf2 (long double ld);
+long double __floatsixf (long l);
+long double __floatunsixf (unsigned long l);
+long __fixxfsi (long double ld);
+long double __addxf3 (long double x1, long double x2);
+long double __subxf3 (long double x1, long double x2);
+long double __mulxf3 (long double x1, long double x2);
+long double __divxf3 (long double x1, long double x2);
+long double __negxf2 (long double x1);
+long __cmpxf2 (long double x1, long double x2);
+long __eqxf2 (long double x1, long double x2);
+long __nexf2 (long double x1, long double x2);
+long __ltxf2 (long double x1, long double x2);
+long __lexf2 (long double x1, long double x2);
+long __gtxf2 (long double x1, long double x2);
+long __gexf2 (long double x1, long double x2);
+
+#endif
+
 
 #ifndef EXTFLOAT
 
@@ -111,10 +150,10 @@ __unordsf2(float a, float b)
   union float_long fl;
 
   fl.f = a;
-  if (EXP(fl.l) == EXP(~0u) && (MANT(fl.l) & ~HIDDEN) != 0)
+  if (EXP(fl.l) == EXP(~0ul) && (MANT(fl.l) & ~HIDDEN) != 0)
     return 1;
   fl.f = b;
-  if (EXP(fl.l) == EXP(~0u) && (MANT(fl.l) & ~HIDDEN) != 0)
+  if (EXP(fl.l) == EXP(~0ul) && (MANT(fl.l) & ~HIDDEN) != 0)
     return 1;
   return 0;
 }
@@ -234,10 +273,10 @@ __floatsisf (long l)
 double
 __extendsfdf2 (float a1)
 {
-  register union float_long fl1;
-  register union double_long dl;
-  register long exp;
-  register long mant;
+  union float_long fl1;
+  union double_long dl;
+  long exp;
+  long mant;
 
   fl1.f = a1;
 
@@ -250,7 +289,7 @@ __extendsfdf2 (float a1)
 
   exp = EXP(fl1.l);
   mant = MANT (fl1.l) & ~HIDDEN;
-  if (exp == 0)
+  if (exp == 0) /* case of mant == 0 has already been catched above */
     {
       /* Denormal.  */
       exp = 1;
@@ -261,7 +300,10 @@ __extendsfdf2 (float a1)
 	}
       mant &= ~HIDDEN;
     }
-  exp = exp - EXCESS + EXCESSD;
+  if (exp == EXPFMASK)
+    exp = EXPDMASK;
+  else
+    exp = exp - EXCESS + EXCESSD;
   dl.l.upper |= exp << 20;
   dl.l.upper |= mant >> 3;
   dl.l.lower = mant << 29;
@@ -273,10 +315,10 @@ __extendsfdf2 (float a1)
 float
 __truncdfsf2 (double a1)
 {
-  register long exp;
-  register long mant;
-  register union float_long fl;
-  register union double_long dl1;
+  long exp;
+  long mant;
+  union float_long fl;
+  union double_long dl1;
   int sticky;
   int shift;
 
@@ -290,7 +332,7 @@ __truncdfsf2 (double a1)
 
   exp = EXPD (dl1) - EXCESSD + EXCESS;
 
-  sticky = dl1.l.lower & ((1 << 22) - 1);
+  sticky = dl1.l.lower & ((1L << 22) - 1);
   mant = MANTD (dl1);
   /* shift double mantissa 6 bits so we can round */
   sticky |= mant & ((1 << 6) - 1);
@@ -311,7 +353,15 @@ __truncdfsf2 (double a1)
 	}
       exp = 0;
     }
-  
+  else if (exp >= EXPFMASK)
+    {
+      if (exp == EXPDMASK - EXCESSD + EXCESS)
+        mant &= ~3; /* was already inf or nan; do not round */
+      else
+        mant = 0; /* just overflowed */
+      exp = EXPFMASK;
+    }
+
   /* now round */
   shift = 1;
   if ((mant & 1) && (sticky || (mant & 2)))
@@ -341,9 +391,9 @@ __truncdfsf2 (double a1)
 long
 __fixdfsi (double a1)
 {
-  register union double_long dl1;
-  register long exp;
-  register long l;
+  union double_long dl1;
+  long exp;
+  long l;
 
   dl1.d = a1;
 
@@ -387,15 +437,6 @@ __fixsfsi (float a1)
 
    We assume all numbers are normalized, don't do any rounding, etc.  */
 
-/* Prototypes for the above in case we use them.  */
-double __floatunsidf (unsigned long);
-double __floatsidf (long);
-float __floatsisf (long);
-double __extendsfdf2 (float);
-float __truncdfsf2 (double);
-long __fixdfsi (double);
-long __fixsfsi (float);
-
 int
 __unordxf2(long double a, long double b)
 {
@@ -416,9 +457,9 @@ __unordxf2(long double a, long double b)
 long double
 __extenddfxf2 (double d)
 {
-  register union double_long dl;
-  register union long_double_long ldl;
-  register long exp;
+  union double_long dl;
+  union long_double_long ldl;
+  long exp;
 
   dl.d = d;
   /*printf ("dfxf in: %g\n", d);*/
@@ -431,7 +472,11 @@ __extenddfxf2 (double d)
       return ldl.ld;
     }
 
-  exp = EXPD (dl) - EXCESSD + EXCESSX;
+  exp = EXPD (dl);
+  if (exp == EXPDMASK)
+    exp = EXPXMASK;
+  else
+    exp = exp - EXCESSD + EXCESSX;
   ldl.l.upper |= exp << 16;
   ldl.l.middle = HIDDENX;
   /* 31-20: # mantissa bits in ldl.l.middle - # mantissa bits in dl.l.upper */
@@ -449,9 +494,9 @@ __extenddfxf2 (double d)
 double
 __truncxfdf2 (long double ld)
 {
-  register long exp;
-  register union double_long dl;
-  register union long_double_long ldl;
+  long exp;
+  union double_long dl;
+  union long_double_long ldl;
 
   ldl.ld = ld;
   /*printf ("xfdf in: %s\n", dumpxf (ld));*/
@@ -467,13 +512,26 @@ __truncxfdf2 (long double ld)
       if (exp == EXPXMASK)
         {
           exp = EXPDMASK;
+          ldl.l.middle = 0;
+          ldl.l.lower = 0;
         }
       else
         {
           exp = exp - EXCESSX + EXCESSD;
           /* ??? quick and dirty: keep `exp' sane */
           if (exp >= EXPDMASK)
-            exp = EXPDMASK - 1;
+          {
+          	/* overflow: return infinity */
+            exp = EXPDMASK;
+            ldl.l.middle = 0;
+            ldl.l.lower = 0;
+          } else if (exp <= 0)
+          {
+          	/* underflow */
+            exp = 0;
+            ldl.l.middle = 0;
+            ldl.l.lower = 0;
+          }
         }
       dl.l.upper |= exp << (32 - (EXPDBITS + 1));
       /* +1-1: add one for sign bit, but take one off for explicit-integer-bit */
