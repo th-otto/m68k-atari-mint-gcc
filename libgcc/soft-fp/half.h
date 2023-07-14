@@ -164,6 +164,7 @@ union _FP_UNION_H
 /* HFmode arithmetic is not implemented.  */
 
 #define _FP_FRAC_HIGH_H(X)	_FP_FRAC_HIGH_1 (X)
+#define _FP_FRAC_ZEROHIGH_H(X)
 #define _FP_FRAC_HIGH_RAW_H(X)	_FP_FRAC_HIGH_1 (X)
 #define _FP_FRAC_HIGH_DW_H(X)	_FP_FRAC_HIGH_1 (X)
 
