@@ -685,8 +685,8 @@ exeext = @host_exeext@
 build_exeext = @build_exeext@
 EVAL_MINGW := case `uname -s` in MINGW*) echo yes;; *) echo no;; esac
 MINGW := $(shell $(EVAL_MINGW))
-mingw_srcdir = $(shell if test "${MINGW}" = yes; then cmd //c echo ${srcdir}; else echo ${srcdir}; fi)
-mingw_build_tooldir = $(shell if test "${MINGW}" = yes; then cmd //c echo ${build_tooldir}; else echo ${build_tooldir}; fi)
+mingw_srcdir := $(shell if test "${MINGW}" = yes; then cmd //c echo ${srcdir}; else echo ${srcdir}; fi)
+mingw_build_tooldir := $(shell if test "${MINGW}" = yes; then cmd //c echo ${build_tooldir}; else echo ${build_tooldir}; fi)
 
 # Directory in which to put man pages.
 mandir = @mandir@
