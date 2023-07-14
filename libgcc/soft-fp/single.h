@@ -184,6 +184,7 @@ union _FP_UNION_S
 #define FP_FROM_INT_S(X, r, rs, rt)	_FP_FROM_INT (S, 1, X, (r), (rs), rt)
 
 #define _FP_FRAC_HIGH_S(X)	_FP_FRAC_HIGH_1 (X)
+#define _FP_FRAC_ZEROHIGH_S(X)
 #define _FP_FRAC_HIGH_RAW_S(X)	_FP_FRAC_HIGH_1 (X)
 
 #if _FP_W_TYPE_SIZE < 64

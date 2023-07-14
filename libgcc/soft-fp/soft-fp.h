@@ -347,4 +347,6 @@ typedef USItype UHWtype;
 # endif
 #endif
 
+#include "softfp-protos.h"
+
 #endif /* !SOFT_FP_H */

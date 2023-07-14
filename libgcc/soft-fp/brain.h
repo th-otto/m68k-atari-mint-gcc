@@ -164,6 +164,7 @@ union _FP_UNION_B
 /* BFmode arithmetic is not implemented.  */
 
 #define _FP_FRAC_HIGH_B(X)	_FP_FRAC_HIGH_1 (X)
+#define _FP_FRAC_ZEROHIGH_B(X)
 #define _FP_FRAC_HIGH_RAW_B(X)	_FP_FRAC_HIGH_1 (X)
 #define _FP_FRAC_HIGH_DW_B(X)	_FP_FRAC_HIGH_1 (X)
 

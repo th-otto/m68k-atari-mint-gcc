@@ -1,10 +1,6 @@
 /* This is a stripped down version of floatlib.c.  It supplies only those
    functions which exist in libgcc, but for which there is not assembly
-   language versions in m68k/lb1sf68.S.
-
-   It also includes simplistic support for extended floats (by working in
-   double precision).  You must compile this file again with -DEXTFLOAT
-   to get this support.  */
+   language versions in m68k/lb1sf68.S.  */
 
 /*
 ** gnulib support for software floating point.
@@ -117,7 +113,7 @@ long __fixdfsi (double a1);
 long __fixsfsi (float a1);
 long __cmpdf2 (double x1, double x2);
 
-#if defined(EXTFLOAT) && !defined (__mcoldfire__)
+#if !defined (__mcoldfire__)
 int __unordxf2(long double a, long double b);
 long double __extenddfxf2 (double d);
 double __truncxfdf2 (long double ld);
@@ -138,12 +134,10 @@ long __ltxf2 (long double x1, long double x2);
 long __lexf2 (long double x1, long double x2);
 long __gtxf2 (long double x1, long double x2);
 long __gexf2 (long double x1, long double x2);
-
 #endif
 
 
-#ifndef EXTFLOAT
-
+#ifdef L_unordsf2
 int
 __unordsf2(float a, float b)
 {
@@ -157,7 +151,9 @@ __unordsf2(float a, float b)
     return 1;
   return 0;
 }
+#endif
 
+#ifdef L_unorddf2
 int
 __unorddf2(double a, double b)
 {
@@ -173,7 +169,9 @@ __unorddf2(double a, double b)
     return 1;
   return 0;
 }
+#endif
 
+#ifdef L_floatunsidf
 /* convert unsigned int to double */
 double
 __floatunsidf (unsigned long a1)
@@ -206,7 +204,9 @@ __floatunsidf (unsigned long a1)
 
   return dl.d;
 }
+#endif
 
+#ifdef L_floatsidf
 /* convert int to double */
 double
 __floatsidf (long a1)
@@ -252,7 +252,9 @@ __floatsidf (long a1)
 
   return dl.d;
 }
+#endif
 
+#ifdef L_floatunsisf
 /* convert unsigned int to float */
 float
 __floatunsisf (unsigned long l)
@@ -260,7 +262,9 @@ __floatunsisf (unsigned long l)
   double foo = __floatunsidf (l);
   return foo;
 }
+#endif
 
+#ifdef L_floatsisf
 /* convert int to float */
 float
 __floatsisf (long l)
@@ -268,7 +272,9 @@ __floatsisf (long l)
   double foo = __floatsidf (l);
   return foo;
 }
+#endif
 
+#ifdef L_extendsfdf2
 /* convert float to double */
 double
 __extendsfdf2 (float a1)
@@ -311,7 +317,9 @@ __extendsfdf2 (float a1)
 	
   return dl.d;
 }
+#endif
 
+#ifdef L_truncdfsf2
 /* convert double to float */
 float
 __truncdfsf2 (double a1)
@@ -391,7 +399,9 @@ __truncdfsf2 (double a1)
   fl.l = PACK (SIGND (dl1), exp, mant);
   return (fl.f);
 }
+#endif
 
+#ifdef L_fixdfsi
 /* convert double to int */
 long
 __fixdfsi (double a1)
@@ -423,7 +433,9 @@ __fixdfsi (double a1)
 
   return (SIGND (dl1) ? -l : l);
 }
+#endif
 
+#ifdef L_fixsfsi
 /* convert float to int */
 long
 __fixsfsi (float a1)
@@ -431,8 +443,7 @@ __fixsfsi (float a1)
   double foo = a1;
   return __fixdfsi (foo);
 }
-
-#else /* EXTFLOAT */
+#endif
 
 /* We do not need these routines for coldfire, as it has no extended
    float format. */
@@ -442,6 +453,7 @@ __fixsfsi (float a1)
 
    We assume all numbers are normalized, don't do any rounding, etc.  */
 
+#ifdef L_unordxf2
 int
 __unordxf2(long double a, long double b)
 {
@@ -457,7 +469,9 @@ __unordxf2(long double a, long double b)
     return 1;
   return 0;
 }
+#endif
 
+#ifdef L_extenddfxf2
 /* convert double to long double */
 long double
 __extenddfxf2 (double d)
@@ -518,7 +532,9 @@ __extenddfxf2 (double d)
   /*printf ("dfxf out: %s\n", dumpxf (ldl.ld));*/
   return ldl.ld;
 }
+#endif
 
+#ifdef L_truncxfdf2
 /* convert long double to double */
 double
 __truncxfdf2 (long double ld)
@@ -580,7 +596,9 @@ __truncxfdf2 (long double ld)
   /*printf ("xfdf out: %g\n", dl.d);*/
   return dl.d;
 }
+#endif
 
+#ifdef L_extendsfxf2
 /* convert a float to a long double */
 long double
 __extendsfxf2 (float f)
@@ -588,7 +606,9 @@ __extendsfxf2 (float f)
   long double foo = __extenddfxf2 (__extendsfdf2 (f));
   return foo;
 }
+#endif
 
+#ifdef L_truncxfsf2
 /* convert a long double to a float */
 float
 __truncxfsf2 (long double ld)
@@ -596,7 +616,9 @@ __truncxfsf2 (long double ld)
   float foo = __truncdfsf2 (__truncxfdf2 (ld));
   return foo;
 }
+#endif
 
+#ifdef L_floatsixf
 /* convert an int to a long double */
 long double
 __floatsixf (long l)
@@ -604,7 +626,9 @@ __floatsixf (long l)
   double foo = __floatsidf (l);
   return foo;
 }
+#endif
 
+#ifdef L_floatunsixf
 /* convert an unsigned int to a long double */
 long double
 __floatunsixf (unsigned long l)
@@ -612,14 +636,15 @@ __floatunsixf (unsigned long l)
   double foo = __floatunsidf (l);
   return foo;
 }
+#endif
 
+#ifdef L_fixxfsi
 /* convert a long double to an int */
 long
 __fixxfsi (long double a)
 {
   union long_double_long ldl;
   long exp;
-  long l;
 
   ldl.ld = a;
 
@@ -650,80 +675,6 @@ __fixxfsi (long double a)
 
   return SIGNX (ldl) ? -ldl.l.lower : ldl.l.lower;
 }
-
-/* The remaining provide crude math support by working in double precision.  */
-
-long double
-__addxf3 (long double x1, long double x2)
-{
-  return (double) x1 + (double) x2;
-}
-
-long double
-__subxf3 (long double x1, long double x2)
-{
-  return (double) x1 - (double) x2;
-}
-
-long double
-__mulxf3 (long double x1, long double x2)
-{
-  return (double) x1 * (double) x2;
-}
-
-long double
-__divxf3 (long double x1, long double x2)
-{
-  return (double) x1 / (double) x2;
-}
-
-long double
-__negxf2 (long double x1)
-{
-  return - (double) x1;
-}
-
-long
-__cmpxf2 (long double x1, long double x2)
-{
-  return __cmpdf2 ((double) x1, (double) x2);
-}
-
-long
-__eqxf2 (long double x1, long double x2)
-{
-  return __cmpdf2 ((double) x1, (double) x2);
-}
-
-long
-__nexf2 (long double x1, long double x2)
-{
-  return __cmpdf2 ((double) x1, (double) x2);
-}
-
-long
-__ltxf2 (long double x1, long double x2)
-{
-  return __cmpdf2 ((double) x1, (double) x2);
-}
-
-long
-__lexf2 (long double x1, long double x2)
-{
-  return __cmpdf2 ((double) x1, (double) x2);
-}
-
-long
-__gtxf2 (long double x1, long double x2)
-{
-  return __cmpdf2 ((double) x1, (double) x2);
-}
-
-long
-__gexf2 (long double x1, long double x2)
-{
-  return __cmpdf2 ((double) x1, (double) x2);
-}
+#endif
 
 #endif /* !__mcoldfire__ */
-#endif /* EXTFLOAT */

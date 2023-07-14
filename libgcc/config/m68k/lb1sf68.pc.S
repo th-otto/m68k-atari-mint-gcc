@@ -1,5 +1,5 @@
 /* libgcc routines for 68000 w/o floating-point hardware.
-   Copyright (C) 1994-2024 Free Software Foundation, Inc.
+   Copyright (C) 1994-2023 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -89,10 +89,6 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #define fp REG (fp)
 #define sp REG (sp)
 #define pc REG (pc)
-
-#ifndef M68K_STRUCT_VALUE_REGNUM
-#define M68K_STRUCT_VALUE_REGNUM a1
-#endif
 
 /* Provide a few macros to allow for PIC code support.
  * With PIC, data is stored A5 relative so we've got to take a bit of special
@@ -420,8 +416,8 @@ $_exception_handler:
 	subql	IMM (2),d6
 #endif
 	beq		4f
-	moveml	d0-d2,M68K_STRUCT_VALUE_REGNUM@			| write return value for long double
-	movel	M68K_STRUCT_VALUE_REGNUM,d0
+	moveml	d0-d2,a1@			| write return value for long double
+	movel	a1,d0
 	bra	4f
 2:
 	movel	a6@(8),a0@(OPER1)
@@ -453,7 +449,7 @@ $_exception_handler:
 
 #ifdef __FASTCALL__
 
-#include "lb1sf68-fast.S"
+#include "lb1sf68-fast.asm"
 
 #else
 
@@ -705,10 +701,6 @@ DBL_MANT_DIG   = 53
 	.globl SYM (__divdf3)
 	.globl SYM (__negdf2)
 	.globl SYM (__cmpdf2)
-	.globl SYM (__cmpdf2_internal)
-#ifdef __ELF__
-	.hidden SYM (__cmpdf2_internal)
-#endif
 
 	.text
 	.even
@@ -789,7 +781,7 @@ SYM (__adddf3):
 	beq	Ladddf$a	| if zero return first operand
 
 	andl	IMM (0x80000000),d7 | isolate a's sign bit
-	swap	d6		| and also b's sign bit
+    swap	d6		| and also b's sign bit
 #ifndef __mcoldfire__
 	andw	IMM (0x8000),d6	|
 	orw	d6,d7		| and combine them into d7, so that a's sign
@@ -800,7 +792,7 @@ SYM (__adddf3):
 	orl	d6,d7
 #endif
 	movel	d7,a0		| now save d7 into a0, so d7 is free to
-                		| be used also
+                                | be used also
 
 | Get the exponents and check for denormalized and/or infinity.
 
@@ -1295,7 +1287,7 @@ Ladddf$a$small:
 	movel	a6@(20),d1
 	PICLEA	SYM (_fpCCR),a0
 	clrw	a0@
-	moveml	sp@,d2-d7/a2-a5	| restore data registers
+	moveml	sp@,d2-d7/a2-a5
 	| XXX if frame pointer is ever removed, stack pointer must
 	| be adjusted here.
 	unlk	a6		| and return
@@ -1741,7 +1733,7 @@ Lmuldf$b$den:
 | double __divdf3(double, double);
 	FUNC(__divdf3)
 SYM (__divdf3):
-	link	a6,IMM (-40)	| everything will be done in registers
+	link	a6,IMM (-40	| everything will be done in registers)
 	moveml	d2-d7/a2-a5,sp@	| save all data registers and a2-a5 (but d0-d1)
 	moveml	a6@(8),d0-d3	| get a into d0-d1, and b into d2-d3
 	movel	d0,d7		| d7 will hold the sign of the result
@@ -2484,10 +2476,6 @@ FLT_MANT_DIG   = 24
 	.globl SYM (__divsf3)
 	.globl SYM (__negsf2)
 	.globl SYM (__cmpsf2)
-	.globl SYM (__cmpsf2_internal)
-#ifdef __ELF__
-	.hidden SYM (__cmpsf2_internal)
-#endif
 
 | These are common routines to return and signal exceptions.
 
@@ -3630,13 +3618,13 @@ SYM (__cmpsf2_internal):
 	andl	IMM (0x7fffffff),d0
 	beq	Lcmpsf$a$0
 	cmpl	IMM (0x7f800000),d0
-	bhi	Lcmpsf$inop
+	bhi	Lcmpf$inop
 Lcmpsf$1:
 	movel	d1,d7
 	andl	IMM (0x7fffffff),d1
 	beq	Lcmpsf$b$0
 	cmpl	IMM (0x7f800000),d1
-	bhi	Lcmpsf$inop
+	bhi	Lcmpf$inop
 Lcmpsf$2:
 | Check the signs
 	eorl	d6,d7
@@ -3690,7 +3678,7 @@ Lcmpsf$b$0:
 	bclr	IMM (31),d7
 	bra	Lcmpsf$2
 
-Lcmpsf$inop:
+Lcmpf$inop:
 	movel	a0,d0
 	moveq	IMM (INEXACT_RESULT+INVALID_OPERATION),d7
 	moveq	IMM (SINGLE_FLOAT),d6
@@ -3809,14 +3797,24 @@ LDBL_MANT_DIG  = 64
 
 | Entry points:
 
+	.globl SYM (__addxf3)
+	.globl SYM (__subxf3)
+	.globl SYM (__mulxf3)
+	.globl SYM (__divxf3)
 	.globl SYM (__negxf2)
 	.globl SYM (__cmpxf2)
-| __addxf3, __subxf3, __mulxf3, and __divxf3 are implemented elsewhere
 
 	.text
 	.even
 
 | These are common routines to return and signal exceptions.
+
+Lx$den:
+| Return and signal a denormalized number
+	orl	d7,d0
+	movew	IMM (INEXACT_RESULT+UNDERFLOW),d7
+	moveq	IMM (DOUBLE_FLOAT),d6
+	PICJUMP	$_exception_handler
 
 Lx$infty:
 Lx$overflow:
@@ -3829,6 +3827,15 @@ Lx$overflow:
 	moveq	IMM (LONG_FLOAT),d6
 	PICJUMP	$_exception_handler
 
+Lx$underflow:
+| Return 0 and set the exception flags
+	movel	IMM (0),d0
+	movel	d0,d1
+	movel	d0,d2
+	movew	IMM (INEXACT_RESULT+UNDERFLOW),d7
+	moveq	IMM (LONG_FLOAT),d6
+	PICJUMP	$_exception_handler
+
 Lx$inop:
 | Return a quiet NaN and set the exception flags
 	movel	IMM (QUIET_NaN),d0
@@ -3837,6 +3844,798 @@ Lx$inop:
 	movew	IMM (INEXACT_RESULT+INVALID_OPERATION),d7
 	moveq	IMM (LONG_FLOAT),d6
 	PICJUMP	$_exception_handler
+
+Lx$div$0:
+| Return a properly signed INFINITY and set the exception flags
+	movel	IMM (INFINITY),d0
+	movel	IMM (0),d1
+	movel	IMM (0),d2
+	orl	d7,d0
+	movew	IMM (INEXACT_RESULT+DIVIDE_BY_ZERO),d7
+	moveq	IMM (LONG_FLOAT),d6
+	PICJUMP	$_exception_handler
+
+|=============================================================================
+|                              __subxf3
+|=============================================================================
+
+| long double __subxf3(long double, long double);
+	FUNC(__subxf3)
+SYM (__subxf3):
+	bchg	IMM (31),sp@(16) | change sign of second operand
+				| and fall through, so we always add
+
+|=============================================================================
+|                              __addxf3
+|=============================================================================
+
+| long double __addxf3(long double, long double);
+	FUNC(__addxf3)
+SYM (__addxf3):
+	link	a6,IMM (-40)	| everything will be done in registers
+	moveml	d2-d7/a2-a5,sp@	| save all data registers and a2-a5 (but d0-d1)
+	pea.l      xxadd6(pc)
+	bra     _xxentry
+
+xxadd1:
+	eor.l      d3,d0
+	bmi        xxadd28
+xxadd2:
+	move.l     d3,d0
+	move.l     d4,d1
+	move.l     d5,d2
+xxadd3:
+	tst.w      d0
+	bpl        xxadd29
+	lsr.l      IMM(1),d1
+	roxr.l     IMM(1),d2
+	addq.w     IMM(1),d0
+	bra.s      xxadd3
+xxadd4:
+	eor.l      d0,d3
+	bpl.s      xxadd3
+xxadd5:
+	moveq	IMM (ADD),d5
+	bra        Lx$inop
+
+	bra.s      xxadd5
+	bra.s      xxadd5
+	bra.s      xxadd5
+	bra.s      xxadd4
+	bra.s      xxadd3
+	bra.s      xxadd3
+	bra.s      xxadd2
+	bra.s      xxadd1
+	bra.s      xxadd2
+	bra.s      xxadd2
+	bra.s      xxadd3
+xxadd6:
+	move.l     d0,d6
+	eor.l      d3,d6
+	move.w     d0,d6
+	sub.w      d3,d6
+	bgt.s      xxadd8
+	neg.w      d6
+	bne.s      xxadd7
+	cmp.l      d4,d1
+	bhi.s      xxadd8
+	bne.s      xxadd7
+	cmp.l      d2,d5
+	bls.s      xxadd8
+xxadd7:
+	move.l     d3,d0
+	exg        d4,d1
+	exg        d5,d2
+xxadd8:
+	moveq.l    IMM(0),d3
+	cmpi.w     IMM(9),d6
+	bls.s      xxadd13
+	cmpi.w     IMM(65),d6
+	bls.s      xxadd9
+	moveq.l    IMM(0),d5
+	moveq.l    IMM(0),d4
+	moveq.l    IMM(1),d3
+	bra.s      xxadd15
+xxadd9:
+	cmpi.w     IMM(33),d6
+	bls.s      xxadd10
+	or.l       d5,d3
+	move.l     d4,d5
+	moveq.l    IMM(0),d4
+	subi.w     IMM(32),d6
+xxadd10:
+	cmpi.w     IMM(17),d6
+	bls.s      xxadd11
+	or.w       d5,d3
+	move.w     d4,d5
+	clr.w      d4
+	swap       d4
+	swap       d5
+	subi.w     IMM(16),d6
+xxadd11:
+	cmpi.w     IMM(9),d6
+	bls.s      xxadd12
+	or.b       d5,d3
+	move.b     d4,d5
+	ror.l      IMM(8),d5
+	lsr.l      IMM(8),d4
+	subq.w     IMM(8),d6
+xxadd12:
+	tst.l      d3
+	beq.s      xxadd13
+	move.w     IMM(0x0FFF),d3
+xxadd13:
+	subq.w     IMM(1),d6
+	bmi.s      xxadd15
+xxadd14:
+	lsr.l      IMM(1),d4
+	roxr.l     IMM(1),d5
+	roxr.w     IMM(1),d3
+	dbf        d6,xxadd14
+xxadd15:
+	tst.l      d6
+	bmi.s      xxadd20
+	add.l      d5,d2
+	addx.l     d4,d1
+	bcc.s      xxadd16
+	roxr.l     IMM(1),d1
+	roxr.l     IMM(1),d2
+	roxr.w     IMM(1),d3
+	addq.w     IMM(1),d0
+xxadd16:
+	cmpi.w     IMM(0x8000),d3
+	bhi.s      xxadd17
+	bne        xxadd27
+	btst       IMM(0),d2
+	beq        xxadd27
+xxadd17:
+	addq.l     IMM(1),d2
+	bcc        xxadd27
+	addq.l     IMM(1),d1
+	bcc        xxadd27
+	bset       IMM(31),d1
+	addq.w     IMM(1),d0
+	bra        xxadd27
+
+xxadd20:
+	sub.l      d5,d2
+	subx.l     d4,d1
+	bmi.s      xxadd21
+	beq        xxadd28
+	subq.w     IMM(1),d0
+	add.l      d2,d2
+	addx.l     d1,d1
+	add.w      d3,d3
+	bcc.s      xxadd21
+	subq.l     IMM(1),d2
+	bcc.s      xxadd21
+	subq.l     IMM(1),d1
+xxadd21:
+	cmpi.w     IMM(0x8000),d3
+	bhi.s      xxadd22
+	bne.s      xxadd25
+	btst       IMM(0),d2
+	bne.s      xxadd22
+	tst.l      d2
+	bne.s      xxadd25
+	cmp.l      IMM(0x80000000),d1
+	bne.s      xxadd25
+xxadd22:
+	subq.l     IMM(1),d2
+	bcc.s      xxadd25
+	subq.l     IMM(1),d1
+	bmi.s      xxadd27
+	beq.s      xxadd28
+	moveq.l    IMM(-1),d2
+	moveq.l    IMM(-1),d1
+	subq.w     IMM(1),d0
+	btst       IMM(14),d3
+	beq.s      xxadd27
+	moveq.l    IMM(-2),d2
+	bra.s      xxadd27
+
+xxadd25:
+	tst.l      d1
+	bmi.s      xxadd27
+xxadd26:
+	subq.w     IMM(1),d0
+	add.l      d2,d2
+	addx.l     d1,d1
+	bpl.s      xxadd26
+xxadd27:
+	cmpi.w     IMM(0x7FFF),d0
+	bcs.s      xxadd29
+	cmpi.w     IMM(0xC000),d0
+	bhi.w      _xxunder
+	bra.w      Lx$overflow
+
+xxadd28:
+	clr.l      d0
+	clr.l      d1
+	clr.l      d2
+	bra.s      xxadd30
+xxadd29:
+	add.l      d0,d0
+	roxr.w     IMM(1),d0
+xxadd30:
+
+
+Laddxf$retnorm:
+	swap       d0
+	clr.w      d0
+	PICLEA	SYM (_fpCCR),a0
+	clrw	a0@
+	moveml	d0-d2,a1@
+	movel	a1,d0
+	moveml	sp@,d2-d7/a2-a5
+	| XXX if frame pointer is ever removed, stack pointer must
+	| be adjusted here.
+	unlk	a6
+	rts
+
+
+_xxentry:
+	movem.l    20(a6),d3-d5
+	clr.w      d3
+	swap       d3
+	move.w     IMM(X_MAX_EXP),d6
+	ext.l      d3
+	and.w      d6,d3
+	cmp.w      d6,d3
+	beq.s      _xxentry5
+	tst.l      d4
+	bmi.s      _xxentry3
+	bne.s      _xxentry2
+	tst.l      d5
+	bne.s      _xxentry2
+	subq.l     IMM(2),(a7)
+	bra.s      _xxentry3
+_xxentry2:
+	subq.w     IMM(1),d3
+	add.l      d5,d5
+	addx.l     d4,d4
+	bpl.s      _xxentry2
+_xxentry3:
+	movem.l    8(a6),d0-d2
+	swap       d0
+	ext.l      d0
+	and.w      d6,d0
+	cmp.w      d6,d0
+	beq.s      _xxentry6
+	tst.l      d1
+	bpl.s      _xxentry4
+	rts
+_xxentry4:
+	bne.s      _norm012_1
+	tst.l      d2
+	bne.s      _norm012_1
+	subq.l     IMM(6),(a7)
+	rts
+_xxentry5:
+	tst.l      d4
+	bne.s      _xxentry7
+	tst.l      d5
+	bne.s      _xxentry7
+	subq.l     IMM(4),(a7)
+	bra.s      _xxentry3
+_xxentry6:
+	tst.l      d1
+	bne.s      _xxentry8
+	tst.l      d2
+	bne.s      _xxentry8
+	subi.l     IMM(12),(a7)
+	rts
+_xxentry7:
+_xxentry8:
+	subi.l     IMM(18),(a7)
+	rts
+
+
+
+_norm012:
+	tst.l      d1
+	bmi.s      _norm012_2
+_norm012_1:
+	subq.w     IMM(1),d0
+	add.l      d2,d2
+	addx.l     d1,d1
+	bpl.s      _norm012_1
+_norm012_2:
+	rts
+
+
+_xxunder:
+	cmpi.w     IMM(0xFF80),d0
+	bgt        _xxunder1
+	bra        Lx$underflow
+	
+_xxunder1:
+	moveq.l    IMM(0),d3
+	moveq.l    IMM(0),d4
+_xxunder2:
+	lsr.l      IMM(1),d1
+	roxr.l     IMM(1),d2
+	roxr.l     IMM(1),d3
+	roxr.l     IMM(1),d4
+	addq.w     IMM(1),d0
+	bne.s      _xxunder2
+	add.l      d0,d0
+	roxr.w     IMM(1),d0
+	bclr       IMM(31),d3
+	beq.s      _xxunder6
+	tst.l      d3
+	beq.s      _xxunder6
+	addq.l     IMM(1),d2
+	bcc.s      _xxunder6
+	addq.l     IMM(1),d1
+_xxunder6:
+	bra        Laddxf$retnorm
+
+|=============================================================================
+|                              __mulxf3
+|=============================================================================
+
+| long double __mulxf3(long double, long double);
+	FUNC(__mulxf3)
+SYM (__mulxf3):
+	link	a6,IMM (-40)	| everything will be done in registers
+	moveml	d2-d7/a2-a5,sp@	| save all data registers and a2-a5 (but d0-d1)
+
+	pea.l      xxmul4(pc)
+	bra.w      _xxentry
+
+xxmul1:
+	eor.l      d3,d0
+	andi.l     IMM(0x80000000),d0
+	moveq      IMM(0),d1
+	moveq      IMM(0),d2
+	swap       d0
+	bra        Lmulxf$retnorm
+xxmul2:
+	moveq	IMM (MULTIPLY),d5
+	bra        Lx$inop
+xxmul3:
+	eor.l      d3,d0
+	swap       d0
+	or.w       d6,d0
+	moveq      IMM(0),d1
+	moveq      IMM(0),d2
+	bra        Lmulxf$retnorm
+
+	move.l     d7,d0
+	clr.w      d0
+	moveq	IMM (MULTIPLY),d5
+	bra     Lx$overflow
+
+	bra.s      xxmul2
+	bra.s      xxmul2
+	bra.s      xxmul2
+	bra.s      xxmul3
+	bra.s      xxmul2
+	bra.s      xxmul3
+	bra.s      xxmul2
+	bra.s      xxmul1
+	bra.s      xxmul1
+	bra.s      xxmul3
+	bra.s      xxmul1
+xxmul4:
+	move.l     d0,d7
+	eor.l      d3,d7
+	move.w     d0,d7
+	add.w      d3,d7
+	subi.w     IMM(0x3FFE),d7
+	move.l     d7,-(a7)
+	moveq.l    IMM(0),d0
+	move.w     d2,d6
+	mulu.w     d4,d6
+	move.w     d1,d3
+	mulu.w     d4,d3
+	move.w     d1,d7
+	mulu.w     d5,d7
+	add.l      d7,d6
+	addx.l     d0,d3
+	swap       d1
+	swap       d2
+	swap       d4
+	swap       d5
+	move.w     d2,d7
+	mulu.w     d5,d7
+	add.l      d7,d6
+	addx.l     d0,d3
+	move.w     d6,-(a7)
+	move.w     d3,d6
+	clr.w      d3
+	swap       d3
+	swap       d6
+	move.l     d2,d7
+	swap       d7
+	mulu.w     d4,d7
+	add.l      d7,d6
+	addx.l     d0,d3
+	move.l     d4,d7
+	swap       d7
+	mulu.w     d2,d7
+	add.l      d7,d6
+	addx.l     d0,d3
+	move.l     d1,d7
+	swap       d7
+	mulu.w     d5,d7
+	add.l      d7,d6
+	addx.l     d0,d3
+	move.l     d5,d7
+	swap       d7
+	mulu.w     d1,d7
+	add.l      d7,d6
+	addx.l     d0,d3
+	move.l     d1,d7
+	swap       d7
+	mulu.w     d4,d7
+	add.l      d7,d3
+	move.l     d4,d7
+	swap       d7
+	mulu.w     d1,d7
+	add.l      d7,d3
+	addx.l     d0,d0
+	move.w     d6,-(a7)
+	move.w     d3,d6
+	move.w     d0,d3
+	swap       d3
+	swap       d6
+	moveq.l    IMM(0),d0
+	move.w     d2,d7
+	mulu.w     d4,d7
+	add.l      d7,d6
+	addx.l     d0,d3
+	move.w     d1,d7
+	mulu.w     d5,d7
+	add.l      d7,d6
+	addx.l     d0,d3
+	move.w     d1,d7
+	mulu.w     d4,d7
+	add.l      d7,d3
+	move.l     (a7)+,d4
+	move.l     (a7)+,d1
+	move.l     d4,d7
+	tst.l      d3
+	bmi.s      xxmul5
+	add.l      d7,d7
+xxmul5:
+
+xxmul11:
+	cmpi.l     IMM(0x80000000),d7
+	bhi.s      xxmul12
+	cmpi.l     IMM(0x7FFE0001),d7
+	bls.s      xxmul14
+	bsr.s      xxmul9
+	cmpi.l     IMM(0x80000000),d4
+	bhi.s      xxmul12
+	bne.s      xxmul14
+	tst.l      d7
+	bne.s      xxmul12
+	btst       IMM(0),d6
+	beq.s      xxmul14
+xxmul12:
+	tst.l      d3
+	bmi.s      xxmul13
+	add.l      d4,d4
+	addx.l     d6,d6
+	addx.l     d3,d3
+	subq.w     IMM(1),d1
+xxmul13:
+	addq.l     IMM(1),d6
+	addx.l     d0,d3
+	bne.s      xxmul15
+	bset       IMM(31),d3
+	addq.w     IMM(1),d1
+	bra.s      xxmul15
+xxmul14:
+	tst.l      d3
+	bmi.s      xxmul15
+	add.l      d4,d4
+	addx.l     d6,d6
+	addx.l     d3,d3
+	subq.w     IMM(1),d1
+xxmul15:
+	cmpi.w     IMM(0x7FFF),d1
+	bcs.s      xxmul16
+	moveq	IMM (MULTIPLY),d5
+	bra     Lx$overflow
+xxmul16:
+	add.l      d1,d1
+	roxr.w     IMM(1),d1
+	move.w     d1,d0
+	move.l     d6,d2
+	move.l     d3,d1
+
+Lmulxf$retnorm:
+	swap       d0
+	clr.w      d0
+	PICLEA	SYM (_fpCCR),a0
+	clrw	a0@
+	moveml	d0-d2,a1@
+	movel	a1,d0
+	moveml	sp@,d2-d7/a2-a5
+	| XXX if frame pointer is ever removed, stack pointer must
+	| be adjusted here.
+	unlk	a6
+	rts
+
+xxmul9:
+	move.l     d1,-(a7)
+	move.l     d2,d1
+	swap       d1
+	mulu.w     d5,d1
+	move.l     d5,d7
+	swap       d7
+	mulu.w     d2,d7
+	moveq.l    IMM(0),d0
+	add.l      d1,d7
+	addx.w     d0,d0
+	swap       d0
+	swap       d7
+	move.w     d7,d0
+	clr.w      d7
+	swap       d2
+	swap       d5
+	move.w     d2,d1
+	mulu.w     d5,d1
+	moveq.l    IMM(0),d2
+	add.l      d1,d7
+	addx.l     d0,d4
+	addx.l     d2,d6
+	addx.l     d2,d3
+	moveq.l    IMM(0),d0
+	move.l     (a7)+,d1
+	tst.l      d3
+	bmi.s      xxmul10
+	add.l      d7,d7
+	addx.l     d4,d4
+	addx.l     d6,d6
+	addx.l     d3,d3
+	subq.w     IMM(1),d1
+xxmul10:
+	rts
+
+|=============================================================================
+|                              __divxf3
+|=============================================================================
+
+| long double __divxf3(long double, long double);
+	FUNC(__divxf3)
+SYM (__divxf3):
+	link	a6,IMM (-40)	| everything will be done in registers
+	moveml	d2-d7/a2-a5,sp@	| save all data registers and a2-a5 (but d0-d1)
+
+	pea.l      xxdiv5(pc)
+	bra.w      _xxentry
+
+__xxdiv:
+	movem.l    d3-d7/a2-a3,-(a7)
+	pea.l      xxdiv5(pc)
+	bra.w      _xxentry
+
+xxdiv1:
+	moveq	IMM (DIVIDE),d5
+	bra     Lx$inop
+
+xxdiv2:
+	eor.l      d3,d0
+	swap       d0
+	andi.w     IMM(0x8000),d0
+	moveq      IMM(0),d1
+	moveq      IMM(0),d2
+	bra        Ldivxf$retnorm
+
+xxdiv3:
+	moveq	IMM (DIVIDE),d5
+	bra     Lx$div$0
+
+xxdiv4:
+	eor.l      d3,d0
+	swap       d0
+	or.w       d6,d0
+	moveq      IMM(0),d1
+	moveq      IMM(0),d2
+	bra        Ldivxf$retnorm
+
+	bra.s      xxdiv1
+	bra.s      xxdiv1
+	bra.s      xxdiv1
+	bra.s      xxdiv1
+	bra.s      xxdiv4
+	bra.s      xxdiv4
+	bra.s      xxdiv2
+	bra.s      xxdiv1
+	bra.s      xxdiv2
+	bra.s      xxdiv2
+	bra.s      xxdiv3
+xxdiv5:
+	suba.l     a3,a3
+	move.l     d0,d7
+	eor.l      d3,d7
+	move.w     d0,d7
+	sub.w      d3,d7
+	addi.w     IMM(0x3FFE),d7
+	cmp.l      d1,d4
+	bhi.s      xxdiv7
+	bne.s      xxdiv6
+	cmp.l      d2,d5
+	bhi.s      xxdiv7
+xxdiv6:
+	addq.w     IMM(1),d7
+	lsr.l      IMM(1),d1
+	roxr.l     IMM(1),d2
+	bcc.s      xxdiv7
+	movea.w    IMM(0x8000),a3
+xxdiv7:
+	move.l     d7,-(a7)
+	moveq.l    IMM(2),d6
+xxdiv8:
+	movea.l    d6,a2
+	move.l     d4,d6
+	swap       d6
+	move.l     d1,d7
+	divu.w     d6,d7
+	bvc.s      xxdiv9
+	move.l     d4,d7
+	clr.w      d7
+	sub.l      d7,d1
+	swap       d7
+	add.l      d7,d1
+	moveq.l    IMM(-1),d7
+	bra.s      xxdiv10
+xxdiv9:
+	move.l     d7,d1
+	clr.w      d1
+	swap       d1
+xxdiv10:
+	move.l     d5,d6
+	swap       d6
+	mulu.w     d7,d6
+	moveq.l    IMM(0),d0
+	sub.l      d6,d2
+	subx.l     d0,d1
+	swap       d1
+	swap       d2
+	move.w     d1,d0
+	move.w     d2,d1
+	move.w     a3,d2
+	suba.l     a3,a3
+	move.w     d4,d3
+	mulu.w     d7,d3
+	move.w     d5,d6
+	mulu.w     d7,d6
+	move.w     d7,-(a7)
+	moveq.l    IMM(0),d7
+	sub.l      d6,d2
+	subx.l     d3,d1
+	subx.w     d7,d0
+	bpl.s      xxdiv12
+xxdiv11:
+	subq.w     IMM(1),(a7)
+	add.l      d5,d2
+	addx.l     d4,d1
+	addx.w     d7,d0
+	bcc.s      xxdiv11
+xxdiv12:
+	move.l     a2,d6
+	dbf        d6,xxdiv8
+	move.l     d4,d6
+	swap       d6
+	move.l     d1,d7
+	divu.w     d6,d7
+	bvc.s      xxdiv13
+	move.l     d4,d7
+	clr.w      d7
+	sub.l      d7,d1
+	swap       d7
+	add.l      d7,d1
+	moveq.l    IMM(-1),d7
+	swap       d1
+	bra.s      xxdiv14
+xxdiv13:
+	move.l     d7,d1
+	clr.w      d1
+xxdiv14:
+	swap       d2
+	move.w     d1,d0
+	move.w     d2,d1
+	clr.w      d2
+	move.w     d4,d3
+	mulu.w     d7,d3
+	moveq.l    IMM(0),d6
+	sub.l      d3,d1
+	subx.w     d6,d0
+	bpl.s      xxdiv16
+xxdiv15:
+	subq.w     IMM(1),d7
+	add.l      d4,d1
+	addx.w     d6,d0
+	bcc.s      xxdiv15
+xxdiv16:
+	swap       d7
+	move.w     (a7)+,d7
+	swap       d7
+	move.l     d4,d6
+	lsr.l      IMM(1),d6
+	sub.l      d1,d6
+	bhi        xxdiv27
+	swap       d6
+	addq.w     IMM(1),d6
+	bmi        xxdiv26
+xxdiv17:
+
+xxdiv22:
+	move.l     d2,-(a7)
+	move.l     d1,-(a7)
+	move.l     d5,d3
+	swap       d3
+	mulu.w     d7,d3
+	move.w     d3,d0
+	clr.w      d3
+	swap       d3
+	swap       d0
+	clr.w      d0
+	move.w     d5,d2
+	mulu.w     d7,d2
+	moveq.l    IMM(0),d1
+	add.l      d2,d0
+	addx.l     d1,d3
+	move.l     (a7)+,d1
+	move.l     (a7)+,d2
+	sub.l      d0,d2
+	subx.l     d3,d1
+	bcc.s      xxdiv23
+	subq.w     IMM(1),d7
+	add.l      d5,d2
+	addx.l     d4,d1
+xxdiv23:
+
+xxdiv24:
+	lsr.l      IMM(1),d4
+	roxr.l     IMM(1),d5
+	sub.l      d2,d5
+	subx.l     d1,d4
+	bmi.s      xxdiv26
+	bne.s      xxdiv27
+	btst       IMM(0),d7
+	beq.s      xxdiv27
+
+xxdiv26:
+	move.l     (a7)+,d6
+	swap       d6
+	addq.l     IMM(1),d7
+	bcc.s      xxdiv28
+	addq.l     IMM(1),d6
+	bra.s      xxdiv28
+xxdiv27:
+	move.l     (a7)+,d6
+	swap       d6
+xxdiv28:
+	move.l     (a7)+,d0
+	cmpi.w     IMM(0x7FFE),d0
+	bls.s      xxdiv29
+	move.l     d6,d1
+	move.l     d7,d2
+	moveq	IMM (DIVIDE),d5
+	bra     Lx$overflow
+
+xxdiv29:
+	add.l      d0,d0
+	roxr.w     IMM(1),d0
+	move.l     d7,d2
+	move.l     d6,d1
+
+Ldivxf$retnorm:
+	swap       d0
+	clr.w      d0
+	PICLEA	SYM (_fpCCR),a0
+	clrw	a0@
+	moveml	d0-d2,a1@
+	movel	a1,d0
+	moveml	sp@,d2-d7/a2-a5
+	unlk	a6
+	rts
 
 |=============================================================================
 |                              __negxf2
@@ -3867,8 +4666,8 @@ SYM (__negxf2):
 	bra	Lx$infty
 1:	PICLEA	SYM (_fpCCR),a0
 	clrw	a0@
-	moveml	d0-d2,M68K_STRUCT_VALUE_REGNUM@
-	movel	M68K_STRUCT_VALUE_REGNUM,d0
+	moveml	d0-d2,a1@
+	movel	a1,d0
 	moveml	sp@,d2-d7/a2-a5
 	| XXX if frame pointer is ever removed, stack pointer must
 	| be adjusted here.
@@ -4032,12 +4831,28 @@ Lcmpxf$inop:
 	moveq	IMM (LONG_FLOAT+1),d6
 	PICJUMP	$_exception_handler
 
+|=============================================================================
+|                           rounding routines
+|=============================================================================
+
+| The rounding routines expect the number to be normalized in registers
+| d0-d1-d2-d3, with the exponent in register d4. They assume that the
+| exponent is larger or equal to 1. They return a properly normalized number
+| if possible, and a denormalized number otherwise. The exponent is returned
+| in d4.
+
+Lround$to$nearest:
+Lround$to$zero:
+Lround$to$plus:
+Lround$to$minus:
+	jmp	a0@
+
 #endif /* _long_double */
 
 #endif /* __mcoldfire__ */
 
 
-#if defined (__ELF__)
+#if defined (__ELF__) && defined (__linux__)
 	/* Make stack non-executable for ELF linux targets.  */
 	.section	.note.GNU-stack,"",@progbits
 #endif

@@ -1,6 +1,6 @@
 /* Software floating-point emulation.
-   Return a converted to IEEE quad
-   Copyright (C) 2007-2022 Free Software Foundation, Inc.
+   Return a - b
+   Copyright (C) 1997-2022 Free Software Foundation, Inc.
    This file is part of the GNU C Library.
 
    The GNU C Library is free software; you can redistribute it and/or
@@ -26,28 +26,20 @@
    License along with the GNU C Library; if not, see
    <https://www.gnu.org/licenses/>.  */
 
-#define FP_NO_EXACT_UNDERFLOW
-#include "soft-fp.h"
-#include "extended.h"
-#include "quad.h"
+#include "soft-fp/soft-fp.h"
+#ifdef LIBGCC_HAS_XF_MODE
+#include "soft-fp/extended.h"
 
-TFtype
-__extendxftf2 (XFtype a)
+long double
+__subxf3 (long double a, long double b)
 {
-  FP_DECL_EX;
-  FP_DECL_E (A);
-  FP_DECL_Q (R);
-  TFtype r;
-
-  FP_INIT_TRAPPING_EXCEPTIONS;
-  FP_UNPACK_RAW_E (A, a);
-#if _FP_W_TYPE_SIZE < 64
-  FP_EXTEND (Q, E, 4, 4, R, A);
-#else
-  FP_EXTEND (Q, E, 2, 2, R, A);
-#endif
-  FP_PACK_RAW_Q (r, R);
-  FP_HANDLE_EXCEPTIONS;
-
-  return r;
+	(void)a;
+	__asm__ __volatile__(
+		"bchg #7,%0\n\t"
+		"jmp %1"
+	:
+	: "m"(b), "m"(__addxf3)
+	: "cc", "memory");
+	__builtin_unreachable();
 }
+#endif

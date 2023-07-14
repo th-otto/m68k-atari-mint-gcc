@@ -1,11 +1,31 @@
 LIB1ASMSRC = m68k/lb1sf68.S
 LIB1ASMFUNCS = _mulsi3 _udivsi3 _divsi3 _umodsi3 _modsi3 \
-   _double _float _floatex \
-   _eqdf2 _nedf2 _gtdf2 _gedf2 _ltdf2 _ledf2 \
-   _eqsf2 _nesf2 _gtsf2 _gesf2 _ltsf2 _lesf2
+	_double _long_double _float _floatex
 
-LIB2ADD = $(srcdir)/config/m68k/fpgnulib.c xfgnulib.c
-
-xfgnulib.c: $(srcdir)/config/m68k/fpgnulib.c
-	echo '#define EXTFLOAT' > xfgnulib.c
-	cat $< >> xfgnulib.c
+LIB2ADD = \
+	$(srcdir)/config/m68k/unordsf2.c \
+	$(srcdir)/config/m68k/unorddf2.c \
+	$(srcdir)/config/m68k/floatunsidf.c \
+	$(srcdir)/config/m68k/floatsidf.c \
+	$(srcdir)/config/m68k/floatunsisf.c \
+	$(srcdir)/config/m68k/floatsisf.c \
+	$(srcdir)/config/m68k/extendsfdf2.c \
+	$(srcdir)/config/m68k/truncdfsf2.c \
+	$(srcdir)/config/m68k/fixdfsi.c \
+	$(srcdir)/config/m68k/fixsfsi.c \
+	\
+	$(srcdir)/config/m68k/unordxf2.c \
+	$(srcdir)/config/m68k/extenddfxf2.c \
+	$(srcdir)/config/m68k/extendsfxf2.c \
+	$(srcdir)/config/m68k/truncxfdf2.c \
+	$(srcdir)/config/m68k/truncxfsf2.c \
+	$(srcdir)/config/m68k/floatsixf.c \
+	$(srcdir)/config/m68k/floatunsixf.c \
+	$(srcdir)/config/m68k/fixxfsi.c \
+	\
+	$(srcdir)/config/m68k/addxf3.c \
+	$(srcdir)/config/m68k/subxf3.c \
+	$(srcdir)/config/m68k/mulxf3.c \
+	$(srcdir)/config/m68k/divxf3.c \
+	$(srcdir)/config/m68k/sfp-exceptions.c \
+	$(empty)
