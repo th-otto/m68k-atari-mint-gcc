@@ -1,8 +1,7 @@
 /* Software floating-point emulation.
-   Return a converted to IEEE quad
-   Copyright (C) 2007-2018 Free Software Foundation, Inc.
+   Truncate IEEE double into IEEE single
+   Copyright (C) 1997-2022 Free Software Foundation, Inc.
    This file is part of the GNU C Library.
-   Contributed by Uros Bizjak (ubizjak@gmail.com).
 
    The GNU C Library is free software; you can redistribute it and/or
    modify it under the terms of the GNU Lesser General Public
@@ -25,29 +24,28 @@
 
    You should have received a copy of the GNU Lesser General Public
    License along with the GNU C Library; if not, see
-   <http://www.gnu.org/licenses/>.  */
+   <https://www.gnu.org/licenses/>.  */
 
-#define FP_NO_EXACT_UNDERFLOW
 #include "soft-fp.h"
+#include "single.h"
 #include "extended.h"
-#include "quad.h"
 
-TFtype
-__extendxftf2 (XFtype a)
+SFtype
+__truncxfsf2 (XFtype a)
 {
   FP_DECL_EX;
   FP_DECL_E (A);
-  FP_DECL_Q (R);
-  TFtype r;
+  FP_DECL_S (R);
+  SFtype r;
 
-  FP_INIT_TRAPPING_EXCEPTIONS;
-  FP_UNPACK_RAW_E (A, a);
-#if (2 * _FP_W_TYPE_SIZE) < _FP_FRACBITS_Q
-  FP_EXTEND (Q, E, 4, 4, R, A);
+  FP_INIT_ROUNDMODE;
+  FP_UNPACK_SEMIRAW_E (A, a);
+#if _FP_W_TYPE_SIZE < 64
+  FP_TRUNC (S, E, 1, 4, R, A);
 #else
-  FP_EXTEND (Q, E, 2, 2, R, A);
+  FP_TRUNC (S, E, 1, 2, R, A);
 #endif
-  FP_PACK_RAW_Q (r, R);
+  FP_PACK_SEMIRAW_S (r, R);
   FP_HANDLE_EXCEPTIONS;
 
   return r;
