@@ -243,6 +243,7 @@
 	    _FP_OVERFLOW_SEMIRAW (fs, wc, X);			\
 	}							\
       _FP_FRAC_SRL_##wc (X, _FP_WORKBITS);			\
+      _FP_FRAC_ZEROHIGH_##fs(X);				\
       if (X##_e == _FP_EXPMAX_##fs && !_FP_FRAC_ZEROP_##wc (X))	\
 	{							\
 	  if (!_FP_KEEPNANFRACP)				\
@@ -820,6 +821,7 @@
 		 canceling it; renormalize.  */				\
 	      _FP_FRAC_HIGH_##fs (R) &= _FP_IMPLBIT_SH_##fs - 1;	\
 	    norm:							\
+	      _FP_FRAC_ZEROHIGH_##fs(R); \
 	      _FP_FRAC_CLZ_##wc (_FP_ADD_INTERNAL_diff, R);		\
 	      _FP_ADD_INTERNAL_diff -= _FP_WFRACXBITS_##fs;		\
 	      _FP_FRAC_SLL_##wc (R, _FP_ADD_INTERNAL_diff);		\

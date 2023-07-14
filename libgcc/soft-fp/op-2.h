@@ -30,7 +30,7 @@
 #define SOFT_FP_OP_2_H	1
 
 #define _FP_FRAC_DECL_2(X)				\
-  _FP_W_TYPE X##_f0 _FP_ZERO_INIT, X##_f1 _FP_ZERO_INIT
+  _FP_W_TYPE X##_f0 _FP_ZERO_INIT, X##_f1 _FP_ZERO_INIT __attribute__((unused))
 #define _FP_FRAC_COPY_2(D, S)	(D##_f0 = S##_f0, D##_f1 = S##_f1)
 #define _FP_FRAC_SET_2(X, I)	__FP_FRAC_SET_2 (X, I)
 #define _FP_FRAC_HIGH_2(X)	(X##_f1)
@@ -194,9 +194,9 @@
 # undef __FP_FRAC_ADDI_2
 # define __FP_FRAC_ADDI_2(xh, xl, i)	add_ssaaaa (xh, xl, xh, xl, 0, i)
 # undef __FP_FRAC_ADD_2
-# define __FP_FRAC_ADD_2		add_ssaaaa
+# define __FP_FRAC_ADD_2(rh, rl, xh, xl, yh, yl) add_ssaaaa(rh, rl, xh, xl, yh, yl)
 # undef __FP_FRAC_SUB_2
-# define __FP_FRAC_SUB_2		sub_ddmmss
+# define __FP_FRAC_SUB_2(rh, rl, xh, xl, yh, yl) sub_ddmmss(rh, rl, xh, xl, yh, yl)
 # undef __FP_FRAC_DEC_2
 # define __FP_FRAC_DEC_2(xh, xl, yh, yl)	\
   sub_ddmmss (xh, xl, xh, xl, yh, yl)

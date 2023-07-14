@@ -186,6 +186,7 @@ union _FP_UNION_D
 # define FP_FROM_INT_D(X, r, rs, rt)	_FP_FROM_INT (D, 2, X, (r), (rs), rt)
 
 # define _FP_FRAC_HIGH_D(X)	_FP_FRAC_HIGH_2 (X)
+# define _FP_FRAC_ZEROHIGH_D(X)
 # define _FP_FRAC_HIGH_RAW_D(X)	_FP_FRAC_HIGH_2 (X)
 
 # define _FP_FRAC_HIGH_DW_D(X)	_FP_FRAC_HIGH_4 (X)
@@ -310,6 +311,7 @@ union _FP_UNION_D
 # define FP_FROM_INT_D(X, r, rs, rt)	_FP_FROM_INT (D, 1, X, (r), (rs), rt)
 
 # define _FP_FRAC_HIGH_D(X)	_FP_FRAC_HIGH_1 (X)
+# define _FP_FRAC_ZEROHIGH_D(X)
 # define _FP_FRAC_HIGH_RAW_D(X)	_FP_FRAC_HIGH_1 (X)
 
 # define _FP_FRAC_HIGH_DW_D(X)	_FP_FRAC_HIGH_2 (X)

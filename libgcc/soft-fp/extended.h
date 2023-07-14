@@ -75,10 +75,9 @@ union _FP_UNION_E
   struct _FP_STRUCT_LAYOUT
   {
 # if __BYTE_ORDER == __BIG_ENDIAN
-    unsigned long pad1 : _FP_W_TYPE_SIZE;
-    unsigned long pad2 : (_FP_W_TYPE_SIZE - 1 - _FP_EXPBITS_E);
     unsigned long sign : 1;
     unsigned long exp : _FP_EXPBITS_E;
+    unsigned long pad2 : (_FP_W_TYPE_SIZE - 1 - _FP_EXPBITS_E);
     unsigned long frac1 : _FP_W_TYPE_SIZE;
     unsigned long frac0 : _FP_W_TYPE_SIZE;
 # else
@@ -301,9 +300,10 @@ union _FP_UNION_E
 # define FP_FROM_INT_E(X, r, rs, rt)	_FP_FROM_INT (E, 4, X, (r), (rs), rt)
 
 # define _FP_FRAC_HIGH_E(X)	(X##_f[2])
+# define _FP_FRAC_ZEROHIGH_E(X)	(X##_f[3] = 0)
 # define _FP_FRAC_HIGH_RAW_E(X)	(X##_f[1])
 
-# define _FP_FRAC_HIGH_DW_E(X)	(X##_f[4])
+# define _FP_FRAC_HIGH_DW_E(X)	_FP_FRAC_HIGH_4(X)
 
 #else   /* not _FP_W_TYPE_SIZE < 64 */
 union _FP_UNION_E
@@ -312,9 +312,9 @@ union _FP_UNION_E
   struct _FP_STRUCT_LAYOUT
   {
 # if __BYTE_ORDER == __BIG_ENDIAN
-    _FP_W_TYPE pad  : (_FP_W_TYPE_SIZE - 1 - _FP_EXPBITS_E);
     unsigned sign   : 1;
     unsigned exp    : _FP_EXPBITS_E;
+    _FP_W_TYPE pad  : (_FP_W_TYPE_SIZE - 1 - _FP_EXPBITS_E);
     _FP_W_TYPE frac : _FP_W_TYPE_SIZE;
 # else
     _FP_W_TYPE frac : _FP_W_TYPE_SIZE;
@@ -507,6 +507,7 @@ union _FP_UNION_E
 # define FP_FROM_INT_E(X, r, rs, rt)	_FP_FROM_INT (E, 2, X, (r), (rs), rt)
 
 # define _FP_FRAC_HIGH_E(X)	(X##_f1)
+# define _FP_FRAC_ZEROHIGH_E(X)
 # define _FP_FRAC_HIGH_RAW_E(X)	(X##_f0)
 
 # define _FP_FRAC_HIGH_DW_E(X)	(X##_f[2])

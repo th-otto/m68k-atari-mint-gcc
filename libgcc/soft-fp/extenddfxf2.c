@@ -28,25 +28,25 @@
 
 #define FP_NO_EXACT_UNDERFLOW
 #include "soft-fp.h"
+#include "double.h"
 #include "extended.h"
-#include "quad.h"
 
-TFtype
-__extendxftf2 (XFtype a)
+XFtype
+__extenddfxf2 (DFtype a)
 {
   FP_DECL_EX;
-  FP_DECL_E (A);
-  FP_DECL_Q (R);
-  TFtype r;
+  FP_DECL_D (A);
+  FP_DECL_E (R);
+  XFtype r;
 
   FP_INIT_TRAPPING_EXCEPTIONS;
-  FP_UNPACK_RAW_E (A, a);
+  FP_UNPACK_RAW_D (A, a);
 #if _FP_W_TYPE_SIZE < 64
-  FP_EXTEND (Q, E, 4, 4, R, A);
+  FP_EXTEND (E, D, 4, 2, R, A);
 #else
-  FP_EXTEND (Q, E, 2, 2, R, A);
+  FP_EXTEND (E, D, 2, 1, R, A);
 #endif
-  FP_PACK_RAW_Q (r, R);
+  FP_PACK_RAW_E (r, R);
   FP_HANDLE_EXCEPTIONS;
 
   return r;
