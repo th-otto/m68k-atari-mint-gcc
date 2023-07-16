@@ -12894,6 +12894,7 @@ fi
 
 
 
+GDCFLAGS=${GDCFLAGS-${CFLAGS}}
 
 # Target tools.
 
