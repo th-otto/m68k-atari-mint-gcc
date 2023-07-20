@@ -1,5 +1,5 @@
 /* { dg-do run } */
-/* { dg-options "-mcpu=power10 -save-temps" } */
+/* { dg-options "-mdejagnu-cpu=power10 -save-temps" } */
 /* { dg-require-effective-target power10_hw } */
 
 /* Check that the expected 128-bit instructions are generated if the processor
@@ -90,7 +90,11 @@ int main ()
   vec_arg1_di[0] = 1000;
   vec_arg1_di[1] = -123456;
 
+#ifdef __BIG_ENDIAN__
+  expected_result = -123456;
+#else
   expected_result = 1000;
+#endif
 
   vec_result = vec_signextq (vec_arg1_di);
 
@@ -109,7 +113,11 @@ int main ()
   vec_arg1_di[0] = -123456;
   vec_arg1_di[1] = 1000;
 
+#ifdef __BIG_ENDIAN__
+  expected_result = 1000;
+#else
   expected_result = -123456;
+#endif
 
   vec_result = vec_signextq (vec_arg1_di);
 

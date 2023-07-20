@@ -1070,7 +1070,7 @@ static const struct cpu_vector_cost thunderx3t110_vector_cost =
 
 static const advsimd_vec_cost ampere1_advsimd_vector_cost =
 {
-  3, /* int_stmt_cost  */
+  1, /* int_stmt_cost  */
   3, /* fp_stmt_cost  */
   0, /* ld2_st2_permute_cost  */
   0, /* ld3_st3_permute_cost  */
@@ -1086,17 +1086,17 @@ static const advsimd_vec_cost ampere1_advsimd_vector_cost =
   8, /* store_elt_extra_cost  */
   6, /* vec_to_scalar_cost  */
   7, /* scalar_to_vec_cost  */
-  5, /* align_load_cost  */
-  5, /* unalign_load_cost  */
-  2, /* unalign_store_cost  */
-  2  /* store_cost  */
+  4, /* align_load_cost  */
+  4, /* unalign_load_cost  */
+  1, /* unalign_store_cost  */
+  1  /* store_cost  */
 };
 
 /* Ampere-1 costs for vector insn classes.  */
 static const struct cpu_vector_cost ampere1_vector_cost =
 {
   1, /* scalar_int_stmt_cost  */
-  1, /* scalar_fp_stmt_cost  */
+  3, /* scalar_fp_stmt_cost  */
   4, /* scalar_load_cost  */
   1, /* scalar_store_cost  */
   1, /* cond_taken_branch_cost  */
@@ -1745,7 +1745,38 @@ static const struct tune_params ampere1_tunings =
   2,	/* min_div_recip_mul_df.  */
   0,	/* max_case_values.  */
   tune_params::AUTOPREFETCHER_WEAK,	/* autoprefetcher_model.  */
-  (AARCH64_EXTRA_TUNE_NONE),		/* tune_flags.  */
+  (AARCH64_EXTRA_TUNE_NO_LDP_COMBINE),	/* tune_flags.  */
+  &ampere1_prefetch_tune
+};
+
+static const struct tune_params ampere1a_tunings =
+{
+  &ampere1a_extra_costs,
+  &generic_addrcost_table,
+  &generic_regmove_cost,
+  &ampere1_vector_cost,
+  &generic_branch_cost,
+  &generic_approx_modes,
+  SVE_NOT_IMPLEMENTED, /* sve_width  */
+  4, /* memmov_cost  */
+  4, /* issue_rate  */
+  (AARCH64_FUSE_ADRP_ADD | AARCH64_FUSE_AES_AESMC |
+   AARCH64_FUSE_MOV_MOVK | AARCH64_FUSE_MOVK_MOVK |
+   AARCH64_FUSE_ALU_BRANCH /* adds, ands, bics, ccmp, ccmn */ |
+   AARCH64_FUSE_CMP_BRANCH | AARCH64_FUSE_ALU_CBZ |
+   AARCH64_FUSE_ADDSUB_2REG_CONST1),
+  /* fusible_ops  */
+  "32",		/* function_align.  */
+  "4",		/* jump_align.  */
+  "32:16",	/* loop_align.  */
+  2,	/* int_reassoc_width.  */
+  4,	/* fp_reassoc_width.  */
+  2,	/* vec_reassoc_width.  */
+  2,	/* min_div_recip_mul_sf.  */
+  2,	/* min_div_recip_mul_df.  */
+  0,	/* max_case_values.  */
+  tune_params::AUTOPREFETCHER_WEAK,	/* autoprefetcher_model.  */
+  (AARCH64_EXTRA_TUNE_NO_LDP_COMBINE),	/* tune_flags.  */
   &ampere1_prefetch_tune
 };
 
@@ -6547,9 +6578,9 @@ aarch64_vfp_is_call_candidate (cumulative_args_t pcum_v, machine_mode mode,
 /* Given MODE and TYPE of a function argument, return the alignment in
    bits.  The idea is to suppress any stronger alignment requested by
    the user and opt for the natural alignment (specified in AAPCS64 \S
-   4.1).  ABI_BREAK is set to true if the alignment was incorrectly
-   calculated in versions of GCC prior to GCC-9.  This is a helper
-   function for local use only.  */
+   4.1).  ABI_BREAK is set to the old alignment if the alignment was
+   incorrectly calculated in versions of GCC prior to GCC-9.  This is
+   a helper function for local use only.  */
 
 static unsigned int
 aarch64_function_arg_alignment (machine_mode mode, const_tree type,
@@ -6625,11 +6656,24 @@ aarch64_layout_arg (cumulative_args_t pcum_v, const function_arg_info &arg)
   if (pcum->aapcs_arg_processed)
     return;
 
+  bool warn_pcs_change
+    = (warn_psabi
+       && !pcum->silent_p
+       && (currently_expanding_function_start
+	   || currently_expanding_gimple_stmt));
+
+  unsigned int alignment
+    = aarch64_function_arg_alignment (mode, type, &abi_break);
+  gcc_assert (!alignment || abi_break < alignment);
+
   pcum->aapcs_arg_processed = true;
 
   pure_scalable_type_info pst_info;
   if (type && pst_info.analyze_registers (type))
     {
+      /* aarch64_function_arg_alignment has never had an effect on
+	 this case.  */
+
       /* The PCS says that it is invalid to pass an SVE value to an
 	 unprototyped function.  There is no ABI-defined location we
 	 can return in this case, so we have no real choice but to raise
@@ -6700,6 +6744,8 @@ aarch64_layout_arg (cumulative_args_t pcum_v, const function_arg_info &arg)
      and homogenous short-vector aggregates (HVA).  */
   if (allocate_nvrn)
     {
+      /* aarch64_function_arg_alignment has never had an effect on
+	 this case.  */
       if (!pcum->silent_p && !TARGET_FLOAT)
 	aarch64_err_no_fpadvsimd (mode);
 
@@ -6758,7 +6804,7 @@ aarch64_layout_arg (cumulative_args_t pcum_v, const function_arg_info &arg)
 	  && (aarch64_function_arg_alignment (mode, type, &abi_break)
 	      == 16 * BITS_PER_UNIT))
 	{
-	  if (abi_break && warn_psabi && currently_expanding_gimple_stmt)
+	  if (warn_pcs_change && abi_break)
 	    inform (input_location, "parameter passing for argument of type "
 		    "%qT changed in GCC 9.1", type);
 	  ++ncrn;
@@ -6821,7 +6867,7 @@ on_stack:
       int new_size = ROUND_UP (pcum->aapcs_stack_size, 16 / UNITS_PER_WORD);
       if (pcum->aapcs_stack_size != new_size)
 	{
-	  if (abi_break && warn_psabi && currently_expanding_gimple_stmt)
+	  if (warn_pcs_change && abi_break)
 	    inform (input_location, "parameter passing for argument of type "
 		    "%qT changed in GCC 9.1", type);
 	  pcum->aapcs_stack_size = new_size;
@@ -6941,14 +6987,13 @@ aarch64_function_arg_boundary (machine_mode mode, const_tree type)
   unsigned int alignment = aarch64_function_arg_alignment (mode, type,
 							   &abi_break);
   alignment = MIN (MAX (alignment, PARM_BOUNDARY), STACK_BOUNDARY);
-  if (abi_break & warn_psabi)
+  if (abi_break && warn_psabi)
     {
       abi_break = MIN (MAX (abi_break, PARM_BOUNDARY), STACK_BOUNDARY);
       if (alignment != abi_break)
 	inform (input_location, "parameter passing for argument of type "
 		"%qT changed in GCC 9.1", type);
     }
-
   return alignment;
 }
 
@@ -21508,30 +21553,56 @@ aarch64_declare_function_name (FILE *stream, const char* name,
   cfun->machine->label_is_assembled = true;
 }
 
-/* Implement PRINT_PATCHABLE_FUNCTION_ENTRY.  Check if the patch area is after
-   the function label and emit a BTI if necessary.  */
+/* Implement PRINT_PATCHABLE_FUNCTION_ENTRY.  */
 
 void
 aarch64_print_patchable_function_entry (FILE *file,
 					unsigned HOST_WIDE_INT patch_area_size,
 					bool record_p)
 {
-  if (cfun->machine->label_is_assembled
-      && aarch64_bti_enabled ()
-      && !cgraph_node::get (cfun->decl)->only_called_directly_p ())
+  if (!cfun->machine->label_is_assembled)
     {
-      /* Remove the BTI that follows the patch area and insert a new BTI
-	 before the patch area right after the function label.  */
-      rtx_insn *insn = next_real_nondebug_insn (get_insns ());
-      if (insn
-	  && INSN_P (insn)
-	  && GET_CODE (PATTERN (insn)) == UNSPEC_VOLATILE
-	  && XINT (PATTERN (insn), 1) == UNSPECV_BTI_C)
-	delete_insn (insn);
-      asm_fprintf (file, "\thint\t34 // bti c\n");
+      /* Emit the patching area before the entry label, if any.  */
+      default_print_patchable_function_entry (file, patch_area_size,
+					      record_p);
+      return;
     }
 
-  default_print_patchable_function_entry (file, patch_area_size, record_p);
+  rtx pa = gen_patchable_area (GEN_INT (patch_area_size),
+			       GEN_INT (record_p));
+  basic_block bb = ENTRY_BLOCK_PTR_FOR_FN (cfun)->next_bb;
+
+  if (!aarch64_bti_enabled ()
+      || cgraph_node::get (cfun->decl)->only_called_directly_p ())
+    {
+      /* Emit the patchable_area at the beginning of the function.  */
+      rtx_insn *insn = emit_insn_before (pa, BB_HEAD (bb));
+      INSN_ADDRESSES_NEW (insn, -1);
+      return;
+    }
+
+  rtx_insn *insn = next_real_nondebug_insn (get_insns ());
+  if (!insn
+      || !INSN_P (insn)
+      || GET_CODE (PATTERN (insn)) != UNSPEC_VOLATILE
+      || XINT (PATTERN (insn), 1) != UNSPECV_BTI_C)
+    {
+      /* Emit a BTI_C.  */
+      insn = emit_insn_before (gen_bti_c (), BB_HEAD (bb));
+    }
+
+  /* Emit the patchable_area after BTI_C.  */
+  insn = emit_insn_after (pa, insn);
+  INSN_ADDRESSES_NEW (insn, -1);
+}
+
+/* Output patchable area.  */
+
+void
+aarch64_output_patchable_area (unsigned int patch_area_size, bool record_p)
+{
+  default_print_patchable_function_entry (asm_out_file, patch_area_size,
+					  record_p);
 }
 
 /* Implement ASM_OUTPUT_DEF_FROM_DECLS.  Output .variant_pcs for aliases.  */
@@ -21627,14 +21698,14 @@ aarch64_emit_unlikely_jump (rtx insn)
   add_reg_br_prob_note (jump, profile_probability::very_unlikely ());
 }
 
-/* We store the names of the various atomic helpers in a 5x4 array.
+/* We store the names of the various atomic helpers in a 5x5 array.
    Return the libcall function given MODE, MODEL and NAMES.  */
 
 rtx
 aarch64_atomic_ool_func(machine_mode mode, rtx model_rtx,
 			const atomic_ool_names *names)
 {
-  memmodel model = memmodel_base (INTVAL (model_rtx));
+  memmodel model = memmodel_from_int (INTVAL (model_rtx));
   int mode_idx, model_idx;
 
   switch (mode)
@@ -21674,6 +21745,11 @@ aarch64_atomic_ool_func(machine_mode mode, rtx model_rtx,
     case MEMMODEL_SEQ_CST:
       model_idx = 3;
       break;
+    case MEMMODEL_SYNC_ACQUIRE:
+    case MEMMODEL_SYNC_RELEASE:
+    case MEMMODEL_SYNC_SEQ_CST:
+      model_idx = 4;
+      break;
     default:
       gcc_unreachable ();
     }
@@ -21686,7 +21762,8 @@ aarch64_atomic_ool_func(machine_mode mode, rtx model_rtx,
   { "__aarch64_" #B #N "_relax", \
     "__aarch64_" #B #N "_acq", \
     "__aarch64_" #B #N "_rel", \
-    "__aarch64_" #B #N "_acq_rel" }
+    "__aarch64_" #B #N "_acq_rel", \
+    "__aarch64_" #B #N "_sync" }
 
 #define DEF4(B)  DEF0(B, 1), DEF0(B, 2), DEF0(B, 4), DEF0(B, 8), \
 		 { NULL, NULL, NULL, NULL }
@@ -24282,6 +24359,34 @@ aarch_macro_fusion_pair_p (rtx_insn *prev, rtx_insn *curr)
 	}
     }
 
+  /* Fuse A+B+1 and A-B-1 */
+  if (simple_sets_p
+      && aarch64_fusion_enabled_p (AARCH64_FUSE_ADDSUB_2REG_CONST1))
+    {
+      /* We're trying to match:
+	  prev == (set (r0) (plus (r0) (r1)))
+	  curr == (set (r0) (plus (r0) (const_int 1)))
+	or:
+	  prev == (set (r0) (minus (r0) (r1)))
+	  curr == (set (r0) (plus (r0) (const_int -1))) */
+
+      rtx prev_src = SET_SRC (prev_set);
+      rtx curr_src = SET_SRC (curr_set);
+
+      int polarity = 1;
+      if (GET_CODE (prev_src) == MINUS)
+	polarity = -1;
+
+      if (GET_CODE (curr_src) == PLUS
+	  && (GET_CODE (prev_src) == PLUS || GET_CODE (prev_src) == MINUS)
+	  && CONST_INT_P (XEXP (curr_src, 1))
+	  && INTVAL (XEXP (curr_src, 1)) == polarity
+	  && REG_P (XEXP (curr_src, 0))
+	  && REG_P (SET_DEST (prev_set))
+	  && REGNO (SET_DEST (prev_set)) == REGNO (XEXP (curr_src, 0)))
+	return true;
+    }
+
   return false;
 }
 
@@ -24468,6 +24573,12 @@ aarch64_operands_ok_for_ldpstp (rtx *operands, bool load,
   HOST_WIDE_INT offval_1, offval_2, msize;
   enum reg_class rclass_1, rclass_2;
   rtx mem_1, mem_2, reg_1, reg_2, base_1, base_2, offset_1, offset_2;
+
+  /* Allow the tuning structure to disable LDP instruction formation
+     from combining instructions (e.g., in peephole2).  */
+  if (load && (aarch64_tune_params.extra_tuning_flags
+	       & AARCH64_EXTRA_TUNE_NO_LDP_COMBINE))
+    return false;
 
   if (load)
     {

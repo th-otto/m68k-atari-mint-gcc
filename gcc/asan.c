@@ -64,6 +64,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree-inline.h"
 #include "tree-ssa.h"
 #include "tree-eh.h"
+#include "diagnostic-core.h"
 
 /* AddressSanitizer finds out-of-bounds and use-after-free bugs
    with <2x slowdown on average.
@@ -1497,10 +1498,14 @@ asan_redzone_buffer::emit_redzone_byte (HOST_WIDE_INT offset,
   HOST_WIDE_INT off
     = m_prev_offset + ASAN_SHADOW_GRANULARITY * m_shadow_bytes.length ();
   if (off == offset)
+    /* Consecutive shadow memory byte.  */;
+  else if (offset < m_prev_offset + (HOST_WIDE_INT) (ASAN_SHADOW_GRANULARITY
+						     * RZ_BUFFER_SIZE)
+	   && !m_shadow_bytes.is_empty ())
     {
-      /* Consecutive shadow memory byte.  */
-      m_shadow_bytes.safe_push (value);
-      flush_if_full ();
+      /* Shadow memory byte with a small gap.  */
+      for (; off < offset; off += ASAN_SHADOW_GRANULARITY)
+	m_shadow_bytes.safe_push (0);
     }
   else
     {
@@ -1521,9 +1526,9 @@ asan_redzone_buffer::emit_redzone_byte (HOST_WIDE_INT offset,
       m_shadow_mem = adjust_address (m_shadow_mem, VOIDmode,
 				     diff >> ASAN_SHADOW_SHIFT);
       m_prev_offset = offset;
-      m_shadow_bytes.safe_push (value);
-      flush_if_full ();
     }
+  m_shadow_bytes.safe_push (value);
+  flush_if_full ();
 }
 
 /* Emit RTX emission of the content of the buffer.  */
@@ -1800,6 +1805,11 @@ asan_emit_stack_protection (rtx base, rtx pbase, unsigned int alignb,
   unsigned char cur_shadow_byte = ASAN_STACK_MAGIC_LEFT;
   tree str_cst, decl, id;
   int use_after_return_class = -1;
+
+  /* Don't emit anything when doing error recovery, the assertions
+     might fail e.g. if a function had a frame offset overflow.  */
+  if (seen_error ())
+    return NULL;
 
   if (shadow_ptr_types[0] == NULL_TREE)
     asan_init_shadow_ptr_types ();

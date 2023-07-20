@@ -141,10 +141,7 @@ extern GTY(()) int darwin_ms_struct;
    Right now there's no mechanism to split up the "variable portion" (%*) of
    the matched spec string, so where we have some driver specs that take 2
    or 3 arguments, these cannot be processed here, but are deferred until the
-   LINK_SPEC, where they are copied verbatim.
-   We have a "safe" version of the MacOS version string, that's been sanity-
-   checked and truncated to minor version.  If the 'tiny' (3rd) portion of the
-   value is not significant, it's better to use this in version-compare().  */
+   LINK_SPEC, where they are copied verbatim.  */
 
 #undef SUBTARGET_DRIVER_SELF_SPECS
 #define SUBTARGET_DRIVER_SELF_SPECS					\
@@ -218,13 +215,8 @@ extern GTY(()) int darwin_ms_struct;
   "%{image_base*:-Xlinker -image_base -Xlinker %*} %<image_base*",	\
   "%{init*:-Xlinker -init -Xlinker %*} %<init*",			\
   "%{multi_module:-Xlinker -multi_module} %<multi_module",		\
-  "%{multiply_defined*:-Xlinker -multiply_defined -Xlinker %*; \
-     :%{shared-libgcc: \
-       %:version-compare(< 10.5 asm_macosx_version_min= -Xlinker) \
-       %:version-compare(< 10.5 asm_macosx_version_min= -multiply_defined) \
-       %:version-compare(< 10.5 asm_macosx_version_min= -Xlinker) \
-       %:version-compare(< 10.5 asm_macosx_version_min= suppress)}} \
-     %<multiply_defined*",						\
+  "%{multiply_defined*:-Xlinker -multiply_defined -Xlinker %*} \
+     %<multiply_defined* ",						\
   "%{multiplydefinedunused*:\
      -Xlinker -multiply_defined_unused -Xlinker %*} \
      %<multiplydefinedunused* ",					\
@@ -445,12 +437,16 @@ extern GTY(()) int darwin_ms_struct;
                      %:replace-outfile(-lobjc libobjc-gnu.a%s); \
                     :%:replace-outfile(-lobjc -lobjc-gnu )}}\
    %{static|static-libgcc|static-libgfortran:%:replace-outfile(-lgfortran libgfortran.a%s)}\
+   %{static|static-libgcc|static-libphobos:%:replace-outfile(-lgphobos libgphobos.a%s)}\
    %{static|static-libgcc|static-libstdc++|static-libgfortran:%:replace-outfile(-lgomp libgomp.a%s)}\
    %{static|static-libgcc|static-libstdc++:%:replace-outfile(-lstdc++ libstdc++.a%s)}\
    %{force_cpusubtype_ALL:-arch %(darwin_arch)} \
    %{!force_cpusubtype_ALL:-arch %(darwin_subarch)} "\
    LINK_SYSROOT_SPEC \
   "%{mmacosx-version-min=*:-macosx_version_min %*} \
+   %{!multiply_defined*:%{shared-libgcc: \
+     %:version-compare(< 10.5 mmacosx-version-min= -multiply_defined) \
+     %:version-compare(< 10.5 mmacosx-version-min= suppress) }} \
    %{sectalign*} %{sectcreate*} %{sectobjectsymbols*}  %{sectorder*} \
    %{segaddr*} %{segcreate*} %{segprot*} "
 
@@ -867,13 +863,12 @@ int darwin_label_is_anonymous_local_objc_name (const char *name);
   if ((LOG) != 0)			\
     fprintf (FILE, "\t%s\t%d\n", ALIGN_ASM_OP, (LOG))
 
-/* The maximum alignment which the object file format can support in
-   bits.  For Mach-O, this is 2^15 bytes.  */
+/* The maximum alignment which the object file format can support in bits
+   which depends on the OS version and whether the object is a common
+   variable.  */
 
 #undef	MAX_OFILE_ALIGNMENT
-#define MAX_OFILE_ALIGNMENT (0x8000 * 8)
-
-#define L2_MAX_OFILE_ALIGNMENT 15
+#define MAX_OFILE_ALIGNMENT ((1U << L2_MAX_OFILE_ALIGNMENT) * 8U)
 
 /*  These are the three variants that emit referenced blank space.  */
 #define ASM_OUTPUT_ALIGNED_BSS(FILE, DECL, NAME, SIZE, ALIGN)		\

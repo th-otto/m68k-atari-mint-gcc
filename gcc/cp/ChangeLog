@@ -1,3 +1,542 @@
+2023-05-29  Release Manager
+
+	* GCC 11.4.0 released.
+
+2023-05-22  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2023-03-03  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/108998
+	* pt.c (el_data::skipped_trees): New data member.
+	(extract_locals_r): Push to skipped_trees any unevaluated
+	contexts that we skipped over.
+	(extract_local_specs): For the second walk, start from each
+	tree in skipped_trees.
+
+2023-05-22  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2022-12-15  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/100295
+	PR c++/107579
+	* pt.c (el_data::skip_unevaluated_operands): New data member.
+	(extract_locals_r): If skip_unevaluated_operands is true,
+	don't walk into unevaluated contexts.
+	(extract_local_specs): Walk the pattern twice, first with
+	skip_unevaluated_operands true followed by it set to false.
+
+2023-05-22  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2022-11-29  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/107864
+	* decl.c (function_requirements_equivalent_p): Don't check
+	DECL_TEMPLATE_SPECIALIZATION.
+	* pt.c (determine_specialization): Propagate constraints when
+	specializing a function template too.  Simplify by using
+	add_outermost_template_args.
+
+2023-05-22  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2022-11-03  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/107179
+	* constraint.cc (tsubst_requires_expr): Make sure we're not
+	deferring access checks.
+
+2023-05-22  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2022-03-30  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/100474
+	* constraint.cc (diagnose_trait_expr): Handle all remaining
+	traits appropriately.  Remove default case.
+
+2023-05-22  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2022-03-12  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/104527
+	* constraint.cc (normalize_atom): Set
+	ATOMIC_CONSTR_EXPR_FROM_CONCEPT_P appropriately.
+	(get_mapped_args):  Make static, adjust parameters.  Always
+	return a vector whose depth corresponds to the template depth of
+	the context of the atomic constraint expression.  Micro-optimize
+	by passing false as exact to safe_grow_cleared and by collapsing
+	a multi-level depth-one argument vector.
+	(satisfy_atom): Adjust call to get_mapped_args and
+	diagnose_atomic_constraint.
+	(diagnose_atomic_constraint): Replace map parameter with an args
+	parameter.
+	* cp-tree.h (ATOMIC_CONSTR_EXPR_FROM_CONCEPT_P): Define.
+	(get_mapped_args): Remove declaration.
+
+2023-05-22  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2022-01-28  Patrick Palka  <ppalka@redhat.com>
+		    Jason Merrill  <jason@redhat.com>
+
+	PR c++/92752
+	* typeck.c (build_ptrmemfunc): Cast a nullptr constant to the
+	unqualified pointer type not the qualified one.
+
+2023-05-16  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2023-04-09  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* coroutines.cc (coro_rewrite_function_body): Ensure that added
+	bind expressions have scope blocks.
+
+2023-05-16  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2023-04-01  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/101118
+	* coroutines.cc (flatten_await_stmt): Use the current count of
+	promoted temporaries to build a unique name for the frame entries.
+
+2023-05-09  Jason Merrill  <jason@redhat.com>
+
+	PR c++/106740
+	PR c++/105852
+	* decl.c (duplicate_decls): Change non-templated friend
+	check to an assert.
+	* pt.c	(tsubst_function_decl): Don't set DECL_TEMPLATE_INFO
+	on non-templated friends.
+	(tsubst_friend_function): Adjust.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-04-12  Jakub Jelinek  <jakub@redhat.com>
+
+	* Make-lang.in (s-cp-module-version): New target.
+	(cp/module.o): Depend on it.
+	(MODULE_VERSION): Remove variable.
+	(CFLAGS-cp/module.o): For -DMODULE_VERSION= argument just
+	cat s-cp-module-version.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-03-20  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/109164
+	* cp-tree.h (var_needs_tls_wrapper): Declare.
+	* decl2.c (var_needs_tls_wrapper): No longer static.
+	* decl.c (cp_finish_decl): Clear TREE_READONLY on TLS variables
+	for which a TLS wrapper will be needed.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-03-14  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/109096
+	* tree.c (record_has_unique_obj_representations): Ignore unnamed
+	bitfields.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-03-10  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/107558
+	* decl.c (cp_finish_decl): Don't clear TREE_READONLY on
+	automatic non-aggregate variables just because of
+	-fmerge-all-constants.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-03-02  Jakub Jelinek  <jakub@redhat.com>
+
+	PR debug/108716
+	* cp-gimplify.c (cp_genericize_r) <case USING_STMT>: Set
+	DECL_SOURCE_LOCATION on IMPORTED_DECL to expression location
+	of USING_STMT or input_location.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-01-24  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/108474
+	* cp-gimplify.c (cp_fold_r): Handle structured bindings
+	vars like anon union artificial vars.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-01-14  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/108365
+	* typeck.c (cp_build_binary_op): For integral division or modulo,
+	shorten if type0 is unsigned, or op0 is cast from narrower unsigned
+	integral type or stripped_op1 is INTEGER_CST other than -1.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-02-01  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/108607
+	* constexpr.c (cxx_eval_constant_expression): Handle OMP_*
+	and OACC_* constructs as non-constant.
+	(potential_constant_expression_1): Handle OMP_SCAN.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-01-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/53932
+	* cp-gimplify.c (cp_fold_r): During cp_fully_fold_init replace
+	DECL_ANON_UNION_VAR_P VAR_DECLs with their corresponding
+	DECL_VALUE_EXPR.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-12-21  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/108180
+	* pt.c (tsubst_expr): Don't call cp_finish_decl on
+	DECL_OMP_PRIVATIZED_MEMBER vars.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-12-15  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/107065
+	* typeck.c (cp_build_unary_op) <case TRUTH_NOT_EXPR>: If
+	invert_truthvalue_loc returns obvalue_p, wrap it into NON_LVALUE_EXPR.
+	* parser.c (cp_parser_binary_expression): Don't call
+	warn_logical_not_parentheses if current.lhs is a NON_LVALUE_EXPR
+	of a decl with boolean type.
+
+2023-04-22  Jason Merrill  <jason@redhat.com>
+
+	PR c++/105996
+	* typeck.c (build_ptrmemfunc): Drop 0-offset optimization
+	and location wrappers.
+
+2023-04-22  Jason Merrill  <jason@redhat.com>
+
+	PR c++/108975
+	* lambda.c (prune_lambda_captures): Don't bother in a template.
+
+2023-04-22  Jason Merrill  <jason@redhat.com>
+
+	PR c++/69410
+	* friend.c (do_friend): Handle namespace as scope argument.
+	* decl.c (grokdeclarator): Pass down in_namespace.
+
+2023-04-22  Jason Merrill  <jason@redhat.com>
+
+	PR c++/101869
+	* semantics.c (finish_qualified_id_expr): Don't try to build a
+	pointer-to-member if the scope is an enumeration.
+
+2023-04-22  Jason Merrill  <jason@redhat.com>
+
+	PR c++/105406
+	* coroutines.cc (build_co_await): Handle lvalue 'o'.
+
+2023-04-22  Jason Merrill  <jason@redhat.com>
+
+	PR c++/103871
+	PR c++/98056
+	* typeck.c (cp_build_modify_expr): Allow array initialization of
+	DECL_ARTIFICIAL variable.
+
+2023-04-22  Jason Merrill  <jason@redhat.com>
+
+	PR c++/108468
+	* pt.c (unify_pack_expansion): Check that TPARMS_PRIMARY_TEMPLATE
+	is non-null.
+
+2023-03-13  Arsen Arsenović  <arsen@aarsen.me>
+
+	PR c++/106188
+	PR c++/106713
+	* coroutines.cc (coro_rewrite_function_body): Ensure we have a
+	BIND_EXPR wrapping the function body.
+
+2023-02-15  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2023-02-15  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/106675
+	* call.c (joust_maybe_elide_copy): Return false for ck_ambig.
+
+2022-12-16  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2021-10-28  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/102780
+	PR c++/108138
+	* constexpr.c (potential_constant_expression_1) <case TRUTH_*_EXPR>:
+	When tf_error isn't set, preemptively check potentiality of the
+	second operand before performing trial evaluation of the first
+	operand.
+	(potential_constant_expression_1): When tf_error is set, first check
+	potentiality quietly and return true if successful, otherwise
+	proceed noisily to give errors.
+
+2022-11-18  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2022-11-18  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/104066
+	* decl.c (grokdeclarator): Check funcdecl_p before complaining
+	about constinit.
+
+2022-11-04  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-10-24  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/105774
+	* constexpr.c (cxx_eval_increment_expression): For signed types
+	that promote to int, evaluate PLUS_EXPR or MINUS_EXPR in int type.
+
+2022-11-04  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-08-16  Jakub Jelinek  <jakub@redhat.com>
+
+	* typeck.c (cp_build_modify_expr): Implement
+	P2327R1 - De-deprecating volatile compound operations.  Don't warn
+	for |=, &= or ^= with volatile lhs.
+	* expr.c (mark_use) <case MODIFY_EXPR>: Adjust warning wording,
+	leave out simple.
+
+2022-10-24  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2022-05-27  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/105725
+	* parser.c (class_decl_loc_t::add): Check CLASS_TYPE_P.
+
+2022-07-22  Jason Merrill  <jason@redhat.com>
+
+	PR c++/106361
+	* decl.c (move_fn_p): Remove assert.
+
+2022-07-01  Jason Merrill  <jason@redhat.com>
+
+	PR c++/106024
+	* parser.c (cp_parser_lookup_name): Don't look in dependent lambda.
+
+2022-06-24  Jason Merrill  <jason@redhat.com>
+
+	PR c++/105925
+	* decl.c (reshape_init_array_1): Set
+	CONSTRUCTOR_IS_DESIGNATED_INIT here.
+	(reshape_init_class): And here.
+
+2022-06-08  Jason Merrill  <jason@redhat.com>
+
+	PR c++/105852
+	PR c++/105761
+	* decl.c (duplicate_decls): Avoid copying template info
+	from non-templated friend even if newdecl isn't a definition.
+	Correct handling of DECL_UNIQUE_FRIEND_P on templates.
+	* pt.c (non_templated_friend_p): New.
+	* cp-tree.h (non_templated_friend_p): Declare it.
+
+2022-06-03  Jason Merrill  <jason@redhat.com>
+
+	PR c++/105761
+	* decl.c (duplicate_decls): Don't copy DECL_TEMPLATE_INFO
+	from a hidden friend.
+
+2022-06-03  Jason Merrill  <jason@redhat.com>
+
+	PR c++/105795
+	* constexpr.c (cxx_eval_bare_aggregate): Always call
+	init_subob_ctx.
+
+2022-05-31  Jason Merrill  <jason@redhat.com>
+
+	PR c++/102307
+	* decl.c (check_initializer): Use build_cplus_new in case of
+	constexpr failure.
+
+2022-05-13  Jason Merrill  <jason@redhat.com>
+
+	PR c++/101442
+	* decl.c (cp_finish_decl): Don't pass decl to push_cleanup.
+	* init.c (perform_member_init): Likewise.
+	* semantics.c (push_cleanup): Adjust comment.
+
+2022-05-13  Jason Merrill  <jason@redhat.com>
+
+	PR c++/101698
+	* pt.c (tsubst_baselink): Also check dependent optype.
+
+2022-05-13  Jason Merrill  <jason@redhat.com>
+
+	PR c++/65211
+	* pt.c (tsubst_decl) [TYPE_DECL]: Copy TYPE_ALIGN.
+
+2022-05-13  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2021-09-27  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/102479
+	* pt.c (rewrite_template_parm): Handle single-level tsubst_args.
+	Avoid a tree cycle when assigning the DECL_TEMPLATE_PARMS for a
+	rewritten ttp.
+	(alias_ctad_tweaks): Set current_template_parms accordingly.
+
+2022-05-13  Jason Merrill  <jason@redhat.com>
+
+	PR c++/102300
+	* parser.c (cp_parser_template_name): Use dependent_scope_p.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/102629
+	* pt.c (gen_elem_of_pack_expansion_instantiation): Clear
+	TEMPLATE_TYPE_PARAMETER_PACK on auto.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/104646
+	* constexpr.c (maybe_save_constexpr_fundef): Don't do extra
+	checks for defaulted ctors.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/82980
+	* lambda.c (type_deducible_expression_p): New.
+	(lambda_capture_field_type): Check it.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/105265
+	PR c++/100838
+	* call.c (build_user_type_conversion_1): Drop
+	flag_elide_constructors check.
+	(convert_like_internal): Likewise.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/105245
+	PR c++/100111
+	* constexpr.c (cxx_eval_store_expression): Build a CONSTRUCTOR
+	as needed in empty base handling.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/104669
+	* decl.c (decls_match): Compare versions even if not recording.
+	(duplicate_decls): Propagate attributes to alias.
+	* decl2.c (find_last_decl): Give up if versioned.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/102071
+	* init.c (build_new_1): Include cookie in alignment.  Omit
+	constexpr wrapper from alloc_call.
+
+2022-05-12  Jason Merrill  <jason@redhat.com>
+
+	PR c++/104142
+	* decl.c (check_initializer): Check TREE_SIDE_EFFECTS.
+
+2022-05-06  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-05-04  Jakub Jelinek  <jakub@redhat.com>
+
+	* lambda.c: Include decl.h.
+	(maybe_add_lambda_conv_op): Temporarily override deprecated_state to
+	DEPRECATED_SUPPRESS.
+
+2022-04-28  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2022-04-26  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/105386
+	* semantics.c (finish_decltype_type): Pass tf_decltype to
+	instantiate_non_dependent_expr_sfinae.
+
+2022-04-28  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2022-04-26  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/105289
+	PR c++/86193
+	* pt.c (process_partial_specialization): Downgrade "partial
+	specialization isn't more specialized" diagnostic from permerror
+	to an on-by-default pedwarn.
+	(unify) <case TEMPLATE_PARM_INDEX>: When substituting into the
+	NTTP type a second time, use the original type not the
+	substituted type.
+
+2022-04-28  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2022-04-28  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/90107
+	* parser.c (cp_parser_class_specifier_1): Accept :: after a class
+	definition.
+
+2022-04-27  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2022-04-27  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/105398
+	* pt.c (uses_template_parms): Return false for any NAMESPACE_DECL.
+
+2022-04-22  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2022-04-21  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/105321
+	* constexpr.c (cxx_eval_logical_expression): Always pass false for lval
+	to cxx_eval_constant_expression.
+
+2022-04-22  Marek Polacek  <polacek@redhat.com>
+
+	Backported from master:
+	2022-04-13  Marek Polacek  <polacek@redhat.com>
+
+	PR c++/97296
+	* call.c (direct_reference_binding): strip_top_quals when creating
+	a ck_qual.
+
+2022-04-21  Matthias Kretz  <m.kretz@gsi.de>
+
+	Backported from master:
+	2021-12-19  Matthias Kretz  <m.kretz@gsi.de>
+
+	* module.cc (trees_out::get_merge_kind): NAMESPACE_DECLs also
+	cannot have a DECL_TEMPLATE_INFO.
+
 2022-04-21  Release Manager
 
 	* GCC 11.3.0 released.

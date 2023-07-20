@@ -294,6 +294,7 @@
     UNSPEC_TAG_SPACE		; Translate address to MTE tag address space.
     UNSPEC_LD1RO
     UNSPEC_SALT_ADDR
+    UNSPECV_PATCHABLE_AREA
 ])
 
 (define_c_enum "unspecv" [
@@ -4762,7 +4763,7 @@
     rtx ccreg = aarch64_gen_compare_reg (EQ, operands[1], const0_rtx);
     rtx x = gen_rtx_NE (VOIDmode, ccreg, const0_rtx);
 
-    emit_insn (gen_rbit<mode>2 (operands[0], operands[1]));
+    emit_insn (gen_aarch64_rbit (<MODE>mode, operands[0], operands[1]));
     emit_insn (gen_clz<mode>2 (operands[0], operands[0]));
     emit_insn (gen_csinc3<mode>_insn (operands[0], x, operands[0], const0_rtx));
     DONE;
@@ -4808,7 +4809,7 @@
   [(set_attr "type" "clz")]
 )
 
-(define_insn "rbit<mode>2"
+(define_insn "@aarch64_rbit<mode>"
   [(set (match_operand:GPI 0 "register_operand" "=r")
 	(unspec:GPI [(match_operand:GPI 1 "register_operand" "r")] UNSPEC_RBIT))]
   ""
@@ -4829,7 +4830,7 @@
   "reload_completed"
   [(const_int 0)]
   "
-  emit_insn (gen_rbit<mode>2 (operands[0], operands[1]));
+  emit_insn (gen_aarch64_rbit (<MODE>mode, operands[0], operands[1]));
   emit_insn (gen_clz<mode>2 (operands[0], operands[0]));
   DONE;
 ")
@@ -5818,6 +5819,13 @@
   "rev16\\t%w0, %w1"
   [(set_attr "type" "rev")]
 )
+
+(define_insn "@aarch64_rev16<mode>"
+  [(set (match_operand:GPI 0 "register_operand" "=r")
+	(unspec:GPI [(match_operand:GPI 1 "register_operand" "r")] UNSPEC_REV))]
+  ""
+  "rev16\\t%<w>0, %<w>1"
+  [(set_attr "type" "rev")])
 
 (define_insn "*aarch64_bfxil<mode>"
   [(set (match_operand:GPI 0 "register_operand" "=r,r")
@@ -7513,6 +7521,19 @@
   "TARGET_MEMTAG"
   "stg\\t%0, [%1, #%2]"
   [(set_attr "type" "memtag")]
+)
+
+(define_insn "patchable_area"
+  [(unspec_volatile [(match_operand 0 "const_int_operand")
+		     (match_operand 1 "const_int_operand")]
+		    UNSPECV_PATCHABLE_AREA)]
+  ""
+{
+  aarch64_output_patchable_area (INTVAL (operands[0]),
+			         INTVAL (operands[1]) != 0);
+  return "";
+}
+  [(set (attr "length") (symbol_ref "INTVAL (operands[0])"))]
 )
 
 ;; AdvSIMD Stuff

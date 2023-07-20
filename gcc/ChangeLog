@@ -1,3 +1,2032 @@
+2023-05-29  Release Manager
+
+	* GCC 11.4.0 released.
+
+2023-05-22   Michael Meissner  <meissner@linux.ibm.com>
+
+	PR target/70243
+	* config/rs6000/vsx.md (vsx_fmav4sf4): Do not generate vmaddfp.  Back
+	port from master 04/10/2023.
+	(vsx_nfmsv4sf4): Do not generate vnmsubfp.
+
+2023-05-16  Simon Wright  <simon@pushface.org>
+
+	Backported from master:
+	2022-06-12  Simon Wright  <simon@pushface.org>
+
+	PR target/104871
+	* config/darwin-driver.c (darwin_find_version_from_kernel): If the OS
+	version is darwin20 (macOS 11) or greater, truncate the version to the
+	major number.
+
+2023-05-16  Mark Mentovai  <mark@mentovai.com>
+
+	Backported from master:
+	2022-06-12  Mark Mentovai  <mark@mentovai.com>
+
+	* config/darwin-c.c: Make -mmacosx-version-min more future-proof.
+
+2023-05-16  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2022-05-29  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR target/105599
+	* config/darwin.h: Move versions-specific handling of multiply_defined
+	from SUBTARGET_DRIVER_SELF_SPECS to LINK_SPEC.
+
+2023-05-16  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2021-12-24  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* config.gcc: Emit L2_MAX_OFILE_ALIGNMENT with suitable
+	values for the host.
+	* config/darwin.c (darwin_emit_common): Error for alignment
+	values > 32768.
+	* config/darwin.h (MAX_OFILE_ALIGNMENT): Rework to use the
+	configured L2_MAX_OFILE_ALIGNMENT.
+
+2023-05-16  François-Xavier Coudert  <fxcoudert@gcc.gnu.org>
+
+	Backported from master:
+	2021-12-18  François-Xavier Coudert  <fxcoudert@gcc.gnu.org>
+
+	* config/darwin-driver.c: Make version code more future-proof.
+	* config.gcc: Homogeneize darwin versions.
+	* configure.ac: Homogeneize darwin versions.
+	* configure: Regenerate.
+
+2023-05-15  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* config/i386/darwin.h (ENDFILE_SPEC): Fix trailing '\'.
+
+2023-05-15  liuhongt  <hongtao.liu@intel.com>
+
+	* config/i386/cygwin.h (ENDFILE_SPEC): Link crtfastmath.o
+	whenever -mdaz-ftz is specified. Don't link crtfastmath.o
+	when -mno-daz-ftz is specified.
+	* config/i386/darwin.h (ENDFILE_SPEC): Ditto.
+	* config/i386/gnu-user-common.h
+	(GNU_USER_TARGET_MATHFILE_SPEC): Ditto.
+	* config/i386/mingw32.h (ENDFILE_SPEC): Ditto.
+	* config/i386/i386.opt (mdaz-ftz): New option.
+	* doc/invoke.texi (x86 options): Document mftz-daz.
+
+2023-05-09  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-05-09  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/109778
+	* wide-int.h (wi::lrotate, wi::rrotate): Call wi::lrshift on
+	wi::zext (x, width) rather than x if width != precision, rather
+	than using wi::zext (right, width) after the shift.
+	* tree-ssa-ccp.c (bit_value_binop): Call wi::ext on the results
+	of wi::lrotate or wi::rrotate.
+
+2023-05-09  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2023-03-01  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/108950
+	* tree-vect-patterns.c (vect_recog_widen_sum_pattern):
+	Check oprnd0 is defined in the loop.
+	* tree-vect-loop.c (vectorizable_reduction): Record all
+	operands vector types, compute that of invariants and
+	properly update their SLP nodes.
+
+2023-05-05  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-11-29  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/107898
+	* gimple-ssa-warn-alloca.c (alloca_call_type): Check
+	the type of the alloca argument is compatible with size_t
+	before querying ranges.
+
+2023-05-03  Arsen Arsenović  <arsen@aarsen.me>
+
+	* doc/extend.texi: Replace @itemx not being preceded by @item.
+
+2023-05-03  Anthony Sharp  <anthonysharp15@gmail.com>
+
+	Backported from master:
+	2021-08-27  Anthony Sharp  <anthonysharp15@gmail.com>
+
+	* symbol-summary.h: Added missing template keyword.
+
+2023-05-03  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/109473
+	* tree-vect-loop.c (get_initial_def_for_reduction):
+	Convert the scalar values to the vector component type
+	before using it to build the vector for the initial value.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-04-12  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/109410
+	* tree-ssa-reassoc.c (build_and_add_sum): Split edge from entry
+	block if first statement of the function is a call to returns_twice
+	function.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-03-28  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/106190
+	* sanopt.c (pass_sanopt::execute): Return TODO_cleanup_cfg if any
+	of the IFN_{UB,HWA,A}SAN_* internal fns are lowered.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-03-28  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/109276
+	* config/i386/i386.c (assign_386_stack_local): For DImode
+	with SLOT_FLOATxFDI_387 and -m32 -mpreferred-stack-boundary=2 pass
+	align 32 rather than 0 to assign_stack_local.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-03-26  Jakub Jelinek  <jakub@redhat.com>
+
+	PR ipa/105685
+	* predict.c (compute_function_frequency): Don't call
+	warn_function_cold if function already has cold attribute.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-03-23  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/109176
+	* tree-vect-generic.c (expand_vector_condition): If a has
+	vector boolean type and is a comparison, also check if both
+	the comparison and VEC_COND_EXPR could be successfully expanded
+	individually.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-03-17  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/105554
+	* function.h (push_struct_function): Add ABSTRACT_P argument defaulted
+	to false.
+	* function.c (push_struct_function): Add ABSTRACT_P argument, pass it
+	to allocate_struct_function instead of false.
+	* tree-inline.c (initialize_cfun): Don't copy DECL_ARGUMENTS
+	nor DECL_RESULT here.  Pass true as ABSTRACT_P to
+	push_struct_function.  Call targetm.target_option.relayout_function
+	after it.
+	(tree_function_versioning): Formatting fix.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-03-17  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/108685
+	* omp-expand.c (expand_omp_for_ordered_loops): Add L0_BB argument,
+	use its loop_father rather than BODY_BB's loop_father.
+	(expand_omp_for_generic): Adjust expand_omp_for_ordered_loops caller.
+	If broken_loop with ordered > collapse and at least one of those
+	extra loops aren't guaranteed to have at least one iteration, change
+	l0_bb's loop_father to entry_bb's loop_father.  Set cont_bb's
+	loop_father to l0_bb's loop_father rather than l1_bb's.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-03-04  Jakub Jelinek  <jakub@redhat.com>
+
+	PR testsuite/108973
+	* selftest-diagnostic.c
+	(test_diagnostic_context::test_diagnostic_context): Set
+	caret_max_width to 80.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-03-01  Jakub Jelinek  <jakub@redhat.com>
+
+	PR debug/108967
+	* cfgexpand.c (expand_debug_expr): Handle WIDEN_{PLUS,MINUS}_EXPR
+	and VEC_WIDEN_{PLUS,MINUS}_{HI,LO}_EXPR.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-02-24  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/108854
+	* cgraphclones.c (duplicate_thunk_for_node): If no parameter
+	changes are needed, copy at least DECL_ARGUMENTS PARM_DECL
+	nodes and adjust their DECL_CONTEXT.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-02-24  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/108881
+	* config/i386/i386-builtin.def (__builtin_ia32_cvtne2ps2bf16_v16hi,
+	__builtin_ia32_cvtne2ps2bf16_v16hi_mask,
+	__builtin_ia32_cvtne2ps2bf16_v16hi_maskz,
+	__builtin_ia32_cvtne2ps2bf16_v8hi,
+	__builtin_ia32_cvtne2ps2bf16_v8hi_mask,
+	__builtin_ia32_cvtne2ps2bf16_v8hi_maskz,
+	__builtin_ia32_cvtneps2bf16_v8sf_mask,
+	__builtin_ia32_cvtneps2bf16_v8sf_maskz,
+	__builtin_ia32_cvtneps2bf16_v4sf_mask,
+	__builtin_ia32_cvtneps2bf16_v4sf_maskz,
+	__builtin_ia32_dpbf16ps_v8sf, __builtin_ia32_dpbf16ps_v8sf_mask,
+	__builtin_ia32_dpbf16ps_v8sf_maskz, __builtin_ia32_dpbf16ps_v4sf,
+	__builtin_ia32_dpbf16ps_v4sf_mask,
+	__builtin_ia32_dpbf16ps_v4sf_maskz): Require also
+	OPTION_MASK_ISA_AVX512VL.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-02-09  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/100758
+	* common/config/i386/cpuinfo.h (cpu_indicator_init): Call
+	get_available_features for all CPUs with max_level >= 1, rather
+	than just Intel or AMD.
+
+2023-05-02  Andrew Pinski  <apinski@marvell.com>
+
+	Backported from master:
+	2023-02-09  Andrew Pinski  <apinski@marvell.com>
+
+	PR tree-optimization/108688
+	* match.pd (bit_field_ref [bit_insert]): Avoid generating
+	BIT_FIELD_REFs of non-mode-precision integral operands.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-02-08  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/108692
+	* tree-vect-patterns.c (vect_widened_op_tree): If rhs_code is
+	widened_code which is different from code, don't call
+	vect_look_through_possible_promotion but instead just check op is
+	SSA_NAME with integral type for which vect_is_simple_use is true
+	and call set_op on this_unprom.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-02-02  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/108435
+	* tree-nested.c (convert_nonlocal_omp_clauses)
+	<case OMP_CLAUSE_LASTPRIVATE>: If info->new_local_var_chain and *seq
+	is not a GIMPLE_BIND, wrap the sequence into a new GIMPLE_BIND
+	before calling declare_vars.
+	(convert_nonlocal_omp_clauses) <case OMP_CLAUSE_LINEAR>: Merge
+	with the OMP_CLAUSE_LASTPRIVATE handling except for whether
+	seq is initialized to &OMP_CLAUSE_LASTPRIVATE_GIMPLE_SEQ (clause)
+	or &OMP_CLAUSE_LINEAR_GIMPLE_SEQ (clause).
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-02-01  Jakub Jelinek  <jakub@redhat.com>
+
+	PR debug/108573
+	* ree.c (combine_reaching_defs): Don't return false for paradoxical
+	subregs in DEBUG_INSNs.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-01-31  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/108596
+	* bb-reorder.c (fix_up_fall_thru_edges): Handle the case where cur_bb
+	ends with asm goto and has a crossing fallthrough edge to the same bb
+	that contains at least one of its labels by restoring EDGE_CROSSING
+	flag even on possible edge from cur_bb to new_bb successor.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-01-27  Jakub Jelinek  <jakub@redhat.com>
+
+	PR other/108560
+	* doc/extend.texi: Fix up return type of __builtin_va_arg_pack_len
+	from size_t to int.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-01-25  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/108498
+	* gimple-ssa-store-merging.c (class store_operand_info):
+	End coment with full stop rather than comma.
+	(split_group): Likewise.
+	(merged_store_group::apply_stores): Clear string_concatenation if
+	start or end aren't on a byte boundary.
+
+2023-05-02  Eric Biggers  <ebiggers@google.com>
+
+	Backported from master:
+	2023-01-24  Eric Biggers  <ebiggers@google.com>
+
+	PR bootstrap/90543
+	* optc-save-gen.awk: Fix copy-and-paste error.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-01-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/108459
+	* omp-expand.c (expand_omp_for_init_counts): Use fold_build1 rather
+	than fold_unary for NEGATE_EXPR.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-01-04  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/108237
+	* generic-match-head.c: Include tree-pass.h.
+	(canonicalize_math_p, optimize_vectors_before_lowering_p): Define
+	to false if cfun and cfun->curr_properties has PROP_gimple_opt_math
+	resp. PROP_gimple_lvec property set.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-01-03  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/108264
+	* expr.c (store_expr): For stores into SUBREG_PROMOTED_* targets
+	from source which doesn't have scalar integral mode first convert
+	it to outer_mode.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-12-23  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/108068
+	* tree.h (real_maybe_zerop): Declare.
+	* tree.c (real_maybe_zerop): Define.
+	* tree-ssa-dom.c (record_edge_info): Use it instead of
+	real_zerop or TREE_CODE (op1) == SSA_NAME || real_zerop.  Always set
+	can_infer_simple_equiv to false for decimal floating point types.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-12-22  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/108193
+	* cse.c (compute_const_anchors): Change n type to
+	unsigned HOST_WIDE_INT, adjust comparison against it to avoid
+	warnings.  Formatting fix.
+	(insert_const_anchor): Use gen_int_mode instead of GEN_INT.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-12-16  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/106751
+	* loop-invariant.c (move_invariant_reg): If preheader bb ends
+	with a JUMP_INSN, split the preheader edge and emit invariants
+	into the new preheader basic block.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-12-15  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/108095
+	* tree-into-ssa.c (maybe_register_def): Insert debug stmt
+	on all non-EH edges from asm goto if they have a single
+	predecessor rather than asserting there is at most one such edge.
+	Test whether there are no PHI nodes next to the single predecessor
+	test.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-12-10  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/107997
+	* tree-ssa-loop-ivopts.c: Include cfganal.h.
+	(create_new_iv) <case IP_END>: If ip_end_pos bb is non-empty and ends
+	with a stmt which ends bb, instead of adding iv update after it split
+	the latch edge and insert iterator into the new latch bb.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-12-08  Jakub Jelinek  <jakub@redhat.com>
+
+	PR debug/106719
+	* cfgbuild.c (find_bb_boundaries): If there are NOTEs in between
+	debug_insn (seen after flow_transfer_insn) and insn, move NOTEs
+	before all the DEBUG_INSNs and split after NOTEs.  If there are
+	other insns like jump table data, clear debug_insn.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-11-28  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/106875
+	* config/i386/i386.opt (x_ix86_abi): Remove TargetSave.
+	(ix86_abi): Replace it with TargetVariable.
+	* config/i386/i386-options.c (ix86_function_specific_save,
+	ix86_function_specific_restore): Don't save and restore x_ix86_abi.
+
+2023-05-02  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-11-24  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/107317
+	* asan.c: Include diagnostic-core.h.
+	(asan_emit_stack_protection): Return NULL early if seen_error ().
+
+2023-05-02  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2023-02-17  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/108821
+	* tree-ssa-loop-im.c (sm_seq_valid_bb): We can also not
+	move volatile accesses.
+
+2023-05-02  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2023-03-27  Richard Biener  <rguenther@suse.de>
+
+	PR lto/109263
+	* lto-wrapper.c (run_gcc): Parse alternate debug options
+	as well, they always enable debug.
+
+2023-05-02  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2023-04-21  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/109573
+	* tree-vect-loop.c (vectorizable_live_operation): Allow
+	unhandled SSA copy as well.  Demote assert to checking only.
+
+2023-05-02  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2023-04-25  Richard Biener  <rguenther@suse.de>
+
+	PR rtl-optimization/109585
+	* tree-ssa-alias.c (aliasing_component_refs_p): Fix typo.
+
+2023-05-02  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2023-04-14  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/109502
+	* tree-vect-stmts.c (vectorizable_assignment): Fix
+	check for conversion between mask and non-mask types.
+
+2023-05-02  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2023-04-12  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/109473
+	* tree-vect-loop.c (vect_create_epilog_for_reduction):
+	Convert scalar result to the computation type before performing
+	the reduction adjustment.
+
+2023-05-02  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2023-02-02  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/108625
+	* genmatch.c (expr::gen_transform): Also disallow resimplification
+	from pushing to lseq with force_leaf.
+	(dt_simplify::gen_1): Likewise.
+
+2023-05-02  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-12-13  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/108076
+	* tree-if-conv.c (if_convertible_loop_p_1): Reject blocks
+	with non-local or forced labels that we later remove
+	labels from.
+
+2023-05-02  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-12-22  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/107451
+	* tree-vect-stmts.c (vectorizable_load): Avoid loading
+	SLP group members from group numbers in excess of the
+	vectorization factor.
+
+2023-05-02  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2023-03-29  Richard Biener  <rguenther@suse.de>
+
+	PR ipa/106124
+	* dwarf2out.c (lookup_type_die): Reset TREE_ASM_WRITTEN
+	so we can re-create the DIE for the type if required.
+
+2023-04-24  Haochen Gui  <guihaoc@gcc.gnu.org>
+
+	PR target/108812
+	* config/rs6000/vsx.md (vsx_sign_extend_qi_<mode>): Rename to...
+	(vsx_sign_extend_v16qi_<mode>): ... this.
+	(vsx_sign_extend_hi_<mode>): Rename to...
+	(vsx_sign_extend_v8hi_<mode>): ... this.
+	(vsx_sign_extend_si_v2di): Rename to...
+	(vsx_sign_extend_v4si_v2di): ... this.
+	(vsignextend_qi_<mode>): Remove.
+	(vsignextend_hi_<mode>): Remove.
+	(vsignextend_si_v2di): Remove.
+	(vsignextend_v2di_v1ti): Remove.
+	(*xxspltib_<mode>_split): Replace gen_vsx_sign_extend_qi_v2di with
+	gen_vsx_sign_extend_v16qi_v2di and gen_vsx_sign_extend_qi_v4si
+	with gen_vsx_sign_extend_v16qi_v4si.
+	* config/rs6000/rs6000.md (split for DI constant generation):
+	Replace gen_vsx_sign_extend_qi_si with gen_vsx_sign_extend_v16qi_si.
+	(split for HSDI constant generation): Replace gen_vsx_sign_extend_qi_di
+	with gen_vsx_sign_extend_v16qi_di and gen_vsx_sign_extend_qi_si
+	with gen_vsx_sign_extend_v16qi_si.
+	* config/rs6000/rs6000-builtin.def (__builtin_altivec_vsignextsb2d):
+	Set ICODE to vsx_sign_extend_v16qi_v2di.
+	(__builtin_altivec_vsignextsb2w): Set ICODE to
+	vsx_sign_extend_v16qi_v4si.
+	(__builtin_altivec_visgnextsh2d): Set ICODE to
+	vsx_sign_extend_v8hi_v2di.
+	(__builtin_altivec_vsignextsh2w): Set ICODE to
+	vsx_sign_extend_v8hi_v4si.
+	(__builtin_altivec_vsignextsw2d): Set ICDE to
+	vsx_sign_extend_si_v2di.
+	(__builtin_altivec_vsignext): Set ICODE to vsx_sign_extend_v2di_v1ti.
+
+2023-04-18  Philipp Tomsich  <philipp.tomsich@vrull.eu>
+
+	Backported from master:
+	2023-01-31  Philipp Tomsich  <philipp.tomsich@vrull.eu>
+
+	PR target/108589
+	* config/aarch64/aarch64.c (aarch_macro_fusion_pair_p): Check
+	REG_P on SET_DEST.
+
+2023-04-17  Philipp Tomsich  <philipp.tomsich@vrull.eu>
+
+	Backported from master:
+	2023-04-17  Philipp Tomsich  <philipp.tomsich@vrull.eu>
+		    Di Zhao  <di.zhao@amperecomputing.com>
+
+	* config/aarch64/aarch64-tuning-flags.def (AARCH64_EXTRA_TUNING_OPTION):
+	Add AARCH64_EXTRA_TUNE_NO_LDP_COMBINE.
+	* config/aarch64/aarch64.c (aarch64_operands_ok_for_ldpstp):
+	Check for the above tuning option when processing loads.
+
+2023-04-17  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-05-05  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105484
+	* gimple-isel.cc (gimple_expand_vec_set_expr): Clean EH, return
+	whether the CFG changed.
+	(gimple_expand_vec_exprs): When the CFG changed, clean it up.
+
+2023-04-17  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-02-09  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/104464
+	* gimple-isel.cc (gimple_expand_vec_cond_expr): Postpone
+	throwing check to after unproblematic replacement.
+
+2023-04-17  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-02-09  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/104450
+	* gimple-isel.cc: Pass cfun around.
+	(+gimple_expand_vec_cond_expr): Do not combine a throwing
+	comparison with the select.
+
+2023-04-17  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2023-04-13  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/109491
+	* tree-ssa-sccvn.c (expressions_equal_p): Restore the
+	NULL operands test.
+
+2023-04-17  Kewen Lin  <linkw@linux.ibm.com>
+
+	Backported from master:
+	2023-04-04  Kewen Lin  <linkw@linux.ibm.com>
+
+	PR target/108699
+	* config/rs6000/altivec.md (*p9v_parity<mode>2): Rename to ...
+	(rs6000_vprtyb<mode>2): ... this.
+	* config/rs6000/rs6000-builtin.def (VPRTYBD): Replace parityv2di2 with
+	rs6000_vprtybv2di2.
+	(VPRTYBW): Replace parityv4si2 with rs6000_vprtybv4si2.
+	(VPRTYBQ): Replace parityv1ti2 with rs6000_vprtybv1ti2.
+	* config/rs6000/vector.md (parity<mode>2 with VEC_IP): Expand with
+	popcountv16qi2 and the corresponding rs6000_vprtyb<mode>2.
+
+2023-04-17  Kewen Lin  <linkw@linux.ibm.com>
+
+	Backported from master:
+	2023-04-04  Kewen Lin  <linkw@linux.ibm.com>
+
+	PR target/108807
+	* config/rs6000/rs6000.c (rs6000_expand_vector_set_var_p9): Fix gen
+	function for permutation control vector by considering big endianness.
+
+2023-04-13  Philipp Tomsich  <philipp.tomsich@vrull.eu>
+
+	Backported from master:
+	2023-03-27  Philipp Tomsich  <philipp.tomsich@vrull.eu>
+		    Jiangning Liu  <jiangning.liu@amperecomputing.com>
+		    Manolis Tsamis  <manolis.tsamis@vrull.eu>
+
+	* config/aarch64/aarch64.c: Update vector costs for ampere1.
+
+2023-04-11  Michael Meissner  <meissner@linux.ibm.com>
+
+	PR target/109067
+	* config/rs6000/rs6000.c (create_complex_muldiv): Delete.
+	(init_float128_ieee): Delete code to switch complex multiply and divide
+	for long double.  Backport from master, 3/20/2023.
+	(complex_multiply_builtin_code): New helper function.
+	(complex_divide_builtin_code): Likewise.
+	(rs6000_mangle_decl_assembler_name): Add support for mangling the name
+	of complex 128-bit multiply and divide built-in functions.
+
+2023-03-28  Eric Botcazou  <ebotcazou@adacore.com>
+
+	PR target/109140
+	* config/sparc/sparc.c (sparc_expand_vcond): Call signed_condition
+	on operand #3 to get the final condition code.  Use std::swap.
+	* config/sparc/sparc.md (vcondv8qiv8qi): New VIS 4 expander.
+	(fucmp<gcond:code>8<P:mode>_vis): Move around.
+	(fpcmpu<gcond:code><GCM:gcm_name><P:mode>_vis): Likewise.
+	(vcondu<GCM:mode><GCM:mode>): New VIS 4 expander.
+
+2023-03-09  Tobias Burnus  <tobias@codesourcery.com>
+
+	Backported from master:
+	2023-03-01  Tobias Burnus  <tobias@codesourcery.com>
+
+	PR middle-end/108546
+	* omp-low.c (lower_omp_target): Remove optional handling
+	on the receiver side, i.e. inside target (data), for
+	use_device_ptr.
+
+2023-02-24  Sebastian Huber  <sebastian.huber@embedded-brains.de>
+
+	Backported from master:
+	2023-02-24  Sebastian Huber  <sebastian.huber@embedded-brains.de>
+
+	* config/riscv/t-rtems: Keep only -mcmodel=medany 64-bit multilibs.
+	Add non-compact 32-bit multilibs.
+
+2023-02-20  Alex Coplan  <alex.coplan@arm.com>
+
+	Backported from master:
+	2023-02-06  Alex Coplan  <alex.coplan@arm.com>
+
+	PR target/104921
+	* config/aarch64/aarch64-simd.md (aarch64_bfmlal<bt>_lane<q>v4sf):
+	Use correct constraint for operand 3.
+
+2023-02-15  Eric Botcazou  <ebotcazou@adacore.com>
+
+	PR target/90458
+	* config/i386/i386.c (ix86_compute_frame_layout): Disable the
+	effects of -fstack-clash-protection for TARGET_STACK_PROBE.
+	(ix86_expand_prologue): Likewise.
+
+2023-02-13  Kewen Lin  <linkw@linux.ibm.com>
+
+	Backported from master:
+	2023-01-18  Kewen Lin  <linkw@linux.ibm.com>
+
+	PR target/108348
+	* config/rs6000/rs6000.c (rs6000_opaque_type_invalid_use_p): Add the
+	support for invalid uses of MMA opaque type in function arguments.
+
+2023-02-13  Kewen Lin  <linkw@linux.ibm.com>
+
+	Backported from master:
+	2023-01-16  Kewen Lin  <linkw@linux.ibm.com>
+
+	PR target/108272
+	* config/rs6000/rs6000.c (rs6000_opaque_type_invalid_use_p): Add the
+	support for invalid uses in inline asm, factor out the checking and
+	erroring to lambda function check_and_error_invalid_use.
+
+2023-02-07  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-09-02  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/106809
+	* tree-ssa-sccvn.c (dominaged_by_p_w_unex): Check we have
+	more than one successor before doing extra work.
+
+2023-02-02  Martin Jambor  <mjambor@suse.cz>
+
+	Backported from master:
+	2023-01-18  Martin Jambor  <mjambor@suse.cz>
+
+	PR ipa/107944
+	* cgraph.c (cgraph_node::remove): Check whether nodes up the
+	lcone_of chain also do not need the body.
+
+2023-01-26  Dimitar Dimitrov  <dimitar@dinux.eu>
+
+	Backported from master:
+	2023-01-22  Dimitar Dimitrov  <dimitar@dinux.eu>
+
+	* config/pru/pru.h (CLZ_DEFINED_VALUE_AT_ZERO): Fix value for QI
+	and HI input modes.
+	* config/pru/pru.md (clz): Fix generated code for QI and HI
+	input modes.
+
+2023-01-25  Christophe Lyon  <christophe.lyon@arm.com>
+
+	Backported from master:
+	2023-01-12  Christophe Lyon  <christophe.lyon@arm.com>
+		    Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/aarch64/aarch64.c (aarch64_function_arg_alignment): Fix
+	comment.
+	(aarch64_layout_arg): Factorize warning conditions.
+	(aarch64_function_arg_boundary): Fix typo.
+	* function.c (currently_expanding_function_start): New variable.
+	(expand_function_start): Handle
+	currently_expanding_function_start.
+	* function.h (currently_expanding_function_start): Declare.
+
+2023-01-24  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-11-11  Richard Biener  <rguenther@suse.de>
+		    Nikita Voronov  <nik_1357@mail.ru>
+
+	PR tree-optimization/107554
+	* tree-ssa-strlen.c (strlen_pass::count_nonzero_bytes):
+	Use unsigned HOST_WIDE_INT type for the strlen.
+
+2023-01-24  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-10-21  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/107323
+	* tree-loop-distribution.c (pg_unmark_merged_alias_ddrs):
+	New function.
+	(loop_distribution::break_alias_scc_partitions): Revert
+	postorder save/restore from the PR94125 fix.  Instead
+	make sure to not ignore edges from SCCs we are going to
+	merge.
+
+2023-01-24  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-10-14  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/107254
+	* tree-vect-slp.c (vect_slp_analyze_node_operations_1):
+	For permutes also analyze live lanes.
+	(vect_schedule_slp_node): For permutes also code generate
+	live lane extracts.
+
+2023-01-24  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-10-11  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/107212
+	* tree-vect-loop.c (vectorizable_reduction): Make sure to
+	set STMT_VINFO_REDUC_DEF for all live lanes in a SLP
+	reduction.
+	(vectorizable_live_operation): Do not pun to the SLP
+	node representative for reduction epilogue generation.
+
+2023-01-24  Sergei Trofimovich  <siarheit@google.com>
+
+	Backported from master:
+	2022-08-16  Sergei Trofimovich  <siarheit@google.com>
+
+	PR driver/106624
+	* gcc.c (driver::detect_jobserver): Allocate storage xputenv()
+	argument using xstrdup().
+
+2023-01-16  Alex Coplan  <alex.coplan@arm.com>
+
+	Backported from master:
+	2022-12-01  Alex Coplan  <alex.coplan@arm.com>
+
+	* varasm.c (assemble_variable): Fix type confusion bug when
+	checking for ".vtable_map_vars" section.
+
+2023-01-11  Eric Botcazou  <ebotcazou@adacore.com>
+
+	PR tree-optimization/108199
+	* tree-sra.c (sra_modify_expr): Deal with reverse storage order
+	for bit-field references.
+
+2023-01-10  Stam Markianos-Wright  <stam.markianos-wright@arm.com>
+
+	Backported from master:
+	2022-12-30  Stam Markianos-Wright  <stam.markianos-wright@arm.com>
+
+	PR target/107714
+	* config/arm/arm-protos.h (mve_struct_mem_operand): New protoype.
+	* config/arm/arm.c (mve_struct_mem_operand): New function.
+	* config/arm/constraints.md (Ug): New constraint.
+	* config/arm/mve.md (mve_vst4q<mode>): Change constraint.
+	(mve_vst2q<mode>): Likewise.
+	(mve_vld4q<mode>): Likewise.
+	(mve_vld2q<mode>): Likewise.
+	* config/arm/predicates.md (mve_struct_operand): New predicate.
+
+2023-01-05  Kewen Lin  <linkw@linux.ibm.com>
+
+	PR target/106736
+	* config/rs6000/mma.md (define_expand movoo): Call function
+	rs6000_opaque_type_invalid_use_p to check and emit error message for
+	the invalid use of opaque type.
+	(define_expand movxo): Likewise.
+	* config/rs6000/rs6000-protos.h
+	(rs6000_opaque_type_invalid_use_p): New function declaration.
+	(currently_expanding_gimple_stmt): New extern declaration.
+	* config/rs6000/rs6000.c (rs6000_opaque_type_invalid_use_p): New
+	function.
+
+2022-12-22  Martin Liska  <mliska@suse.cz>
+
+	Backported from master:
+	2022-08-10  Martin Liska  <mliska@suse.cz>
+
+	* opts-jobserver.h: Add one member.
+	* opts-common.c (jobserver_info::jobserver_info): Parse FIFO
+	format of --jobserver-auth.
+
+2022-12-22  Martin Liska  <mliska@suse.cz>
+
+	Backported from master:
+	2022-08-10  Martin Liska  <mliska@suse.cz>
+
+	* gcc.c (driver::detect_jobserver): Remove and move to
+	jobserver.h.
+	* lto-wrapper.c (jobserver_active_p): Likewise.
+	(run_gcc): Likewise.
+	* opts-jobserver.h: New file.
+	* opts-common.c (jobserver_info::jobserver_info): New function.
+
+2022-12-15  Sebastian Pop  <spop@amazon.com>
+
+	PR target/98776
+	* config/aarch64/aarch64-protos.h (aarch64_output_patchable_area):
+	Declared.
+	* config/aarch64/aarch64.c (aarch64_print_patchable_function_entry):
+	Emit an UNSPECV_PATCHABLE_AREA pseudo instruction.
+	(aarch64_output_patchable_area): New.
+	* config/aarch64/aarch64.md (UNSPECV_PATCHABLE_AREA): New.
+	(patchable_area): Define.
+
+2022-12-12  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-10-06  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/107107
+	* tree-ssa-sccvn.c (visit_reference_op_store): Do not
+	affect value-numbering when doing the tail merging
+	MODIFY_EXPR lookup.
+
+2022-12-01  liuhongt  <hongtao.liu@intel.com>
+
+	PR target/107863
+	* config/i386/i386-expand.c (ix86_expand_vec_set_builtin):
+	Convert op1 to target mode whenever mode mismatch.
+
+2022-11-30  John David Anglin  <danglin@gcc.gnu.org>
+
+	* config/pa/pa.md (addvdi3): Force operand 2 to a register.
+	Remove "addi,tsv,*" instruction from unamed pattern.
+	(subvdi3): Force operand 1 to a register.
+	Remove "subi,tsv" instruction from from unamed pattern.
+
+2022-11-29  Max Filippov  <jcmvbkbc@gmail.com>
+
+	Backported from master:
+	2022-11-08  Max Filippov  <jcmvbkbc@gmail.com>
+
+	PR rtl-optimization/107482
+	* ira-color.c (assign_hard_reg): Only call
+	update_costs_from_copies when retry_p is false.
+
+2022-11-25  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* range-op.cc (operator_bitwise_xor::op1_range): Fix thinko.
+
+2022-11-25  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* tree-loop-distribution.c (loop_distribution::classify_builtin_ldst):
+	Bail out if source and destination do not have the same storage order.
+
+2022-11-21  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-11-21  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/107748
+	* config/i386/smmintrin.h (_mm_extract_ps): Uglify names of local
+	variables and union members.
+
+2022-11-21  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-11-20  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/107183
+	* reg-stack.c (next_flags_user): Add DEBUG_SEEN argument.
+	If >= 0 and a DEBUG_INSN would be otherwise returned, set
+	DEBUG_SEEN to 1 and ignore it.
+	(swap_rtx_condition): Add DEBUG_SEEN argument.  In >= 0
+	mode only set DEBUG_SEEN to 1 if problematic DEBUG_ISNSs
+	were seen and revert all changes on success in that case.
+	Don't try to recog_memoized DEBUG_INSNs.
+	(compare_for_stack_reg): Adjust swap_rtx_condition caller.
+	If it returns true and debug_seen is 1, call swap_rtx_condition
+	again with debug_seen -1.
+
+2022-11-19  Thomas Schwinge  <thomas@codesourcery.com>
+
+	Backported from master:
+	2022-11-19  Thomas Schwinge  <thomas@codesourcery.com>
+
+	* config/nvptx/nvptx.h (STARTFILE_SPEC): Fix 'crt0.o' for
+	'-mmainkernel'.
+
+2022-11-16  Philipp Tomsich  <philipp.tomsich@vrull.eu>
+
+	Backported from master:
+	2022-11-14  Philipp Tomsich  <philipp.tomsich@vrull.eu>
+
+	* config/aarch64/aarch64-cores.def (AARCH64_CORE): Add ampere1a.
+	* config/aarch64/aarch64-cost-tables.h: Add ampere1a_extra_costs.
+	* config/aarch64/aarch64-fusion-pairs.def (AARCH64_FUSION_PAIR):
+	Define a new fusion pair for A+B+1/A-B-1 (i.e., add/subtract two
+	registers and then +1/-1).
+	* config/aarch64/aarch64-tune.md: Regenerate.
+	* config/aarch64/aarch64.c (aarch_macro_fusion_pair_p): Implement
+	idiom-matcher for the new fusion pair.
+	* doc/invoke.texi: Add ampere1a.
+
+2022-11-08  H.J. Lu  <hjl.tools@gmail.com>
+
+	Backported from master:
+	2022-10-25  H.J. Lu  <hjl.tools@gmail.com>
+
+	PR target/107304
+	* expr.c (get_inner_reference): Always use TYPE_MODE for vector
+	field with vector raw mode.
+
+2022-11-05  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2022-11-05  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR c/41041
+	* doc/cppopts.texi: Document -fwide-exec-charset defaults
+	correctly.
+
+2022-11-04  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* fold-const.c (operand_compare::operand_equal_p) <COMPONENT_REF>:
+	Do not take into account operand 2.
+	(operand_compare::hash_operand) <COMPONENT_REF>: Likewise.
+
+2022-11-04  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-09-24  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/107001
+	* omp-low.c (lower_omp_taskgroup): Don't add GOMP_RETURN statement
+	at the end.
+	* omp-expand.c (build_omp_regions_1): Clarify GF_OMP_TARGET_KIND_DATA
+	is not stand-alone directive.  For GIMPLE_OMP_TASKGROUP, also don't
+	update parent.
+	(omp_make_gimple_edges) <case GIMPLE_OMP_TASKGROUP>: Reset
+	cur_region back after new_omp_region.
+
+2022-11-04  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-08-24  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/106721
+	* config/i386/sse.md
+	(avx512er_vmrcp28<mode><mask_name><round_saeonly_name>): Fix typo,
+	mask_opernad3 -> mask_operand3.
+
+2022-11-04  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-07-27  Jakub Jelinek  <jakub@redhat.com>
+
+	PR debug/106261
+	* cgraphunit.c (cgraph_node::assemble_thunks_and_aliases): Don't
+	output asm thunks for -dx.
+
+2022-11-04  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-07-01  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/106144
+	* wide-int.cc (wi::shifted_mask): If end >= prec, return right after
+	emitting element for shift or if shift is 0 first element after start.
+	(wide_int_cc_tests): Add tests for equivalency of wi::mask and
+	wi::shifted_mask with 0 start.
+
+2022-11-04  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-06-21  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/106032
+	* ifcvt.c (noce_try_sign_mask): Punt if !t_unconditional, and
+	t may_trap_or_fault_p, even if it is cheap.
+
+2022-11-04  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-06-21  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/106030
+	* expr.c (expand_cond_expr_using_cmove): Pass NULL_RTX instead of
+	temp to expand_operands if mode has been promoted.
+
+2022-10-27  Torbjörn SVENSSON  <torbjorn.svensson@foss.st.com>
+
+	Backported from master:
+	2022-10-27  Torbjörn SVENSSON  <torbjorn.svensson@foss.st.com>
+		    Yvan ROUX  <yvan.roux@foss.st.com>
+
+	* ira.c: Resize array after reg number increased.
+
+2022-10-26  Philipp Tomsich  <philipp.tomsich@vrull.eu>
+
+	Backported from master:
+	2022-10-06  Philipp Tomsich  <philipp.tomsich@vrull.eu>
+
+	* config/aarch64/aarch64-cores.def (AARCH64_CORE): Update
+	Ampere-1 core entry.
+
+2022-10-26  Philipp Tomsich  <philipp.tomsich@vrull.eu>
+
+	Backported from master:
+	2022-10-06  Philipp Tomsich  <philipp.tomsich@vrull.eu>
+
+	* config/aarch64/driver-aarch64.c (readline): Fix off-by-one.
+
+2022-10-25  Stefan Schulze Frielinghaus  <stefansf@linux.ibm.com>
+
+	Backported from master:
+	2022-10-19  Stefan Schulze Frielinghaus  <stefansf@linux.ibm.com>
+
+	PR target/106355
+	* config/s390/s390.c (s390_call_saved_register_used): For a
+	parameter with BLKmode fix determining number of consecutive
+	registers.
+
+2022-10-25  Martin Liska  <mliska@suse.cz>
+
+	Backported from master:
+	2022-10-25  Martin Liska  <mliska@suse.cz>
+
+	PR target/107364
+	* common/config/i386/i386-cpuinfo.h (enum processor_vendor):
+	Fix pedantic warning.
+
+2022-10-25  Martin Liska  <mliska@suse.cz>
+
+	Backported from master:
+	2022-10-24  Martin Liska  <mliska@suse.cz>
+
+	PR target/107364
+	* common/config/i386/i386-cpuinfo.h (enum processor_vendor):
+	  Reorder enum values as BUILTIN_VENDOR_MAX should not point
+	  in the middle of the valid enum values.
+
+2022-10-20  Richard Sandiford  <richard.sandiford@arm.com>
+
+	Backported from master:
+	2022-10-20  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/aarch64/aarch64-sve.md (*aarch64_brk<brk_op>_cc): Remove
+	merging alternative.
+	(*aarch64_brk<brk_op>_ptest): Likewise.
+
+2022-10-20  Richard Sandiford  <richard.sandiford@arm.com>
+
+	Backported from master:
+	2022-10-20  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/aarch64/iterators.md (SVE_BRKP): New iterator.
+	* config/aarch64/aarch64-sve.md (*aarch64_brkn_cc): New pattern.
+	(*aarch64_brkn_ptest): Likewise.
+	(*aarch64_brk<brk_op>_cc): Restrict to SVE_BRKP.
+	(*aarch64_brk<brk_op>_ptest): Likewise.
+
+2022-10-20  Richard Sandiford  <richard.sandiford@arm.com>
+
+	* config/aarch64/aarch64.h (AARCH64_FL_FOR_ARCH8_3): Add
+	AARCH64_FL_RCPC.
+	(AARCH64_ISA_RCPC): New macro.
+	* config/aarch64/aarch64-cores.def (thunderx3t110, zeus, neoverse-v1)
+	(neoverse-512tvb, saphira): Remove RCPC from these Armv8.3-A+ cores.
+	* config/aarch64/aarch64-c.c (aarch64_update_cpp_builtins): Define
+	__ARM_FEATURE_RCPC when appropriate.
+
+2022-10-19  Kewen Lin  <linkw@linux.ibm.com>
+
+	Backported from master:
+	2022-09-26  Kewen Lin  <linkw@linux.ibm.com>
+
+	PR target/96072
+	* config/rs6000/rs6000-logue.c (rs6000_emit_epilogue): Update the
+	condition for adding REG_CFA_DEF_CFA reg note with
+	frame_pointer_needed_indeed.
+
+2022-10-17  Pat Haugen  <pthaugen@linux.ibm.com>
+
+	PR target/99685
+	* config/rs6000/rs6000-call.c (rs6000_function_arg_advance_1): Bump
+	register count when not splitting IEEE 128-bit Complex.
+
+2022-10-17  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-09-14  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/106934
+	* tree-ssa.c (non_rewritable_mem_ref_base): Avoid BIT_FIELD_REFs
+	of bitfields.
+	(maybe_rewrite_mem_ref_base): Likewise.
+
+2022-10-17  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-09-09  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/106892
+	* tree-predcom.c (ref_at_iteration): Do not associate the
+	constant part of the offset into the MEM_REF offset
+	operand, across a non-zero offset.
+
+2022-10-17  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-07-26  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/106189
+	* gimple-array-bounds.cc (array_bounds_checker::check_mem_ref):
+	Divide using offset_ints.
+
+2022-10-14  Andre Vieira  <andre.simoesdiasvieira@arm.com>
+
+	Backported from master:
+	2022-07-25  Andre Vieira  <andre.simoesdiasvieira@arm.com>
+
+	* config/aarch64/aarch64.md (rbit<mode>2): Rename this ...
+	(@aarch64_rbit<mode>): ... to this and change it in...
+	(ffs<mode>2,ctz<mode>2): ... here.
+	(@aarch64_rev16<mode>): New.
+	* config/aarch64/aarch64-builtins.c: (aarch64_builtins):
+	Define the following enum AARCH64_REV16, AARCH64_REV16L,
+	AARCH64_REV16LL, AARCH64_RBIT, AARCH64_RBITL, AARCH64_RBITLL.
+	(aarch64_init_data_intrinsics): New.
+	(aarch64_general_init_builtins): Add call to
+	aarch64_init_data_intrinsics.
+	(aarch64_expand_builtin_data_intrinsic): New.
+	(aarch64_general_expand_builtin): Add call to
+	aarch64_expand_builtin_data_intrinsic.
+	* config/aarch64/arm_acle.h (__clz, __clzl, __clzll, __cls, __clsl,
+	__clsll, __rbit, __rbitl, __rbitll, __rev, __revl, __revll, __rev16,
+	__rev16l, __rev16ll, __ror, __rorl, __rorll, __revsh): New.
+
+2022-10-14  Eric Botcazou  <ebotcazou@adacore.com>
+
+	PR target/107248
+	* config/sparc/sparc.c (sparc_expand_prologue): Emit a frame
+	blockage for leaf functions.
+	(sparc_flat_expand_prologue): Emit frame instead of full blockage.
+	(sparc_expand_epilogue): Emit a frame blockage for leaf functions.
+	(sparc_flat_expand_epilogue): Emit frame instead of full blockage.
+
+2022-10-11  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-08-10  Richard Biener  <rguenther@suse.de>
+
+	PR lto/106540
+	PR lto/106334
+	* lto-streamer-in.c (lto_read_tree_1): Use lto_input_tree_1
+	to input DECL_INITIAL, avoiding to commit drefs.
+
+2022-10-11  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-08-10  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/106513
+	* gimple-ssa-store-merging.c (do_shift_rotate): Use uint64_t
+	for head_marker.
+
+2022-10-11  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-07-19  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/106331
+	* builtins.c (get_memory_rtx): Compute alignment from
+	the original address and set MEM_OFFSET to unknown when
+	we create a MEM_EXPR from the base object of the address.
+
+2022-10-11  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-07-01  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/106131
+	* tree-ssa-sccvn.c (vn_reference_lookup_3): Force alias-set
+	zero when offsetting the read looking through an aggregate
+	copy.
+
+2022-10-11  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-06-29  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/106112
+	* tree-ssa-sccvn.c (valueized_wider_op): Properly extend
+	a constant operand according to its type.
+
+2022-10-11  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-06-20  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/106027
+	* fold-const.c (fold_to_nonsharp_ineq_using_bound): Use the
+	type of the prevailing comparison for the new comparison type.
+	(fold_binary_loc): Use proper types for the A < X && A + 1 > Y
+	to A < X && A >= Y folding.
+
+2022-10-03  Sergei Trofimovich  <siarheit@google.com>
+
+	Backported from master:
+	2022-10-03  Sergei Trofimovich  <siarheit@google.com>
+
+	PR target/107064
+	* config/i386/t-i386: Add build-time dependencies against
+	i386-builtin-types.inc to i386-builtins.o, i386-expand.o,
+	i386-features.o.
+
+2022-09-29  H.J. Lu  <hjl.tools@gmail.com>
+
+	Backported from master:
+	2022-09-28  H.J. Lu  <hjl.tools@gmail.com>
+
+	PR target/107061
+	* config/i386/predicates.md (encodekey128_operation): Check
+	XMM4-XMM6 as clobbered.
+	(encodekey256_operation): Likewise.
+	* config/i386/sse.md (encodekey128u32): Clobber XMM4-XMM6.
+	(encodekey256u32): Likewise.
+
+2022-09-28  Kyrylo Tkachov  <kyrylo.tkachov@arm.com>
+
+	* config/aarch64/aarch64-cores.def (neoverse-v2): New entry.
+	* config/aarch64/aarch64-tune.md: Regenerate.
+	* doc/invoke.texi (AArch64 Options): Document neoverse-v2.
+
+2022-09-21  Richard Sandiford  <richard.sandiford@arm.com>
+
+	Backported from master:
+	2022-09-20  Richard Sandiford  <richard.sandiford@arm.com>
+
+	PR target/106491
+	* config/aarch64/aarch64-sve-builtins.cc (scalar_types)
+	(acle_vector_types, acle_svpattern, acle_svprfop): Add GTY
+	markup to (new) extern declarations instead of to the main
+	definition.
+
+2022-09-14  Tom de Vries  <tdevries@suse.de>
+
+	Backported from master:
+	2022-02-01  Tom de Vries  <tdevries@suse.de>
+
+	* config/nvptx/nvptx.c (nvptx_single): Use nvptx_uniform_warp_check.
+	* config/nvptx/nvptx.md (define_c_enum "unspecv"): Add
+	UNSPECV_UNIFORM_WARP_CHECK.
+	(define_insn "nvptx_uniform_warp_check"): New define_insn.
+
+2022-09-14  Tom de Vries  <tdevries@suse.de>
+
+	Backported from master:
+	2022-02-01  Tom de Vries  <tdevries@suse.de>
+
+	* config/nvptx/nvptx.c (nvptx_single): Use nvptx_warpsync.
+	* config/nvptx/nvptx.md (define_c_enum "unspecv"): Add
+	UNSPECV_WARPSYNC.
+	(define_insn "nvptx_warpsync"): New define_insn.
+
+2022-09-14  Thomas Schwinge  <thomas@codesourcery.com>
+
+	* config/nvptx/nvptx.h (TARGET_PTX_6_0): '#define' to 'false'.
+
+2022-09-12  Peter Bergner  <bergner@linux.ibm.com>
+
+	Backported from master:
+	2022-09-01  Peter Bergner  <bergner@linux.ibm.com>
+
+	PR target/101322
+	* config/rs6000/rs6000-call.c (rs6000_gimple_fold_mma_builtin):
+	Enforce the use of a valid MMA pointer type.
+
+2022-09-08  Sebastian Huber  <sebastian.huber@embedded-brains.de>
+
+	* config/rs6000/rtems.h (CPP_OS_DEFAULT_SPEC): Define __PPC_VRSAVE__ if
+	-mvrsave is present.
+	* config/rs6000/t-rtems: Add -mvrsave multilib variants for
+	-mcpu=e6500.
+
+2022-09-02  Richard Earnshaw  <rearnsha@arm.com>
+
+	Backported from master:
+	2022-08-03  Richard Earnshaw  <rearnsha@arm.com>
+
+	PR rtl-optimization/106187
+	* alias.h (mems_same_for_tbaa_p): Declare.
+	* alias.c (mems_same_for_tbaa_p): New function.
+	* dse.c (record_store): Use it instead of open-coding
+	alias check.
+	* cselib.h (cselib_redundant_set_p): Declare.
+	* cselib.c: Include alias.h
+	(cselib_redundant_set_p): New function.
+	* cfgcleanup.c: (mark_effect): Use cselib_redundant_set_p instead
+	of rtx_equal_for_cselib_p.
+	* postreload.c (reload_cse_simplify): Use cselib_redundant_set_p.
+	(reload_cse_noop_set_p): Delete.
+
+2022-09-02  Richard Earnshaw  <rearnsha@arm.com>
+
+	Backported from master:
+	2022-05-13  Richard Earnshaw  <rearnsha@arm.com>
+
+	PR target/105463
+	* config/arm/mve.md (*movmisalign<mode>_mve_store): Use
+	mve_memory_operand.
+	(*movmisalign<mode>_mve_load): Likewise.
+	* config/arm/vec-common.md (movmisalign<mode>): Convert to generator
+	form...
+	(@movmisalign<mode>): ... thus.  Use generic predicates and then
+	rework operands if they are not valid.  For MVE rework to a
+	narrower element size if the alignment is not high enough.
+
+2022-08-30  Peter Bergner  <bergner@linux.ibm.com>
+
+	Backported from master:
+	2022-08-28  Peter Bergner  <bergner@linux.ibm.com>
+
+	PR target/106017
+	* config/rs6000/rs6000.c (rs6000_invalid_conversion): Remove handling
+	of MMA pointer conversions.
+
+2022-08-24  Kewen.Lin  <linkw@gcc.gnu.org>
+
+	Backported from master:
+	2022-08-16  Kewen.Lin  <linkw@gcc.gnu.org>
+
+	PR target/103353
+	* config/rs6000/mma.md (define_expand movoo): Move TARGET_MMA condition
+	check to preparation statements and add handlings for !TARGET_MMA.
+	(define_expand movxo): Likewise.
+
+2022-08-17  Tobias Burnus  <tobias@codesourcery.com>
+
+	Backported from master:
+	2022-08-09  Tobias Burnus  <tobias@codesourcery.com>
+
+	PR middle-end/106492
+	* omp-low.c (lower_rec_input_clauses): Add missing folding
+	to data type of linear-clause list item.
+
+2022-08-16  Segher Boessenkool  <segher@kernel.crashing.org>
+
+	Backported from master:
+	2022-04-21  Segher Boessenkool  <segher@kernel.crashing.org>
+
+	PR target/103197
+	PR target/102146
+	* config/rs6000/rs6000.md (zero_extendqi<mode>2 for EXTQI): Disparage
+	the "Z" alternatives in {l,st}{f,xs}iwzx.
+	(zero_extendhi<mode>2 for EXTHI): Ditto.
+	(zero_extendsi<mode>2 for EXTSI): Ditto.
+	(*movsi_internal1): Ditto.
+	(*mov<mode>_internal1 for QHI): Ditto.
+	(movsd_hardfloat): Ditto.
+
+2022-08-12  Peter Bergner  <bergner@linux.ibm.com>
+
+	Backported from master:
+	2022-07-26  Peter Bergner  <bergner@linux.ibm.com>
+
+	PR c/106016
+	* expr.c (count_type_elements): Handle OPAQUE_TYPE.
+
+2022-08-08   Michael Meissner  <meissner@linux.ibm.com>
+
+	* config/rs6000/rs6000.c (rs6000_option_override_internal): Remove code
+	setting -mblock-ops-vector-pair.  Patch back ported from trunk, August
+	3rd, 2022.
+
+2022-08-02  Peter Bergner  <bergner@linux.ibm.com>
+
+	Backported from master:
+	2022-07-25  Peter Bergner  <bergner@linux.ibm.com>
+		    Kewen Lin  <linkw@linux.ibm.com>
+
+	PR testsuite/106345
+	* config/rs6000/rs6000.h (DRIVER_SELF_SPECS): Adjust -mdejagnu-cpu
+	to filter out all -mtune options.
+
+2022-08-02  Kewen Lin  <linkw@linux.ibm.com>
+
+	Backported from master:
+	2022-07-26  Kewen Lin  <linkw@linux.ibm.com>
+
+	PR target/106091
+	* config/rs6000/rs6000-p8swap.c (replace_swapped_aligned_store): Copy
+	REG_EH_REGION when replacing one store insn having it.
+	(replace_swapped_aligned_load): Likewise.
+
+2022-07-27  Maciej W. Rozycki  <macro@embecosm.com>
+
+	Backported from master:
+	2022-07-27  Maciej W. Rozycki  <macro@embecosm.com>
+
+	* config/riscv/riscv.md (stack_protect_set_<mode>): Remove
+	duplicate backslashes.
+
+2022-07-25  Sebastian Huber  <sebastian.huber@embedded-brains.de>
+
+	Backported from master:
+	2022-07-25  Sebastian Huber  <sebastian.huber@embedded-brains.de>
+
+	* config/rs6000/rtems.h (CPLUSPLUS_CPP_SPEC): Undef.
+
+2022-07-22  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-05-17  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105618
+	* tree-ssa-sink.c (statement_sink_location): For virtual
+	PHI uses ignore those defining the used virtual operand.
+
+2022-07-22  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2021-11-24  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/103193
+	* match.pd: Avoid canonicalizing (le/ge @0 @0) to (eq @0 @0)
+	with NaNs and -ftrapping-math.
+
+2022-07-22  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-05-04  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/103116
+	* tree-vect-stmts.c (get_group_load_store_type): Handle the
+	case we need peeling for gaps even though GROUP_GAP is zero.
+
+2022-07-21  Surya Kumari Jangala  <jskumari@linux.vnet.ibm.com>
+
+	Backported from master:
+	2022-06-14  Surya Kumari Jangala  <jskumari@linux.ibm.com>
+
+	PR rtl-optimization/105041
+	* regrename.c (check_new_reg_p): Use nregs value from du chain.
+
+2022-07-14   Michael Meissner  <meissner@linux.ibm.com>
+
+	* config/rs6000/rs6000.c (rs6000_option_override_internal): Do
+	not generate block copies with vector pair instructions if we are
+	tuning for power10.  Back port from master branch.
+
+2022-07-12  Martin Jambor  <mjambor@suse.cz>
+
+	Backported from master:
+	2022-07-04  Martin Jambor  <mjambor@suse.cz>
+
+	PR tree-optimization/105860
+	* tree-sra.c (build_reconstructed_reference): Start expr
+	traversal only just below the outermost union.
+
+2022-07-04  Richard Sandiford  <richard.sandiford@arm.com>
+
+	Backported from master:
+	2022-03-21  Richard Sandiford  <richard.sandiford@arm.com>
+
+	PR middle-end/104869
+	* rtl-ssa/accesses.h (clobber_group::prev_clobber): Declare.
+	(clobber_group::next_clobber): Likewise.
+	(def_lookup::prev_def): Rename to...
+	(def_lookup::last_def_of_prev_group): ...this.
+	(def_lookup::next_def): Rename to...
+	(def_lookup::first_def_of_next_group): ...this.
+	(def_lookup::matching_or_prev_def): Rename to...
+	(def_lookup::matching_set_or_last_def_of_prev_group): ...this.
+	(def_lookup::matching_or_next_def): Rename to...
+	(def_lookup::matching_set_or_first_def_of_next_group): ...this.
+	(def_lookup::prev_def): New function, taking the lookup insn as
+	argument.
+	(def_lookup::next_def): Likewise.
+	* rtl-ssa/member-fns.inl (def_lookup::prev_def): Rename to...
+	(def_lookup::last_def_of_prev_group): ...this.
+	(def_lookup::next_def): Rename to...
+	(def_lookup::first_def_of_next_group): ...this.
+	(def_lookup::matching_or_prev_def): Rename to...
+	(def_lookup::matching_set_or_last_def_of_prev_group): ...this.
+	(def_lookup::matching_or_next_def): Rename to...
+	(def_lookup::matching_set_or_first_def_of_next_group): ...this.
+	* rtl-ssa/movement.h (restrict_movement_for_dead_range): Update after
+	above renaming.
+	* rtl-ssa/accesses.cc (clobber_group::prev_clobber): New function.
+	(clobber_group::next_clobber): Likewise.
+	(def_lookup::prev_def): Likewise.
+	(def_lookup::next_def): Likewise.
+	(function_info::make_use_available): Pass the lookup insn to
+	def_lookup::prev_def and def_lookup::next_def.
+
+2022-06-24  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2022-06-24  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	* config/tilepro/gen-mul-tables.cc (tilegx_emit): Adjust loop
+	condition to avoid overflow.
+
+2022-06-23  Martin Liska  <mliska@suse.cz>
+
+	Backported from master:
+	2022-06-23  Martin Liska  <mliska@suse.cz>
+
+	PR ipa/105600
+	* ipa-icf.c (sem_item_optimizer::filter_removed_items):
+	Skip variables with body_removed.
+
+2022-06-20  Uros Bizjak  <ubizjak@gmail.com>
+
+	Backported from master:
+	2022-06-17  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/105209
+	* config/alpha/alpha-protos.h (alpha_store_data_bypass_p): New.
+	* config/alpha/alpha.c (alpha_store_data_bypass_p): New function.
+	(alpha_store_data_bypass_p_1): Ditto.
+	* config/alpha/ev4.md: Use alpha_store_data_bypass_p instead
+	of generic store_data_bypass_p.
+	(ev4_ist_c): Remove insn reservation.
+
+2022-06-20  Segher Boessenkool  <segher@kernel.crashing.org>
+
+	Backported from master:
+	2022-03-12  Segher Boessenkool  <segher@kernel.crashing.org>
+
+	PR target/104829
+	* config/rs6000/rs6000.c (rs6000_machine_from_flags): Don't output
+	"ppc" and "ppc64" based on rs6000_cpu.
+
+2022-06-20  Segher Boessenkool  <segher@kernel.crashing.org>
+
+	Backported from master:
+	2022-03-04  Segher Boessenkool  <segher@kernel.crashing.org>
+
+	* config/rs6000/rs6000.c (rs6000_machine_from_flags): Restructure a
+	bit.  Handle most older CPUs.
+
+2022-06-20  Uros Bizjak  <ubizjak@gmail.com>
+
+	Backported from master:
+	2022-06-17  Uroš Bizjak  <ubizjak@gmail.com>
+
+	PR target/105970
+	* config/i386/i386.c (ix86_function_arg): Assert that
+	the mode of pointer argumet is equal to ptr_mode, not Pmode.
+
+2022-06-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-06-18  Jakub Jelinek  <jakub@redhat.com>
+
+	PR middle-end/105998
+	* varasm.c (narrowing_initializer_constant_valid_p): Check
+	SCALAR_INT_MODE_P instead of INTEGRAL_MODE_P, also break on
+	! INTEGRAL_TYPE_P and do the same check also on op{0,1}'s type.
+
+2022-06-20  Jan Hubicka  <jh@suse.cz>
+
+	Backported from master:
+	2022-06-14  Jan Hubicka  <hubicka@ucw.cz>
+
+	PR ipa/105739
+	* ipa-prop.c (ipa_load_from_parm_agg): Punt on volatile loads.
+
+2022-06-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-05-27  Jakub Jelinek  <jakub@redhat.com>
+
+	PR sanitizer/105729
+	* fold-const.c (fold_unary_loc): Don't optimize (X &) ((Y *) z + w)
+	to (X &) z + w if -fsanitize=null during GENERIC folding.
+
+2022-06-16  Richard Earnshaw  <rearnsha@arm.com>
+
+	Backported from master:
+	2022-06-15  Richard Earnshaw  <rearnsha@arm.com>
+
+	PR target/105981
+	* config/arm/arm.c (gen_cpymem_ldrd_strd): Rename low_reg and hi_reg
+	to first_reg and second_reg respectively.  Initialize them correctly
+	when generating big-endian code.
+
+2022-06-15  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-12-01  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	* common.opt (static-libphobos): Add option.
+	* config/darwin.h (LINK_SPEC): Substitute -lgphobos with libgphobos.a
+	when linking statically.
+	* gcc.c (driver_handle_option): Set -static-libphobos as always valid.
+
+2022-06-15  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-05-27  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105726
+	* gimple-ssa-warn-restrict.c (builtin_memref::set_base_and_offset):
+	Constrain array-of-flexarray case more.
+
+2022-06-14  Vladimir N. Makarov  <vmakarov@redhat.com>
+
+	PR rtl-optimization/104637
+	* lra-assigns.c (lra_split_hard_reg_for): Split hard regs as many
+	as possible on one subpass.
+
+2022-06-14  H.J. Lu  <hjl.tools@gmail.com>
+
+	Backported from master:
+	2022-06-13  H.J. Lu  <hjl.tools@gmail.com>
+
+	* common/config/i386/cpuinfo.h (get_available_features): Require
+	AVX for F16C and VAES.
+
+2022-06-08  Max Filippov  <jcmvbkbc@gmail.com>
+
+	Backported from master:
+	2022-06-08  Max Filippov  <jcmvbkbc@gmail.com>
+
+	PR target/105879
+	* config/xtensa/xtensa.md (movdi): Rename 'first' and 'second'
+	to 'lowpart' and 'highpart' so that they match 'gen_lowpart' and
+	'gen_highpart' bitwise semantics and fix order of highpart and
+	lowpart depending on target endianness.
+
+2022-06-08  liuhongt  <hongtao.liu@intel.com>
+
+	PR target/105854
+	* config/i386/sse.md (ssse3_palignrdi): Change alternative 2
+	from Yv to Yw.
+
+2022-06-02  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-05-02  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105437
+	* tree-vect-slp.c (vect_schedule_slp_node): Handle the
+	case where last_stmt alters control flow.
+
+2022-05-26  Simon Cook  <simon.cook@embecosm.com>
+
+	Backported from master:
+	2022-05-25  Simon Cook  <simon.cook@embecosm.com>
+
+	* config/riscv/arch-canonicalize: Only add mafd extension if
+	base was rv32/rv64g.
+
+2022-05-26  Kito Cheng  <kito.cheng@sifive.com>
+
+	Backported from master:
+	2022-05-09  Kito Cheng  <kito.cheng@sifive.com>
+
+	* config/riscv/arch-canonicalize: Handle g correctly.
+
+2022-05-24  Qing Zhao  <qing.zhao@oracle.com>
+
+	Backported from master:
+	2022-05-09  Qing Zhao  <qing.zhao@oracle.com>
+
+	PR target/101891
+	* config/i386/i386.c (zero_call_used_regno_mode): use V2SImode
+	as a generic MMX mode instead of V4HImode.
+	(zero_all_mm_registers): Use SET to zero instead of MOV for
+	zeroing scratch registers.
+	(ix86_zero_call_used_regs): Likewise.
+
+2022-05-23  Paul A. Clarke  <pc@us.ibm.com>
+
+	PR target/104257
+	* config/rs6000/bmi2intrin.h: Uglify local variables.
+	* config/rs6000/emmintrin.h: Likewise.
+	* config/rs6000/mm_malloc.h: Likewise.
+	* config/rs6000/mmintrin.h: Likewise.
+	* config/rs6000/pmmintrin.h: Likewise.
+	* config/rs6000/smmintrin.h: Likewise.
+	* config/rs6000/tmmintrin.h: Likewise.
+	* config/rs6000/xmmintrin.h: Likewise.
+
+2022-05-19  Michael Meissner  <meissner@linux.ibm.com>
+
+	Backported from master:
+	2022-05-06  Michael Meissner  <meissner@linux.ibm.com>
+		    Segher Boessenkool  <segher@kernel.crashing.org>
+
+	PR target/102059
+	* config/rs6000/rs6000.c (rs6000_can_inline_p): Ignore -mpower8-fusion
+	and -mpower10-fusion options for inlining purposes.
+
+2022-05-19  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-05-11  Richard Biener  <rguenther@suse.de>
+
+	PR rtl-optimization/105559
+	* cfgrtl.c (delete_insn_and_edges): Only perform search to BB_END
+	for non-debug insns.
+
+2022-05-19  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-04-29  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105431
+	* tree-ssa-math-opts.c (powi_as_mults_1): Make n unsigned.
+	(powi_as_mults): Use absu_hwi.
+	(gimple_expand_builtin_powi): Remove now pointless n != -n
+	check.
+
+2022-05-19  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-04-25  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105368
+	* tree-ssa-math-opts.c (powi_cost): Use absu_hwi.
+
+2022-05-19  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-04-20  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105312
+	* gimple-isel.cc (gimple_expand_vec_cond_expr): Query both
+	VCOND and VCONDU for EQ and NE.
+
+2022-05-19  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-04-13  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105263
+	* tree-ssa-reassoc.c (try_special_add_to_ops): Do not consume
+	negates in multiplication chains with DFP.
+
+2022-05-19  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-04-06  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105173
+	* tree-ssa-reassoc.c (find_insert_point): Get extra
+	insert_before output argument and compute it.
+	(insert_stmt_before_use): Adjust.
+	(rewrite_expr_tree): Likewise.
+
+2022-05-19  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-04-06  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105163
+	* tree-ssa-reassoc.c (repropagate_negates): Avoid propagating
+	negated abnormals.
+
+2022-05-19  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-04-06  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105148
+	* tree-ssa-loop-ivopts.c (idx_record_use): Walk raw operands
+	2 and 3 of ARRAY_REFs.
+
+2022-05-19  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-04-13  Richard Biener  <rguenther@suse.de>
+
+	PR tree-optimization/105250
+	* fold-const.c (fold_convertible_p): Revert
+	r12-7979-geaaf77dd85c333, instead check for size equality
+	of the vector types involved.
+
+2022-05-19  Richard Biener  <rguenther@suse.de>
+
+	Backported from master:
+	2022-04-04  Richard Biener  <rguenther@suse.de>
+
+	PR middle-end/105140
+	* fold-const.c (fold_convertible_p): Allow a TYPE_P arg.
+
+2022-05-19  Martin Jambor  <mjambor@suse.cz>
+
+	Backported from master:
+	2022-04-29  Martin Jambor  <mjambor@suse.cz>
+
+	PR ipa/100413
+	* cgraph.c (cgraph_node::remove): Release body of the node this
+	is clone_of if appropriate.
+
+2022-05-16  Sebastian Pop  <spop@amazon.com>
+
+	PR target/105162
+	* config/aarch64/aarch64-protos.h (atomic_ool_names): Increase dimension
+	of str array.
+	* config/aarch64/aarch64.c (aarch64_atomic_ool_func): Call
+	memmodel_from_int and handle MEMMODEL_SYNC_*.
+	(DEF0): Add __aarch64_*_sync functions.
+
+2022-05-16  Jan Hubicka  <jh@suse.cz>
+
+	Backported from master:
+	2021-11-10  Jan Hubicka  <jh@suse.cz>
+
+	* ipa-modref-tree.h (modref_tree::remap_params): Fix off-by-one error.
+
+2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-05-10  Jakub Jelinek  <jakub@redhat.com>
+
+	PR tree-optimization/105528
+	* gimple-isel.cc (gimple_expand_vec_set_expr): After gsi_remove
+	set *gsi to gsi_for_stmt (ass_stmt).  Fix up function comment.
+
+2022-05-10  Eric Botcazou  <ebotcazou@adacore.com>
+
+	PR target/105292
+	* config/sparc/sparc.c (sparc_vectorize_vec_perm_const): Return
+	true only for 8-byte vector modes.
+
+2022-05-06  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-04-28  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/105331
+	* config/i386/i386.c (ix86_gimplify_va_arg): Mark va_arg_tmp
+	temporary TREE_ADDRESSABLE before trying to gimplify ADDR_EXPR
+	of it.
+
+2022-05-06  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-04-27  Jakub Jelinek  <jakub@redhat.com>
+
+	PR sanitizer/105396
+	* asan.c (asan_redzone_buffer::emit_redzone_byte): Handle the case
+	where offset is bigger than off but smaller than m_prev_offset + 32
+	bits by pushing one or more 0 bytes.  Sink the
+	m_shadow_bytes.safe_push (value); flush_if_full (); statements from
+	all cases to the end of the function.
+
+2022-05-06  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-04-22  Jakub Jelinek  <jakub@redhat.com>
+
+	PR rtl-optimization/105333
+	* rtlanal.c (replace_rtx): Use simplify_subreg or
+	simplify_unary_operation if CONST_SCALAR_INT_P rather than just
+	CONST_INT_P.
+
+2022-04-27  Hongyu Wang  <hongyu.wang@intel.com>
+
+	Backported from master:
+	2022-04-25  Hongyu Wang  <hongyu.wang@intel.com>
+
+	PR target/105339
+	* config/i386/avx512fintrin.h (_mm512_scalef_round_pd):
+	Add parentheses for parameters and djust format.
+	(_mm512_mask_scalef_round_pd): Ditto.
+	(_mm512_maskz_scalef_round_pd): Ditto.
+	(_mm512_scalef_round_ps): Ditto.
+	(_mm512_mask_scalef_round_ps): Ditto.
+	(_mm512_maskz_scalef_round_ps): Ditto.
+	(_mm_scalef_round_sd): Use _mm_undefined_pd.
+	(_mm_scalef_round_ss): Use _mm_undefined_ps.
+	(_mm_mask_scalef_round_sd): New macro.
+	(_mm_mask_scalef_round_ss): Ditto.
+	(_mm_maskz_scalef_round_sd): Ditto.
+	(_mm_maskz_scalef_round_ss): Ditto.
+
+2022-04-21  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-04-19  Jakub Jelinek  <jakub@redhat.com>
+
+	PR target/105257
+	* config/sparc/sparc.c (epilogue_renumber): If ORIGINAL_REGNO,
+	use gen_raw_REG instead of gen_rtx_REG and copy over also
+	ORIGINAL_REGNO.  Use return 0; instead of /* fallthrough */.
+
+2022-04-21  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2022-04-21  Jakub Jelinek  <jakub@redhat.com>
+
+	PR debug/105203
+	* emit-rtl.c (emit_copy_of_insn_after): Don't call mark_jump_label
+	on DEBUG_INSNs.
+
+2022-04-21  Sergei Trofimovich  <siarheit@google.com>
+
+	Backported from master:
+	2022-04-19  Sergei Trofimovich  <siarheit@google.com>
+
+	PR gcov-profile/105282
+	* value-prof.c (stream_out_histogram_value): Allow negative counts
+	on HIST_TYPE_INDIR_CALL.
+
 2022-04-21  Release Manager
 
 	* GCC 11.3.0 released.

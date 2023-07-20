@@ -1034,7 +1034,7 @@ bool aarch64_high_bits_all_ones_p (HOST_WIDE_INT);
 
 struct atomic_ool_names
 {
-    const char *str[5][4];
+    const char *str[5][5];
 };
 
 rtx aarch64_atomic_ool_func(machine_mode mode, rtx model_rtx,
@@ -1051,5 +1051,7 @@ const char *aarch64_sls_barrier (int);
 const char *aarch64_indirect_call_asm (rtx);
 extern bool aarch64_harden_sls_retbr_p (void);
 extern bool aarch64_harden_sls_blr_p (void);
+
+extern void aarch64_output_patchable_area (unsigned int, bool);
 
 #endif /* GCC_AARCH64_PROTOS_H */

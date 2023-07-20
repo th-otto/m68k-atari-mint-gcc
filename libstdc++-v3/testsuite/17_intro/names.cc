@@ -106,6 +106,8 @@
 #define z (
 
 #define tmp (
+#define sz (
+#define token (
 
 #if __cplusplus < 201103L
 #define uses_allocator  (
@@ -195,6 +197,8 @@
 #undef y
 // <sys/var.h> defines vario::v
 #undef v
+// <sys/timer.h> defines trb::func and cputime_tmr::func
+#undef func
 #endif
 
 #ifdef __APPLE__

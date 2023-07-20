@@ -128,7 +128,7 @@ namespace __gnu_posix
     return ret;
   }
   using char_type = wchar_t;
-#elif defined _GLIBCXX_HAVE_UNISTD_H
+#elif defined _GLIBCXX_HAVE_UNISTD_H && ! defined __AVR__
   using ::open;
   using ::close;
 # ifdef _GLIBCXX_HAVE_SYS_STAT_H
@@ -170,6 +170,10 @@ namespace __gnu_posix
 # endif
   using char_type = char;
 #else // ! _GLIBCXX_FILESYSTEM_IS_WINDOWS && ! _GLIBCXX_HAVE_UNISTD_H
+#ifdef __AVR__
+# define ENOTSUP ENOSYS
+#endif
+
   inline int open(const char*, int, ...) { errno = ENOTSUP; return -1; }
   inline int close(int) { errno = ENOTSUP; return -1; }
   using mode_t = int;
@@ -566,6 +570,47 @@ _GLIBCXX_BEGIN_NAMESPACE_FILESYSTEM
 #endif // NEED_DO_SPACE
 
 #endif // _GLIBCXX_HAVE_SYS_STAT_H
+
+  // Find OS-specific name of temporary directory from the environment,
+  // Caller must check that the path is an accessible directory.
+#ifdef _GLIBCXX_FILESYSTEM_IS_WINDOWS
+  inline wstring
+  get_temp_directory_from_env(error_code& ec)
+  {
+    unsigned len = 1024;
+    std::wstring buf;
+    do
+      {
+	buf.resize(len);
+	len = GetTempPathW(buf.size(), buf.data());
+      } while (len > buf.size());
+
+    if (len == 0)
+      ec.assign((int)GetLastError(), std::system_category());
+    else
+      ec.clear();
+
+    buf.resize(len);
+    return buf;
+  }
+#else
+  inline const char*
+  get_temp_directory_from_env(error_code& ec) noexcept
+  {
+    ec.clear();
+    for (auto env : { "TMPDIR", "TMP", "TEMP", "TEMPDIR" })
+      {
+#if _GLIBCXX_HAVE_SECURE_GETENV
+	auto tmpdir = ::secure_getenv(env);
+#else
+	auto tmpdir = ::getenv(env);
+#endif
+	if (tmpdir)
+	  return tmpdir;
+      }
+    return "/tmp";
+  }
+#endif
 
 _GLIBCXX_END_NAMESPACE_FILESYSTEM
 

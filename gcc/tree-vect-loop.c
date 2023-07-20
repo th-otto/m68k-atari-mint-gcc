@@ -4730,10 +4730,14 @@ get_initial_def_for_reduction (loop_vec_info loop_vinfo,
         else
           def_for_init = build_int_cst (scalar_type, int_init_val);
 
-	if (adjustment_def || operand_equal_p (def_for_init, init_val, 0))
+	bool same_p = operand_equal_p (def_for_init, init_val, 0);
+	init_val = gimple_convert (&stmts, TREE_TYPE (vectype), init_val);
+	def_for_init = gimple_convert (&stmts, TREE_TYPE (vectype), def_for_init);
+
+	if (adjustment_def || same_p)
 	  {
 	    /* Option1: the first element is '0' or '1' as well.  */
-	    if (!operand_equal_p (def_for_init, init_val, 0))
+	    if (!same_p)
 	      *adjustment_def = init_val;
 	    init_def = gimple_build_vector_from_val (&stmts, vectype,
 						     def_for_init);
@@ -5945,9 +5949,12 @@ vect_create_epilog_for_reduction (loop_vec_info loop_vinfo,
 	{
           new_temp = scalar_results[0];
 	  gcc_assert (TREE_CODE (TREE_TYPE (adjustment_def)) != VECTOR_TYPE);
-	  adjustment_def = gimple_convert (&stmts, scalar_type, adjustment_def);
-	  new_temp = gimple_build (&stmts, code, scalar_type,
+	  adjustment_def = gimple_convert (&stmts, TREE_TYPE (vectype),
+					   adjustment_def);
+	  new_temp = gimple_convert (&stmts, TREE_TYPE (vectype), new_temp);
+	  new_temp = gimple_build (&stmts, code, TREE_TYPE (vectype),
 				   new_temp, adjustment_def);
+	  new_temp = gimple_convert (&stmts, scalar_type, new_temp);
 	}
 
       epilog_stmt = gimple_seq_last_stmt (stmts);
@@ -6476,6 +6483,7 @@ vectorizable_reduction (loop_vec_info loop_vinfo,
 {
   tree scalar_dest;
   tree vectype_in = NULL_TREE;
+  tree vectype_op[3] = { NULL_TREE, NULL_TREE, NULL_TREE };
   class loop *loop = LOOP_VINFO_LOOP (loop_vinfo);
   enum vect_def_type cond_reduc_dt = vect_unknown_def_type;
   stmt_vec_info cond_stmt_vinfo = NULL;
@@ -6486,7 +6494,6 @@ vectorizable_reduction (loop_vec_info loop_vinfo,
   bool nested_cycle = false;
   bool double_reduc = false;
   int vec_num;
-  tree tem;
   tree cr_index_scalar_type = NULL_TREE, cr_index_vector_type = NULL_TREE;
   tree cond_reduc_val = NULL_TREE;
 
@@ -6589,10 +6596,20 @@ vectorizable_reduction (loop_vec_info loop_vinfo,
 	}
       if (!REDUC_GROUP_FIRST_ELEMENT (vdef))
 	only_slp_reduc_chain = false;
-      /* ???  For epilogue generation live members of the chain need
+      /* For epilogue generation live members of the chain need
          to point back to the PHI via their original stmt for
-	 info_for_reduction to work.  */
-      if (STMT_VINFO_LIVE_P (vdef))
+	 info_for_reduction to work.  For SLP we need to look at
+	 all lanes here - even though we only will vectorize from
+	 the SLP node with live lane zero the other live lanes also
+	 need to be identified as part of a reduction to be able
+	 to skip code generation for them.  */
+      if (slp_for_stmt_info)
+	{
+	  for (auto s : SLP_TREE_SCALAR_STMTS (slp_for_stmt_info))
+	    if (STMT_VINFO_LIVE_P (s))
+	      STMT_VINFO_REDUC_DEF (vect_orig_stmt (s)) = phi_info;
+	}
+      else if (STMT_VINFO_LIVE_P (vdef))
 	STMT_VINFO_REDUC_DEF (def) = phi_info;
       gassign *assign = dyn_cast <gassign *> (vdef->stmt);
       if (!assign)
@@ -6723,8 +6740,8 @@ vectorizable_reduction (loop_vec_info loop_vinfo,
       enum vect_def_type dt;
       tree op;
       if (!vect_is_simple_use (loop_vinfo, stmt_info, slp_for_stmt_info,
-			       i + opno_adjust, &op, &slp_op[i], &dt, &tem,
-			       &def_stmt_info))
+			       i + opno_adjust, &op, &slp_op[i], &dt,
+			       &vectype_op[i], &def_stmt_info))
 	{
 	  if (dump_enabled_p ())
 	    dump_printf_loc (MSG_MISSED_OPTIMIZATION, vect_location,
@@ -6739,15 +6756,20 @@ vectorizable_reduction (loop_vec_info loop_vinfo,
       if (VECTORIZABLE_CYCLE_DEF (dt))
 	return false;
 
+      if (!vectype_op[i])
+	vectype_op[i]
+	  = get_vectype_for_scalar_type (loop_vinfo,
+					 TREE_TYPE (op), slp_op[i]);
+
       /* To properly compute ncopies we are interested in the widest
 	 non-reduction input type in case we're looking at a widening
 	 accumulation that we later handle in vect_transform_reduction.  */
       if (lane_reduc_code_p
-	  && tem
+	  && vectype_op[i]
 	  && (!vectype_in
 	      || (GET_MODE_SIZE (SCALAR_TYPE_MODE (TREE_TYPE (vectype_in)))
-		  < GET_MODE_SIZE (SCALAR_TYPE_MODE (TREE_TYPE (tem))))))
-	vectype_in = tem;
+		  < GET_MODE_SIZE (SCALAR_TYPE_MODE (TREE_TYPE (vectype_op[i]))))))
+	vectype_in = vectype_op[i];
 
       if (code == COND_EXPR)
 	{
@@ -7270,7 +7292,7 @@ vectorizable_reduction (loop_vec_info loop_vinfo,
 	   && code != SAD_EXPR
 	   && reduction_type != FOLD_LEFT_REDUCTION))
     for (i = 0; i < op_type; i++)
-      if (!vect_maybe_update_slp_op_vectype (slp_op[i], vectype_in))
+      if (!vect_maybe_update_slp_op_vectype (slp_op[i], vectype_op[i]))
 	{
 	  if (dump_enabled_p ())
 	    dump_printf_loc (MSG_MISSED_OPTIMIZATION, vect_location,
@@ -8578,10 +8600,6 @@ vectorizable_live_operation (vec_info *vinfo,
 	     all involved stmts together.  */
 	  else if (slp_index != 0)
 	    return true;
-	  else
-	    /* For SLP reductions the meta-info is attached to
-	       the representative.  */
-	    stmt_info = SLP_TREE_REPRESENTATIVE (slp_node);
 	}
       stmt_vec_info reduc_info = info_for_reduction (loop_vinfo, stmt_info);
       gcc_assert (reduc_info->is_reduc_info);
@@ -8864,9 +8882,10 @@ vectorizable_live_operation (vec_info *vinfo,
 						use_stmt))
 	      {
 		enum tree_code code = gimple_assign_rhs_code (use_stmt);
-		gcc_assert (code == CONSTRUCTOR
-			    || code == VIEW_CONVERT_EXPR
-			    || CONVERT_EXPR_CODE_P (code));
+		gcc_checking_assert (code == SSA_NAME
+				     || code == CONSTRUCTOR
+				     || code == VIEW_CONVERT_EXPR
+				     || CONVERT_EXPR_CODE_P (code));
 		if (dump_enabled_p ())
 		  dump_printf_loc (MSG_MISSED_OPTIMIZATION, vect_location,
 				   "Using original scalar computation for "

@@ -31,6 +31,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "toplev.h"
 #include "gimplify.h"
 #include "target.h"
+#include "decl.h"
 
 /* Constructor for a lambda expression.  */
 
@@ -202,6 +203,24 @@ lambda_function (tree lambda)
   return lambda;
 }
 
+/* True if EXPR is an expression whose type can be used directly in lambda
+   capture.  Not to be used for 'auto'.  */
+
+static bool
+type_deducible_expression_p (tree expr)
+{
+  if (!type_dependent_expression_p (expr))
+    return true;
+  if (BRACE_ENCLOSED_INITIALIZER_P (expr)
+      || TREE_CODE (expr) == EXPR_PACK_EXPANSION)
+    return false;
+  tree t = non_reference (TREE_TYPE (expr));
+  if (!t) return false;
+  while (TREE_CODE (t) == POINTER_TYPE)
+    t = TREE_TYPE (t);
+  return currently_open_class (t);
+}
+
 /* Returns the type to use for the FIELD_DECL corresponding to the
    capture of EXPR.  EXPLICIT_INIT_P indicates whether this is a
    C++14 init capture, and BY_REFERENCE_P indicates whether we're
@@ -228,7 +247,7 @@ lambda_capture_field_type (tree expr, bool explicit_init_p,
       else
 	type = do_auto_deduction (type, expr, auto_node);
     }
-  else if (!is_this && type_dependent_expression_p (expr))
+  else if (!is_this && !type_deducible_expression_p (expr))
     {
       type = cxx_make_type (DECLTYPE_TYPE);
       DECLTYPE_TYPE_EXPR (type) = expr;
@@ -1177,9 +1196,13 @@ maybe_add_lambda_conv_op (tree type)
 	}
     }
   else
-    call = build_call_a (callop,
-			 direct_argvec->length (),
-			 direct_argvec->address ());
+    {
+      /* Don't warn on deprecated lambda declarations, unless
+	 the lambda is actually called.  */
+      auto du = make_temp_override (deprecated_state, DEPRECATED_SUPPRESS);
+      call = build_call_a (callop, direct_argvec->length (),
+			   direct_argvec->address ());
+    }
 
   CALL_FROM_THUNK_P (call) = 1;
   SET_EXPR_LOCATION (call, UNKNOWN_LOCATION);
@@ -1535,6 +1558,9 @@ prune_lambda_captures (tree body)
     return;
   if (LAMBDA_EXPR_DEFAULT_CAPTURE_MODE (lam) == CPLD_NONE)
     /* No default captures, and we don't prune explicit captures.  */
+    return;
+  /* Don't bother pruning in a template, we'll prune at instantiation time.  */
+  if (dependent_type_p (TREE_TYPE (lam)))
     return;
 
   hash_map<tree,tree*> const_vars;

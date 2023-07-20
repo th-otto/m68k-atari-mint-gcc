@@ -1,3 +1,24 @@
+2023-05-29  Release Manager
+
+	* GCC 11.4.0 released.
+
+2023-05-16  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2023-04-18  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* configure.tgt: Unsupport Darwin22+ until a mechanism can be found
+	to locate dyld in the shared cache.
+
+2023-01-04  Florian Weimer  <fweimer@redhat.com>
+
+	Backported from master:
+	2022-10-18  Florian Weimer  <fweimer@redhat.com>
+
+	* configure.ac (sanitizer_supported): Include <unistd.h> for
+	syscall prototype.
+	* configure: Regenerate.
+
 2022-04-21  Release Manager
 
 	* GCC 11.3.0 released.

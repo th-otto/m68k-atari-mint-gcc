@@ -466,6 +466,7 @@ extern GTY(()) tree cp_global_trees[CPTI_MAX];
       PACK_EXPANSION_SIZEOF_P (in *_PACK_EXPANSION)
       OVL_USING_P (in OVERLOAD)
       IMPLICIT_CONV_EXPR_NONTYPE_ARG (in IMPLICIT_CONV_EXPR)
+      ATOMIC_CONSTR_EXPR_FROM_CONCEPT_P (in ATOMIC_CONSTR)
    2: IDENTIFIER_KIND_BIT_2 (in IDENTIFIER_NODE)
       ICS_THIS_FLAG (in _CONV)
       DECL_INITIALIZED_BY_CONSTANT_EXPRESSION_P (in VAR_DECL)
@@ -1634,6 +1635,11 @@ check_constraint_info (tree t)
    Used only in satisfy_atom and in the satisfaction cache.  */
 #define ATOMIC_CONSTR_MAP_INSTANTIATED_P(NODE) \
   TREE_LANG_FLAG_0 (ATOMIC_CONSTR_CHECK (NODE))
+
+/* Whether the expression for this atomic constraint belongs to a
+   concept definition.  */
+#define ATOMIC_CONSTR_EXPR_FROM_CONCEPT_P(NODE) \
+  TREE_LANG_FLAG_1 (ATOMIC_CONSTR_CHECK (NODE))
 
 /* The expression of an atomic constraint. */
 #define ATOMIC_CONSTR_EXPR(NODE) \
@@ -6789,6 +6795,7 @@ extern void copy_linkage			(tree, tree);
 extern tree get_guard				(tree);
 extern tree get_guard_cond			(tree, bool);
 extern tree set_guard				(tree);
+extern bool var_needs_tls_wrapper		(tree);
 extern tree maybe_get_tls_wrapper_call		(tree);
 extern void mark_needed				(tree);
 extern bool decl_needed_p			(tree);
@@ -7242,6 +7249,7 @@ extern bool push_tinst_level_loc                (tree, location_t);
 extern bool push_tinst_level_loc                (tree, tree, location_t);
 extern void pop_tinst_level                     (void);
 extern struct tinst_level *outermost_tinst_level(void);
+extern bool non_templated_friend_p		(tree);
 extern void init_template_processing		(void);
 extern void print_template_statistics		(void);
 bool template_template_parameter_p		(const_tree);
@@ -8137,7 +8145,6 @@ extern tree evaluate_requires_expr		(tree);
 extern tree tsubst_constraint                   (tree, tree, tsubst_flags_t, tree);
 extern tree tsubst_constraint_info              (tree, tree, tsubst_flags_t, tree);
 extern tree tsubst_parameter_mapping		(tree, tree, tsubst_flags_t, tree);
-extern tree get_mapped_args			(tree);
 
 struct processing_constraint_expression_sentinel
 {

@@ -2386,7 +2386,7 @@ assemble_variable (tree decl, int top_level ATTRIBUTE_UNUSED,
   else
     {
       /* Special-case handling of vtv comdat sections.  */
-      if (sect->named.name
+      if (SECTION_STYLE (sect) == SECTION_NAMED
 	  && (strcmp (sect->named.name, ".vtable_map_vars") == 0))
 	handle_vtv_comdat_section (sect, decl);
       else
@@ -4697,7 +4697,10 @@ narrowing_initializer_constant_valid_p (tree value, tree endtype, tree *cache)
     {
       tree inner = TREE_OPERAND (op0, 0);
       if (inner == error_mark_node
-	  || ! INTEGRAL_MODE_P (TYPE_MODE (TREE_TYPE (inner)))
+	  || ! INTEGRAL_TYPE_P (TREE_TYPE (op0))
+	  || ! SCALAR_INT_MODE_P (TYPE_MODE (TREE_TYPE (op0)))
+	  || ! INTEGRAL_TYPE_P (TREE_TYPE (inner))
+	  || ! SCALAR_INT_MODE_P (TYPE_MODE (TREE_TYPE (inner)))
 	  || (GET_MODE_SIZE (SCALAR_INT_TYPE_MODE (TREE_TYPE (op0)))
 	      > GET_MODE_SIZE (SCALAR_INT_TYPE_MODE (TREE_TYPE (inner)))))
 	break;
@@ -4709,7 +4712,10 @@ narrowing_initializer_constant_valid_p (tree value, tree endtype, tree *cache)
     {
       tree inner = TREE_OPERAND (op1, 0);
       if (inner == error_mark_node
-	  || ! INTEGRAL_MODE_P (TYPE_MODE (TREE_TYPE (inner)))
+	  || ! INTEGRAL_TYPE_P (TREE_TYPE (op1))
+	  || ! SCALAR_INT_MODE_P (TYPE_MODE (TREE_TYPE (op1)))
+	  || ! INTEGRAL_TYPE_P (TREE_TYPE (inner))
+	  || ! SCALAR_INT_MODE_P (TYPE_MODE (TREE_TYPE (inner)))
 	  || (GET_MODE_SIZE (SCALAR_INT_TYPE_MODE (TREE_TYPE (op1)))
 	      > GET_MODE_SIZE (SCALAR_INT_TYPE_MODE (TREE_TYPE (inner)))))
 	break;

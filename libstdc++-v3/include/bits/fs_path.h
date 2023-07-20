@@ -558,12 +558,7 @@ namespace __detail
       _Multi = 0, _Root_name, _Root_dir, _Filename
     };
 
-    path(basic_string_view<value_type> __str, _Type __type)
-    : _M_pathname(__str)
-    {
-      __glibcxx_assert(__type != _Type::_Multi);
-      _M_cmpts.type(__type);
-    }
+    path(basic_string_view<value_type> __str, _Type __type);
 
     enum class _Split { _Stem, _Extension };
 
@@ -809,8 +804,7 @@ namespace __detail
 
   struct path::_Cmpt : path
   {
-    _Cmpt(basic_string_view<value_type> __s, _Type __t, size_t __pos)
-      : path(__s, __t), _M_pos(__pos) { }
+    _Cmpt(basic_string_view<value_type> __s, _Type __t, size_t __pos);
 
     _Cmpt() : _M_pos(-1) { }
 
@@ -1211,9 +1205,9 @@ namespace __detail
       {
 	if (_M_pathname.back() == preferred_separator)
 	  return {};
-	auto& __last = *--end();
-	if (__last._M_type() == _Type::_Filename)
-	  return __last;
+	auto __last = --end();
+	if (__last->_M_type() == _Type::_Filename)
+	  return *__last;
       }
     return {};
   }
@@ -1360,6 +1354,16 @@ template<typename _Distance>
 extern template class __shared_ptr<const filesystem::filesystem_error::_Impl>;
 
 /// @endcond
+
+// _GLIBCXX_RESOLVE_LIB_DEFECTS
+// 3657. std::hash<std::filesystem::path> is not enabled
+template<>
+  struct hash<filesystem::path>
+  {
+    size_t
+    operator()(const filesystem::path& __p) const noexcept
+    { return filesystem::hash_value(__p); }
+  };
 
 _GLIBCXX_END_NAMESPACE_VERSION
 } // namespace std

@@ -5903,10 +5903,10 @@ lower_rec_input_clauses (tree clauses, gimple_seq *ilist, gimple_seq *dlist,
 			}
 
 		      if (POINTER_TYPE_P (TREE_TYPE (x)))
-			x = fold_build2 (POINTER_PLUS_EXPR,
-					 TREE_TYPE (x), x, t);
+			x = fold_build_pointer_plus (x, t);
 		      else
-			x = fold_build2 (PLUS_EXPR, TREE_TYPE (x), x, t);
+			x = fold_build2 (PLUS_EXPR, TREE_TYPE (x), x,
+					 fold_convert (TREE_TYPE (x), t));
 		    }
 
 		  if ((OMP_CLAUSE_CODE (c) != OMP_CLAUSE_LINEAR
@@ -9217,7 +9217,6 @@ lower_omp_taskgroup (gimple_stmt_iterator *gsi_p, omp_context *ctx)
   gimple_bind_add_seq (bind, gimple_omp_body (stmt));
   gimple_omp_set_body (stmt, NULL);
 
-  gimple_bind_add_stmt (bind, gimple_build_omp_return (true));
   gimple_bind_add_seq (bind, dseq);
 
   pop_gimplify_context (bind);
@@ -12911,7 +12910,8 @@ lower_omp_target (gimple_stmt_iterator *gsi_p, omp_context *ctx)
 				     gimple_build_assign (new_var, x));
 	      }
 	    tree present;
-	    present = (do_optional_check
+	    present = ((do_optional_check
+			&& OMP_CLAUSE_CODE (c) != OMP_CLAUSE_IS_DEVICE_PTR)
 		       ? omp_check_optional_argument (OMP_CLAUSE_DECL (c), true)
 		       : NULL_TREE);
 	    if (present)

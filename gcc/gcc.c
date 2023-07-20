@@ -27,6 +27,7 @@ CC recognizes how to compile each input file by suffixes in the file names.
 Once it knows which kind of compilation to perform, the procedure for
 compilation is specified by a string called a "spec".  */
 
+#define INCLUDE_STRING
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
@@ -43,6 +44,7 @@ compilation is specified by a string called a "spec".  */
 #include "opts.h"
 #include "filenames.h"
 #include "spellcheck.h"
+#include "opts-jobserver.h"
 
 /*
  * these are from xm-mingw32.h, but this is only included
@@ -4508,10 +4510,12 @@ driver_handle_option (struct gcc_options *opts,
     case OPT_static_libgcc:
     case OPT_shared_libgcc:
     case OPT_static_libgfortran:
+    case OPT_static_libphobos:
     case OPT_static_libstdc__:
       /* These are always valid, since gcc.c itself understands the
-	 first two, gfortranspec.c understands -static-libgfortran and
-	 g++spec.c understands -static-libstdc++ */
+	 first two, gfortranspec.c understands -static-libgfortran,
+	 d-spec.cc understands -static-libphobos, and g++spec.c
+	 understands -static-libstdc++ */
       validated = true;
       break;
 
@@ -9093,38 +9097,9 @@ driver::final_actions () const
 void
 driver::detect_jobserver () const
 {
-  /* Detect jobserver and drop it if it's not working.  */
-  const char *makeflags = env.get ("MAKEFLAGS");
-  if (makeflags != NULL)
-    {
-      const char *needle = "--jobserver-auth=";
-      const char *n = strstr (makeflags, needle);
-      if (n != NULL)
-	{
-	  int rfd = -1;
-	  int wfd = -1;
-
-	  bool jobserver
-	    = (sscanf (n + strlen (needle), "%d,%d", &rfd, &wfd) == 2
-	       && rfd > 0
-	       && wfd > 0
-	       && is_valid_fd (rfd)
-	       && is_valid_fd (wfd));
-
-	  /* Drop the jobserver if it's not working now.  */
-	  if (!jobserver)
-	    {
-	      unsigned offset = n - makeflags;
-	      char *dup = xstrdup (makeflags);
-	      dup[offset] = '\0';
-
-	      const char *space = strchr (makeflags + offset, ' ');
-	      if (space != NULL)
-		strcpy (dup + offset, space);
-	      xputenv (concat ("MAKEFLAGS=", dup, NULL));
-	    }
-	}
-    }
+  jobserver_info jinfo;
+  if (!jinfo.is_active && !jinfo.skipped_makeflags.empty ())
+    xputenv (xstrdup (jinfo.skipped_makeflags.c_str ()));
 }
 
 /* Determine what the exit code of the driver should be.  */

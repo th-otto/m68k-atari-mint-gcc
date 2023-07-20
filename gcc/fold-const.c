@@ -2355,7 +2355,7 @@ build_zero_vector (tree type)
 bool
 fold_convertible_p (const_tree type, const_tree arg)
 {
-  tree orig = TREE_TYPE (arg);
+  const_tree orig = TREE_TYPE (arg);
 
   if (type == orig)
     return true;
@@ -2387,7 +2387,7 @@ fold_convertible_p (const_tree type, const_tree arg)
       return (VECTOR_TYPE_P (orig)
 	      && known_eq (TYPE_VECTOR_SUBPARTS (type),
 			   TYPE_VECTOR_SUBPARTS (orig))
-	      && fold_convertible_p (TREE_TYPE (type), TREE_TYPE (orig)));
+	      && tree_int_cst_equal (TYPE_SIZE (type), TYPE_SIZE (orig)));
 
     default:
       return false;
@@ -3331,9 +3331,6 @@ operand_compare::operand_equal_p (const_tree arg0, const_tree arg1,
 		if (compare_address
 		    && (flags & OEP_ADDRESS_OF_SAME_FIELD) == 0)
 		  {
-		    if (TREE_OPERAND (arg0, 2)
-			|| TREE_OPERAND (arg1, 2))
-		      return OP_SAME_WITH_NULL (2);
 		    tree field0 = TREE_OPERAND (arg0, 1);
 		    tree field1 = TREE_OPERAND (arg1, 1);
 
@@ -3844,17 +3841,10 @@ operand_compare::hash_operand (const_tree t, inchash::hash &hstate,
 	      if (sflags & OEP_ADDRESS_OF)
 		{
 		  hash_operand (TREE_OPERAND (t, 0), hstate, flags);
-		  if (TREE_OPERAND (t, 2))
-		    hash_operand (TREE_OPERAND (t, 2), hstate,
-				  flags & ~OEP_ADDRESS_OF);
-		  else
-		    {
-		      tree field = TREE_OPERAND (t, 1);
-		      hash_operand (DECL_FIELD_OFFSET (field),
-				    hstate, flags & ~OEP_ADDRESS_OF);
-		      hash_operand (DECL_FIELD_BIT_OFFSET (field),
-				    hstate, flags & ~OEP_ADDRESS_OF);
-		    }
+		  hash_operand (DECL_FIELD_OFFSET (TREE_OPERAND (t, 1)),
+				hstate, flags & ~OEP_ADDRESS_OF);
+		  hash_operand (DECL_FIELD_BIT_OFFSET (TREE_OPERAND (t, 1)),
+				hstate, flags & ~OEP_ADDRESS_OF);
 		  return;
 		}
 	      break;
@@ -7508,7 +7498,7 @@ tree_swap_operands_p (const_tree arg0, const_tree arg1)
 static tree
 fold_to_nonsharp_ineq_using_bound (location_t loc, tree ineq, tree bound)
 {
-  tree a, typea, type = TREE_TYPE (ineq), a1, diff, y;
+  tree a, typea, type = TREE_TYPE (bound), a1, diff, y;
 
   if (TREE_CODE (bound) == LT_EXPR)
     a = TREE_OPERAND (bound, 0);
@@ -9486,6 +9476,16 @@ fold_unary_loc (location_t loc, enum tree_code code, tree type, tree op0)
 	      && sanitize_flags_p (SANITIZE_ALIGNMENT)
 	      && (min_align_of_type (TREE_TYPE (type))
 		  > min_align_of_type (TREE_TYPE (TREE_TYPE (arg00)))))
+	    return NULL_TREE;
+
+	  /* Similarly, avoid this optimization in GENERIC for -fsanitize=null
+	     when type is a reference type and arg00's type is not,
+	     because arg00 could be validly nullptr and if arg01 doesn't return,
+	     we don't want false positive binding of reference to nullptr.  */
+	  if (TREE_CODE (type) == REFERENCE_TYPE
+	      && !in_gimple_form
+	      && sanitize_flags_p (SANITIZE_NULL)
+	      && TREE_CODE (TREE_TYPE (arg00)) != REFERENCE_TYPE)
 	    return NULL_TREE;
 
 	  arg00 = fold_convert_loc (loc, type, arg00);
@@ -11987,11 +11987,15 @@ fold_binary_loc (location_t loc, enum tree_code code, tree type,
 	{
 	  tem = fold_to_nonsharp_ineq_using_bound (loc, arg0, arg1);
 	  if (tem && !operand_equal_p (tem, arg0, 0))
-	    return fold_build2_loc (loc, code, type, tem, arg1);
+	    return fold_convert (type,
+				 fold_build2_loc (loc, code, TREE_TYPE (arg1),
+						  tem, arg1));
 
 	  tem = fold_to_nonsharp_ineq_using_bound (loc, arg1, arg0);
 	  if (tem && !operand_equal_p (tem, arg1, 0))
-	    return fold_build2_loc (loc, code, type, arg0, tem);
+	    return fold_convert (type,
+				 fold_build2_loc (loc, code, TREE_TYPE (arg0),
+						  arg0, tem));
 	}
 
       if ((tem = fold_truth_andor (loc, code, type, arg0, arg1, op0, op1))

@@ -5793,6 +5793,9 @@ store_expr (tree exp, rtx target, int call_param_p,
 	  temp = convert_modes (inner_mode, outer_mode, temp,
 				SUBREG_PROMOTED_SIGN (target));
 	}
+      else if (!SCALAR_INT_MODE_P (GET_MODE (temp)))
+	temp = convert_modes (outer_mode, TYPE_MODE (TREE_TYPE (exp)),
+			      temp, SUBREG_PROMOTED_SIGN (target));
 
       convert_move (SUBREG_REG (target), temp,
 		    SUBREG_PROMOTED_SIGN (target));
@@ -6192,13 +6195,13 @@ count_type_elements (const_tree type, bool for_ctor_p)
     case OFFSET_TYPE:
     case REFERENCE_TYPE:
     case NULLPTR_TYPE:
+    case OPAQUE_TYPE:
       return 1;
 
     case ERROR_MARK:
       return 0;
 
     case VOID_TYPE:
-    case OPAQUE_TYPE:
     case METHOD_TYPE:
     case FUNCTION_TYPE:
     case LANG_TYPE:
@@ -7436,8 +7439,7 @@ get_inner_reference (tree exp, poly_int64_pod *pbitsize,
 	  /* For vector fields re-check the target flags, as DECL_MODE
 	     could have been set with different target flags than
 	     the current function has.  */
-	  if (mode == BLKmode
-	      && VECTOR_TYPE_P (TREE_TYPE (field))
+	  if (VECTOR_TYPE_P (TREE_TYPE (field))
 	      && VECTOR_MODE_P (TYPE_MODE_RAW (TREE_TYPE (field))))
 	    mode = TYPE_MODE (TREE_TYPE (field));
 	}
@@ -8566,7 +8568,8 @@ expand_cond_expr_using_cmove (tree treeop0 ATTRIBUTE_UNUSED,
   expanding_cond_expr_using_cmove = true;
   start_sequence ();
   expand_operands (treeop1, treeop2,
-		   temp, &op1, &op2, EXPAND_NORMAL);
+		   mode == orig_mode ? temp : NULL_RTX, &op1, &op2,
+		   EXPAND_NORMAL);
 
   if (TREE_CODE (treeop0) == SSA_NAME
       && (srcstmt = get_def_for_expr_class (treeop0, tcc_comparison)))

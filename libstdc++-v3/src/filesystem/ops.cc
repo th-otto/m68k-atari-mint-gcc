@@ -27,6 +27,10 @@
 # define NEED_DO_COPY_FILE
 # define NEED_DO_SPACE
 #endif
+#ifndef _GNU_SOURCE
+// Cygwin needs this for secure_getenv
+# define _GNU_SOURCE 1
+#endif
 
 #include <bits/largefile-config.h>
 #include <experimental/filesystem>
@@ -344,8 +348,12 @@ fs::copy(const path& from, const path& to, copy_options options,
       // set an unused bit in options to disable further recursion
       if (!is_set(options, copy_options::recursive))
 	options |= static_cast<copy_options>(4096);
-      for (const directory_entry& x : directory_iterator(from))
-	copy(x.path(), to/x.path().filename(), options, ec);
+      for (const directory_entry& x : directory_iterator(from, ec))
+	{
+	  copy(x.path(), to/x.path().filename(), options, ec);
+	  if (ec)
+	    return;
+	}
     }
   // _GLIBCXX_RESOLVE_LIB_DEFECTS
   // 2683. filesystem::copy() says "no effects"
@@ -1195,13 +1203,43 @@ fs::space(const path& p, error_code& ec) noexcept
   return info;
 }
 
+#if _GLIBCXX_FILESYSTEM_IS_WINDOWS
+static bool has_trailing_slash(const fs::path& p)
+{
+  wchar_t c = p.native().back();
+  return c == '/' || c == L'\\';
+}
+#endif
+
 #ifdef _GLIBCXX_HAVE_SYS_STAT_H
 fs::file_status
 fs::status(const fs::path& p, error_code& ec) noexcept
 {
   file_status status;
+
+  auto str = p.c_str();
+
+#if _GLIBCXX_FILESYSTEM_IS_WINDOWS
+  // stat() fails if there's a trailing slash (PR 88881)
+  path p2;
+  if (p.has_relative_path() && has_trailing_slash(p))
+    {
+      __try
+	{
+	  p2 = p.parent_path();
+	  str = p2.c_str();
+	}
+      __catch(const bad_alloc&)
+	{
+	  ec = std::make_error_code(std::errc::not_enough_memory);
+	  return status;
+	}
+      str = p2.c_str();
+    }
+#endif
+
   stat_type st;
-  if (posix::stat(p.c_str(), &st))
+  if (posix::stat(str, &st))
     {
       int err = errno;
       ec.assign(err, std::generic_category());
@@ -1224,8 +1262,30 @@ fs::file_status
 fs::symlink_status(const fs::path& p, std::error_code& ec) noexcept
 {
   file_status status;
+
+  auto str = p.c_str();
+
+#if _GLIBCXX_FILESYSTEM_IS_WINDOWS
+  // stat() fails if there's a trailing slash (PR 88881)
+  path p2;
+  if (p.has_relative_path() && has_trailing_slash(p))
+    {
+      __try
+	{
+	  p2 = p.parent_path();
+	  str = p2.c_str();
+	}
+      __catch(const bad_alloc&)
+	{
+	  ec = std::make_error_code(std::errc::not_enough_memory);
+	  return status;
+	}
+      str = p2.c_str();
+    }
+#endif
+
   stat_type st;
-  if (posix::lstat(p.c_str(), &st))
+  if (posix::lstat(str, &st))
     {
       int err = errno;
       ec.assign(err, std::generic_category());
@@ -1289,7 +1349,8 @@ fs::system_complete(const path& p, error_code& ec)
 #endif
 }
 
-fs::path fs::temp_directory_path()
+fs::path
+fs::temp_directory_path()
 {
   error_code ec;
   path tmp = temp_directory_path(ec);
@@ -1298,31 +1359,12 @@ fs::path fs::temp_directory_path()
   return tmp;
 }
 
-fs::path fs::temp_directory_path(error_code& ec)
+fs::path
+fs::temp_directory_path(error_code& ec)
 {
-  path p;
-#ifdef _GLIBCXX_FILESYSTEM_IS_WINDOWS
-  unsigned len = 1024;
-  std::wstring buf;
-  do
-    {
-      buf.resize(len);
-      len = GetTempPathW(buf.size(), buf.data());
-    } while (len > buf.size());
-
-  if (len == 0)
-    {
-      ec.assign((int)GetLastError(), std::system_category());
-      return p;
-    }
-  buf.resize(len);
-  p = std::move(buf);
-#else
-  const char* tmpdir = nullptr;
-  const char* env[] = { "TMPDIR", "TMP", "TEMP", "TEMPDIR", nullptr };
-  for (auto e = env; tmpdir == nullptr && *e != nullptr; ++e)
-    tmpdir = ::getenv(*e);
-  p = tmpdir ? tmpdir : "/tmp";
+  path p = fs::get_temp_directory_from_env(ec);
+  if (ec)
+    return p;
   auto st = status(p, ec);
   if (ec)
     p.clear();
@@ -1331,7 +1373,5 @@ fs::path fs::temp_directory_path(error_code& ec)
       p.clear();
       ec = std::make_error_code(std::errc::not_a_directory);
     }
-#endif
   return p;
 }
-

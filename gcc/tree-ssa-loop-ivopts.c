@@ -131,6 +131,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "builtins.h"
 #include "tree-vectorizer.h"
 #include "dbgcnt.h"
+#include "cfganal.h"
 
 /* For lang_hooks.types.type_for_mode.  */
 #include "langhooks.h"
@@ -2125,8 +2126,10 @@ idx_record_use (tree base, tree *idx,
   find_interesting_uses_op (data, *idx);
   if (TREE_CODE (base) == ARRAY_REF || TREE_CODE (base) == ARRAY_RANGE_REF)
     {
-      find_interesting_uses_op (data, array_ref_element_size (base));
-      find_interesting_uses_op (data, array_ref_low_bound (base));
+      if (TREE_OPERAND (base, 2))
+	find_interesting_uses_op (data, TREE_OPERAND (base, 2));
+      if (TREE_OPERAND (base, 3))
+	find_interesting_uses_op (data, TREE_OPERAND (base, 3));
     }
   return true;
 }
@@ -7107,6 +7110,12 @@ create_new_iv (struct ivopts_data *data, struct iv_cand *cand)
     case IP_END:
       incr_pos = gsi_last_bb (ip_end_pos (data->current_loop));
       after = true;
+      if (!gsi_end_p (incr_pos) && stmt_ends_bb_p (gsi_stmt (incr_pos)))
+	{
+	  edge e = find_edge (gsi_bb (incr_pos), data->current_loop->header);
+	  incr_pos = gsi_after_labels (split_edge (e));
+	  after = false;
+	}
       break;
 
     case IP_AFTER_USE:

@@ -1,3 +1,44 @@
+2023-05-29  Release Manager
+
+	* GCC 11.4.0 released.
+
+2022-12-13  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	* libdruntime/core/stdc/fenv.d: Compile in MIPS uClibc bindings on
+	MIPS_Any targets.
+	* libdruntime/core/stdc/math.d: Likewise.
+	* libdruntime/core/sys/posix/dlfcn.d: Likewise.
+	* libdruntime/core/sys/posix/setjmp.d: Add MIPS64 definitions for
+	CRuntime_UClibc.
+	* libdruntime/core/sys/posix/sys/types.d: Likewise.
+	* src/std/path.d (expandTilde): Handle more errno codes that could be
+	left set by getpwnam_r.
+	* src/std/stdio.d: Set CRuntime_UClibc as GENERIC_IO target.
+
+2022-06-15  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-12-01  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	* testsuite/testsuite_flags.in: Add libphobos library directory as
+	search path to --gdcldflags.
+
+2022-04-26  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2021-09-30  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	* libdruntime/gcc/unwind/generic.d (__aligned__): Define.
+	(_Unwind_Exception): Align struct to __aligned__.
+
+2022-04-26  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	Backported from master:
+	2022-04-26  Iain Buclaw  <ibuclaw@gdcproject.org>
+
+	* libdruntime/gcc/emutls.d (emutlsDestroyThread): Clear the per-thread
+	TLS array, don't call free().
+
 2022-04-21  Release Manager
 
 	* GCC 11.3.0 released.

@@ -1854,12 +1854,12 @@ verify_tree (tree x, struct tlist **pbefore_sp, struct tlist **pno_sp,
   enum tree_code code;
   enum tree_code_class cl;
 
+ restart:
   /* X may be NULL if it is the operand of an empty statement expression
      ({ }).  */
   if (x == NULL)
     return;
 
- restart:
   code = TREE_CODE (x);
   cl = TREE_CODE_CLASS (code);
 
@@ -2023,11 +2023,16 @@ verify_tree (tree x, struct tlist **pbefore_sp, struct tlist **pno_sp,
 
     case LSHIFT_EXPR:
     case RSHIFT_EXPR:
-    case COMPONENT_REF:
     case ARRAY_REF:
       if (cxx_dialect >= cxx17)
 	goto sequenced_binary;
       goto do_default;
+
+    case COMPONENT_REF:
+      /* Treat as unary, the other operands aren't evaluated.  */
+      x = TREE_OPERAND (x, 0);
+      writer = 0;
+      goto restart;
 
     default:
     do_default:

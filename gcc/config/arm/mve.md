@@ -92,7 +92,7 @@
 ;; [vst4q])
 ;;
 (define_insn "mve_vst4q<mode>"
-  [(set (match_operand:XI 0 "neon_struct_operand" "=Um")
+  [(set (match_operand:XI 0 "mve_struct_operand" "=Ug")
 	(unspec:XI [(match_operand:XI 1 "s_register_operand" "w")
 		    (unspec:MVE_VLD_ST [(const_int 0)] UNSPEC_VSTRUCTDUMMY)]
 	 VST4Q))
@@ -10312,7 +10312,7 @@
 ;; [vst2q])
 ;;
 (define_insn "mve_vst2q<mode>"
-  [(set (match_operand:OI 0 "neon_struct_operand" "=Um")
+  [(set (match_operand:OI 0 "mve_struct_operand" "=Ug")
 	(unspec:OI [(match_operand:OI 1 "s_register_operand" "w")
 		    (unspec:MVE_VLD_ST [(const_int 0)] UNSPEC_VSTRUCTDUMMY)]
 	 VST2Q))
@@ -10341,7 +10341,7 @@
 ;;
 (define_insn "mve_vld2q<mode>"
   [(set (match_operand:OI 0 "s_register_operand" "=w")
-	(unspec:OI [(match_operand:OI 1 "neon_struct_operand" "Um")
+	(unspec:OI [(match_operand:OI 1 "mve_struct_operand" "Ug")
 		    (unspec:MVE_VLD_ST [(const_int 0)] UNSPEC_VSTRUCTDUMMY)]
 	 VLD2Q))
   ]
@@ -10369,7 +10369,7 @@
 ;;
 (define_insn "mve_vld4q<mode>"
   [(set (match_operand:XI 0 "s_register_operand" "=w")
-	(unspec:XI [(match_operand:XI 1 "neon_struct_operand" "Um")
+	(unspec:XI [(match_operand:XI 1 "mve_struct_operand" "Ug")
 		    (unspec:MVE_VLD_ST [(const_int 0)] UNSPEC_VSTRUCTDUMMY)]
 	 VLD4Q))
   ]
@@ -10822,7 +10822,7 @@
 )
 
 (define_insn "*movmisalign<mode>_mve_store"
-  [(set (match_operand:MVE_VLD_ST 0 "neon_permissive_struct_operand"	     "=Ux")
+  [(set (match_operand:MVE_VLD_ST 0 "mve_memory_operand"	     "=Ux")
 	(unspec:MVE_VLD_ST [(match_operand:MVE_VLD_ST 1 "s_register_operand" " w")]
 	 UNSPEC_MISALIGNED_ACCESS))]
   "((TARGET_HAVE_MVE && VALID_MVE_SI_MODE (<MODE>mode))
@@ -10835,7 +10835,7 @@
 
 (define_insn "*movmisalign<mode>_mve_load"
   [(set (match_operand:MVE_VLD_ST 0 "s_register_operand"				 "=w")
-	(unspec:MVE_VLD_ST [(match_operand:MVE_VLD_ST 1 "neon_permissive_struct_operand" " Ux")]
+	(unspec:MVE_VLD_ST [(match_operand:MVE_VLD_ST 1 "mve_memory_operand" " Ux")]
 	 UNSPEC_MISALIGNED_ACCESS))]
   "((TARGET_HAVE_MVE && VALID_MVE_SI_MODE (<MODE>mode))
     || (TARGET_HAVE_MVE_FLOAT && VALID_MVE_SF_MODE (<MODE>mode)))

@@ -17256,9 +17256,9 @@
    (set_attr "mode" "<sseinsnmode>")])
 
 (define_insn_and_split "ssse3_palignrdi"
-  [(set (match_operand:DI 0 "register_operand" "=y,x,Yv")
-	(unspec:DI [(match_operand:DI 1 "register_operand" "0,0,Yv")
-		    (match_operand:DI 2 "register_mmxmem_operand" "ym,x,Yv")
+  [(set (match_operand:DI 0 "register_operand" "=y,x,Yw")
+	(unspec:DI [(match_operand:DI 1 "register_operand" "0,0,Yw")
+		    (match_operand:DI 2 "register_mmxmem_operand" "ym,x,Yw")
 		    (match_operand:SI 3 "const_0_to_255_mul_8_operand" "n,n,n")]
 		   UNSPEC_PALIGNR))]
   "(TARGET_MMX || TARGET_MMX_WITH_SSE) && TARGET_SSSE3"
@@ -19495,7 +19495,7 @@
 	  (match_operand:VF_128 2 "register_operand" "v")
 	  (const_int 1)))]
   "TARGET_AVX512ER"
-  "vrcp28<ssescalarmodesuffix>\t{<round_saeonly_mask_op3>%1, %2, %0<mask_operand3>|<mask_opernad3>%0, %2, %<iptr>1<round_saeonly_mask_op3>}"
+  "vrcp28<ssescalarmodesuffix>\t{<round_saeonly_mask_op3>%1, %2, %0<mask_operand3>|<mask_operand3>%0, %2, %<iptr>1<round_saeonly_mask_op3>}"
   [(set_attr "length_immediate" "1")
    (set_attr "prefix" "evex")
    (set_attr "type" "sse")
@@ -24127,7 +24127,7 @@
 
   for (i = 4; i < 7; i++)
     XVECEXP (operands[2], 0, i)
-      = gen_rtx_SET (xmm_regs[i], CONST0_RTX (V2DImode));
+      = gen_rtx_CLOBBER (VOIDmode, xmm_regs[i]);
 
   XVECEXP (operands[2], 0, 7)
     = gen_rtx_CLOBBER (VOIDmode, gen_rtx_REG (CCmode, FLAGS_REG));
@@ -24184,7 +24184,7 @@
 
   for (i = 4; i < 7; i++)
     XVECEXP (operands[2], 0, i + 1)
-      = gen_rtx_SET (xmm_regs[i], CONST0_RTX (V2DImode));
+      = gen_rtx_CLOBBER (VOIDmode, xmm_regs[i]);
 
   XVECEXP (operands[2], 0, 8)
     = gen_rtx_CLOBBER (VOIDmode, gen_rtx_REG (CCmode, FLAGS_REG));

@@ -2207,6 +2207,37 @@ get_group_load_store_type (vec_info *vinfo, stmt_vec_info stmt_info,
 	      gcc_assert (!loop_vinfo || cmp > 0);
 	      *memory_access_type = VMAT_CONTIGUOUS;
 	    }
+
+	  /* When we have a contiguous access across loop iterations
+	     but the access in the loop doesn't cover the full vector
+	     we can end up with no gap recorded but still excess
+	     elements accessed, see PR103116.  Make sure we peel for
+	     gaps if necessary and sufficient and give up if not.  */
+	  if (loop_vinfo
+	      && *memory_access_type == VMAT_CONTIGUOUS
+	      && SLP_TREE_LOAD_PERMUTATION (slp_node).exists ()
+	      && !multiple_p (group_size * LOOP_VINFO_VECT_FACTOR (loop_vinfo),
+			      nunits))
+	    {
+	      unsigned HOST_WIDE_INT cnunits, cvf;
+	      if (!can_overrun_p
+		  || !nunits.is_constant (&cnunits)
+		  || !LOOP_VINFO_VECT_FACTOR (loop_vinfo).is_constant (&cvf)
+		  /* Peeling for gaps assumes that a single scalar iteration
+		     is enough to make sure the last vector iteration doesn't
+		     access excess elements.
+		     ???  Enhancements include peeling multiple iterations
+		     or using masked loads with a static mask.  */
+		  || (group_size * cvf) % cnunits + group_size < cnunits)
+		{
+		  if (dump_enabled_p ())
+		    dump_printf_loc (MSG_MISSED_OPTIMIZATION, vect_location,
+				     "peeling for gaps insufficient for "
+				     "access\n");
+		  return false;
+		}
+	      overrun_p = true;
+	    }
 	}
     }
   else
@@ -5232,8 +5263,7 @@ vectorizable_assignment (vec_info *vinfo,
 		       GET_MODE_SIZE (TYPE_MODE (vectype_in)))))
     return false;
 
-  if (VECTOR_BOOLEAN_TYPE_P (vectype)
-      && !VECTOR_BOOLEAN_TYPE_P (vectype_in))
+  if (VECTOR_BOOLEAN_TYPE_P (vectype) != VECTOR_BOOLEAN_TYPE_P (vectype_in))
     {
       if (dump_enabled_p ())
 	dump_printf_loc (MSG_MISSED_OPTIMIZATION, vect_location,
@@ -8911,6 +8941,7 @@ vectorizable_load (vec_info *vinfo,
       unsigned int group_el = 0;
       unsigned HOST_WIDE_INT
 	elsz = tree_to_uhwi (TYPE_SIZE_UNIT (TREE_TYPE (vectype)));
+      unsigned int n_groups = 0;
       for (j = 0; j < ncopies; j++)
 	{
 	  if (nloads > 1)
@@ -8932,12 +8963,19 @@ vectorizable_load (vec_info *vinfo,
 	      if (! slp
 		  || group_el == group_size)
 		{
-		  tree newoff = copy_ssa_name (running_off);
-		  gimple *incr = gimple_build_assign (newoff, POINTER_PLUS_EXPR,
-						      running_off, stride_step);
-		  vect_finish_stmt_generation (vinfo, stmt_info, incr, gsi);
-
-		  running_off = newoff;
+		  n_groups++;
+		  /* When doing SLP make sure to not load elements from
+		     the next vector iteration, those will not be accessed
+		     so just use the last element again.  See PR107451.  */
+		  if (!slp || known_lt (n_groups, vf))
+		    {
+		      tree newoff = copy_ssa_name (running_off);
+		      gimple *incr
+			= gimple_build_assign (newoff, POINTER_PLUS_EXPR,
+					       running_off, stride_step);
+		      vect_finish_stmt_generation (vinfo, stmt_info, incr, gsi);
+		      running_off = newoff;
+		    }
 		  group_el = 0;
 		}
 	    }

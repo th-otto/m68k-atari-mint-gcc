@@ -1906,7 +1906,21 @@ cgraph_node::remove (void)
   if (prev_sibling_clone)
     prev_sibling_clone->next_sibling_clone = next_sibling_clone;
   else if (clone_of)
-    clone_of->clones = next_sibling_clone;
+    {
+      clone_of->clones = next_sibling_clone;
+      if (!clones)
+	{
+	  bool need_body = false;
+	  for (cgraph_node *n = clone_of; n; n = n->clone_of)
+	    if (n->analyzed || n->clones)
+	      {
+		need_body = true;
+		break;
+	      }
+	  if (!need_body)
+	    clone_of->release_body ();
+	}
+    }
   if (next_sibling_clone)
     next_sibling_clone->prev_sibling_clone = prev_sibling_clone;
   if (clones)
