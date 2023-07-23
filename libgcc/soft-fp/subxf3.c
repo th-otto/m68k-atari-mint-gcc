@@ -27,6 +27,7 @@
    <https://www.gnu.org/licenses/>.  */
 
 #include "soft-fp.h"
+#ifdef LIBGCC_HAS_XF_MODE
 #include "extended.h"
 
 XFtype
@@ -47,3 +48,4 @@ __subxf3 (XFtype a, XFtype b)
 
   return r;
 }
+#endif

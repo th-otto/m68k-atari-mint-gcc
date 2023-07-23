@@ -318,6 +318,4 @@ union _FP_UNION_D
 
 #endif /* W_TYPE_SIZE < 64 */
 
-#include "softfp-protos.h"
-
 #endif /* !SOFT_FP_DOUBLE_H */

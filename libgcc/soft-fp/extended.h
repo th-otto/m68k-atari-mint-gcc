@@ -514,6 +514,4 @@ union _FP_UNION_E
 
 #endif /* not _FP_W_TYPE_SIZE < 64 */
 
-#include "softfp-protos.h"
-
 #endif /* !SOFT_FP_EXTENDED_H */

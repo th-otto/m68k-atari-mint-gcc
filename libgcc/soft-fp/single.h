@@ -193,6 +193,4 @@ union _FP_UNION_S
 # define _FP_FRAC_HIGH_DW_S(X)	_FP_FRAC_HIGH_1 (X)
 #endif
 
-#include "softfp-protos.h"
-
 #endif /* !SOFT_FP_SINGLE_H */
