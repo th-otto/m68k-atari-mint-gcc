@@ -188,6 +188,7 @@ static enum flt_eval_method
 m68k_excess_precision (enum excess_precision_type);
 static machine_mode m68k_promote_function_mode (const_tree, machine_mode,
 						int *, const_tree, int);
+static void m68k_file_end (void);
 
 /* Initialize the GCC target structure.  */
 
@@ -226,6 +227,8 @@ static machine_mode m68k_promote_function_mode (const_tree, machine_mode,
 
 #undef TARGET_ASM_FILE_START_APP_OFF
 #define TARGET_ASM_FILE_START_APP_OFF true
+#undef TARGET_ASM_FILE_END
+#define TARGET_ASM_FILE_END m68k_file_end
 
 #undef TARGET_LEGITIMIZE_ADDRESS
 #define TARGET_LEGITIMIZE_ADDRESS m68k_legitimize_address
@@ -6624,6 +6627,22 @@ m68k_promote_function_mode (const_tree type, machine_mode mode,
   if (type == NULL_TREE && !for_return && (mode == QImode || mode == HImode))
     return SImode;
   return mode;
+}
+
+/* Do not emit .note.GNU-stack by default.  */
+#undef NEED_INDICATE_EXEC_STACK
+#ifdef USING_ELFOS_H
+#define NEED_INDICATE_EXEC_STACK	1
+#else
+#define NEED_INDICATE_EXEC_STACK	0
+#endif
+
+static void
+m68k_file_end (void)
+{
+  if (NEED_INDICATE_EXEC_STACK)
+    /* Add .note.GNU-stack.  */
+    file_end_indicate_exec_stack ();
 }
 
 #include "gt-m68k.h"
