@@ -901,7 +901,7 @@ proper position among the other output files.  */
 #endif
 
 #ifndef LINKER_NAME
-#define LINKER_NAME "collect2"
+#define LINKER_NAME "collect2 %{v:-v}"
 #endif
 
 #ifdef HAVE_AS_DEBUG_PREFIX_MAP
