@@ -40,6 +40,10 @@ along with GCC; see the file COPYING3.  If not see
 #undef ASM_COMMENT_START
 #define ASM_COMMENT_START "|"
 
+/* with fdlibm, most of the c99 functions are available, including sincos */
+#undef TARGET_LIBC_HAS_FUNCTION
+#define TARGET_LIBC_HAS_FUNCTION bsd_libc_has_function
+
 #undef WCHAR_TYPE
 #define WCHAR_TYPE "short unsigned int"
 
@@ -83,6 +87,13 @@ along with GCC; see the file COPYING3.  If not see
 
 /* The -g option generates stabs debug information.  */
 #define DBX_DEBUGGING_INFO 1
+
+/* Do not break .stabs pseudos into continuations.  */
+#define DBX_CONTIN_LENGTH 0
+
+/* This is the char to use for continuation (in case we need to turn
+   continuation back on).  */
+#define DBX_CONTIN_CHAR '?'
 
 /* This is the assembler directive to equate two values.  */
 #undef SET_ASM_OP
@@ -142,7 +153,33 @@ along with GCC; see the file COPYING3.  If not see
    assembler operation to identify the following data as uninitialized global
    data.  */
 
+#ifdef USING_ELFOS_H
+#define BSS_SECTION_ASM_OP "\t.section\t.bss"
+
+#define TARGET_HAVE_NAMED_SECTIONS true
+
+/* Currently, JUMP_TABLES_IN_TEXT_SECTION must be defined in order to
+   keep switch tables in the text section.  */
+   
+#define JUMP_TABLES_IN_TEXT_SECTION 1
+
+#define EH_TABLES_CAN_BE_READ_ONLY 1
+
+/*
+ * our object format is elf, but not our executable format
+ */
+#undef HAVE_INITFINI_ARRAY_SUPPORT
+#define HAVE_INITFINI_ARRAY_SUPPORT 0
+
+#undef OBJECT_FORMAT_ELF 
+#undef INIT_SECTION_ASM_OP
+#undef FINI_SECTION_ASM_OP
+
+#else
 #define BSS_SECTION_ASM_OP "\t.bss"
+
+#define TARGET_HAVE_NAMED_SECTIONS false
+#endif
 
 /* A C statement (sans semicolon) to output to the stdio stream
    FILE the assembler definition of uninitialized global DECL named

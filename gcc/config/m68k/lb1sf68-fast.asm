@@ -31,7 +31,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #endif
 SYM (__mulsi3):
 SYM (__mulsi3_internal):
-	move.l  d2,-(a7)
+	move.l  d2,-(sp)
 	movel   d0, a0          | d0a0 = x0:x1
 	movel   d1, a1		| d1a1 = y0:y1
 	swap	d0              | d0   = x1:x0 
@@ -49,7 +49,7 @@ SYM (__mulsi3_internal):
 	movel	a1,d1		| d1 = y0:y1
 	muluw	d2, d1		| d1 = x1*y1
 
-	move.l  (a7)+,d2
+	move.l  (sp)+,d2
 	addl	d1, d0
 
 	rts
@@ -66,7 +66,7 @@ SYM (__mulsi3_internal):
 SYM (__udivsi3):
 SYM (__udivsi3_internal):
 #ifndef __mcoldfire__
-	move.l  d2,-(a7)
+	move.l  d2,-(sp)
 	movel	d0, a0
 
 	cmpl	IMM (0x10000), d1 /* divisor >= 2 ^ 16 ?   */
@@ -107,7 +107,7 @@ udivsi3_fast_L4:	lsrl	IMM (1), d1	/* shift divisor */
 udivsi3_fast_L5:	subql	IMM (1), d0	/* adjust quotient */
 
 udivsi3_fast_L6:
-	move.l  (a7)+,d2
+	move.l  (sp)+,d2
 	rts
 
 #else /* __mcoldfire__ */
@@ -142,7 +142,7 @@ udivsi3_fast_L2:	subql	IMM (1),d4
 #endif
 SYM (__divsi3):
 SYM (__divsi3_internal):
-	move.l  d2,-(a7)
+	move.l  d2,-(sp)
 	moveq	IMM (1), d2	/* sign of result stored in d2 (=1 or =-1) */
 	tstl	d1
 	jpl	divsi3_fast_L1
@@ -169,7 +169,7 @@ divsi3_fast_L2:	movew	d2,a1		/* Called function MUST NOT clobber a1 */
 	negl	d0
 
 divsi3_fast_L3:
-	move.l  (a7)+,d2
+	move.l  (sp)+,d2
 	rts
 #endif /* L_divsi3 */
 
@@ -178,7 +178,7 @@ divsi3_fast_L3:
 	FUNC(__umodsi3)
 	.globl	SYM (__umodsi3)
 SYM (__umodsi3):
-	move.l  d2,-(a7)
+	move.l  d2,-(sp)
 	movel	d0, d2
 	movel	d1, a1		/* a1 MUST NOT be clobbered by calls*/
 	PICCALL	SYM (__udivsi3_internal)
@@ -191,7 +191,7 @@ SYM (__umodsi3):
 	movel	d2, d1		/* d1 = dividend */
 	subl	d0, d1		/* d1 = a - (a/b)*b */
 	movel	d1, d0
-	move.l  (a7)+,d2
+	move.l  (sp)+,d2
 	rts
 #endif /* L_umodsi3 */
 
@@ -200,7 +200,7 @@ SYM (__umodsi3):
 	FUNC(__modsi3)
 	.globl	SYM (__modsi3)
 SYM (__modsi3):
-	move.l  d2,-(a7)
+	move.l  d2,-(sp)
 	movel	d0, sp@-
 	movel	d1, sp@-
 	PICCALL	SYM (__divsi3_internal)
@@ -213,6 +213,6 @@ SYM (__modsi3):
 	movel	sp@+, d1	/* d1 = dividend */
 	subl	d0, d1		/* d1 = a - (a/b)*b */
 	movel	d1, d0
-	move.l  (a7)+,d2
+	move.l  (sp)+,d2
 	rts
 #endif /* L_modsi3 */

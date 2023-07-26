@@ -235,6 +235,10 @@ case $os in
 	-psos*)
 		os=-psos
 		;;
+	-mintelf)
+		basic_machine=m68k-atari
+		os=-mintelf
+		;;
 	-mint | -mint[0-9]*)
 		basic_machine=m68k-atari
 		os=-mint
@@ -766,6 +770,10 @@ case $basic_machine in
 		;;
 	miniframe)
 		basic_machine=m68000-convergent
+		;;
+	*mintelf)
+		basic_machine=m68k-atari
+		os=-mintelf
 		;;
 	*mint | -mint[0-9]* | *MiNT | *MiNT[0-9]*)
 		basic_machine=m68k-atari
@@ -1434,6 +1442,9 @@ case $os in
 		;;
 	-xenix)
 		os=-xenix
+		;;
+	-*mintelf)
+		os=-mintelf
 		;;
 	-*mint | -mint[0-9]* | -*MiNT | -MiNT[0-9]*)
 		os=-mint
