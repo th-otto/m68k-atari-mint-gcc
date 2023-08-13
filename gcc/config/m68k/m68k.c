@@ -585,6 +585,14 @@ m68k_handle_option (size_t code, const char *arg, int value)
     default:
       return true;
     }
+
+  /*
+   * disable -fcombine-stack-adjustments for coldfire/mshort combination,
+   * which generates wrong CFI offsets.
+   * https://gcc.gnu.org/bugzilla/show_bug.cgi?id=88160
+   */
+  if (PREFERRED_STACK_BOUNDARY > 16 && INT_TYPE_SIZE <= 16 && (write_symbols & DWARF2_DEBUG))
+    flag_combine_stack_adjustments = 0;
 }
 
 /* Clear stack slot assignments remembered from previous functions.
