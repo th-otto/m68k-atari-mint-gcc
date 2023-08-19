@@ -41,24 +41,6 @@
 #include <bits/c++config.h>
 #include <ctype.h>
 
-#ifdef __MINT__
-/*
- * This defines from mintlib headers conflict with
- * usage in c++ headers
- */
-#undef _CTc
-#undef _CTd
-#undef _CTu
-#undef _CTl
-#undef _CTs
-#undef _CTp
-#undef _CTx
-#undef _CTb
-#undef _CTg
-#undef _CTP
-#undef isblank
-#endif
-
 #ifndef _GLIBCXX_CCTYPE
 #define _GLIBCXX_CCTYPE 1
 
