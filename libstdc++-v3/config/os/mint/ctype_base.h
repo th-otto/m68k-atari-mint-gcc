@@ -1,6 +1,6 @@
 // Locale support -*- C++ -*-
 
-// Copyright (C) 1997-2017 Free Software Foundation, Inc.
+// Copyright (C) 1997-2023 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -26,7 +26,7 @@
 // ISO C++ 14882: 22.1  Locales
 //
 
-//  We don't use the C-locale masks defined in usr/include/ctype.h
+//  We don't use the C-locale masks defined in /usr/include/ctype.h
 //  because those masks do not conform to the requirements of 22.2.1.
 //  In particular, a separate 'print' bitmask does not exist (isprint(c)
 //  relies on a combination of flags) and the  '_ALPHA' mask is also a
@@ -46,7 +46,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
     // NB: Offsets into ctype<char>::_M_table force a particular size
     // on the mask type. Because of this, we don't use an enum.
-    typedef unsigned short 	mask;   
+    typedef unsigned short 	mask;
     static const mask upper	= 1 << 0;
     static const mask lower	= 1 << 1;
     static const mask alpha	= 1 << 2;
