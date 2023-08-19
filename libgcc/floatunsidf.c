@@ -1,3 +1,5 @@
+#include "elf-alias.h"
+
 /* Public domain.  */
 typedef int SItype __attribute__ ((mode (SI)));
 typedef unsigned int USItype __attribute__ ((mode (SI)));
@@ -13,3 +15,4 @@ __floatunsidf (USItype u)
 				 << (sizeof (USItype) * __CHAR_BIT__ - 1));
   return r;
 }
+ELF_ALIAS(__floatunsidf)
