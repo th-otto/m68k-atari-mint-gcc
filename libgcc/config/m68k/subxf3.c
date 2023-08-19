@@ -42,4 +42,6 @@ __subxf3 (long double a, long double b)
 	: "cc", "memory");
 	__builtin_unreachable();
 }
+ELF_ALIAS(__subxf3)
+
 #endif

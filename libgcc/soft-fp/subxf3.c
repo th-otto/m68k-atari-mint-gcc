@@ -48,4 +48,5 @@ __subxf3 (XFtype a, XFtype b)
 
   return r;
 }
+ELF_ALIAS(__subxf3)
 #endif

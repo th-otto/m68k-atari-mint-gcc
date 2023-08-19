@@ -136,6 +136,8 @@ long __gtxf2 (long double x1, long double x2);
 long __gexf2 (long double x1, long double x2);
 #endif
 
+#include "elf-alias.h"
+
 
 #ifdef L_unordsf2
 int
@@ -151,6 +153,7 @@ __unordsf2(float a, float b)
     return 1;
   return 0;
 }
+ELF_ALIAS(__unordsf2)
 #endif
 
 #ifdef L_unorddf2
@@ -169,6 +172,7 @@ __unorddf2(double a, double b)
     return 1;
   return 0;
 }
+ELF_ALIAS(__unorddf2)
 #endif
 
 #ifdef L_floatunsidf
@@ -204,6 +208,7 @@ __floatunsidf (unsigned long a1)
 
   return dl.d;
 }
+ELF_ALIAS(__floatunsidf)
 #endif
 
 #ifdef L_floatsidf
@@ -252,6 +257,7 @@ __floatsidf (long a1)
 
   return dl.d;
 }
+ELF_ALIAS(__floatsidf)
 #endif
 
 #ifdef L_floatunsisf
@@ -262,6 +268,7 @@ __floatunsisf (unsigned long l)
   double foo = __floatunsidf (l);
   return foo;
 }
+ELF_ALIAS(__floatunsisf)
 #endif
 
 #ifdef L_floatsisf
@@ -272,6 +279,7 @@ __floatsisf (long l)
   double foo = __floatsidf (l);
   return foo;
 }
+ELF_ALIAS(__floatsisf)
 #endif
 
 #ifdef L_extendsfdf2
@@ -316,6 +324,7 @@ __extendsfdf2 (float a1)
 	
   return dl.d;
 }
+ELF_ALIAS(__extendsfdf2)
 #endif
 
 #ifdef L_truncdfsf2
@@ -394,6 +403,7 @@ __truncdfsf2 (double a1)
   fl.l = PACK (SIGND (dl1), exp, mant);
   return (fl.f);
 }
+ELF_ALIAS(__truncdfsf2)
 #endif
 
 #ifdef L_fixdfsi
@@ -428,6 +438,7 @@ __fixdfsi (double a1)
 
   return (SIGND (dl1) ? -l : l);
 }
+ELF_ALIAS(__fixdfsi)
 #endif
 
 #ifdef L_fixsfsi
@@ -438,6 +449,7 @@ __fixsfsi (float a1)
   double foo = a1;
   return __fixdfsi (foo);
 }
+ELF_ALIAS(__fixsfsi)
 #endif
 
 /* We do not need these routines for coldfire, as it has no extended
@@ -464,6 +476,7 @@ __unordxf2(long double a, long double b)
     return 1;
   return 0;
 }
+ELF_ALIAS(__unordxf2)
 #endif
 
 #ifdef L_extenddfxf2
@@ -503,6 +516,7 @@ __extenddfxf2 (double d)
   /*printf ("dfxf out: %s\n", dumpxf (ldl.ld));*/
   return ldl.ld;
 }
+ELF_ALIAS(__extenddfxf2)
 #endif
 
 #ifdef L_truncxfdf2
@@ -559,6 +573,7 @@ __truncxfdf2 (long double ld)
   /*printf ("xfdf out: %g\n", dl.d);*/
   return dl.d;
 }
+ELF_ALIAS(__truncxfdf2)
 #endif
 
 #ifdef L_extendsfxf2
@@ -569,6 +584,7 @@ __extendsfxf2 (float f)
   long double foo = __extenddfxf2 (__extendsfdf2 (f));
   return foo;
 }
+ELF_ALIAS(__extendsfxf2)
 #endif
 
 #ifdef L_truncxfsf2
@@ -579,6 +595,7 @@ __truncxfsf2 (long double ld)
   float foo = __truncdfsf2 (__truncxfdf2 (ld));
   return foo;
 }
+ELF_ALIAS(__truncxfsf2)
 #endif
 
 #ifdef L_floatsixf
@@ -589,6 +606,7 @@ __floatsixf (long l)
   double foo = __floatsidf (l);
   return foo;
 }
+ELF_ALIAS(__floatsixf)
 #endif
 
 #ifdef L_floatunsixf
@@ -599,6 +617,7 @@ __floatunsixf (unsigned long l)
   double foo = __floatunsidf (l);
   return foo;
 }
+ELF_ALIAS(__floatunsixf)
 #endif
 
 #ifdef L_fixxfsi
@@ -609,6 +628,7 @@ __fixxfsi (long double ld)
   long foo = __fixdfsi ((double) ld);
   return foo;
 }
+ELF_ALIAS(__fixxfsi)
 #endif
 
 #endif /* !__mcoldfire__ */

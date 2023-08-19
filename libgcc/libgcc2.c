@@ -51,6 +51,8 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #define LIBGCC2_UNITS_PER_WORD LIBGCC2_MAX_UNITS_PER_WORD
 #endif
 
+#include "elf-alias.h"
+
 #if LIBGCC2_UNITS_PER_WORD <= LIBGCC2_MAX_UNITS_PER_WORD
 
 #include "libgcc2.h"
@@ -69,6 +71,7 @@ __negdi2 (DWtype u)
 
   return w.ll;
 }
+ELF_ALIAS(__negdi2)
 #endif
 
 #ifdef L_addvsi3
@@ -82,6 +85,7 @@ __addvSI3 (Wtype a, Wtype b)
 
   return w;
 }
+ELF_ALIAS(__addvsi3)
 #ifdef COMPAT_SIMODE_TRAPPING_ARITHMETIC
 SItype
 __addvsi3 (SItype a, SItype b)
@@ -107,6 +111,7 @@ __addvDI3 (DWtype a, DWtype b)
 
   return w;
 }
+ELF_ALIAS(__addvdi3)
 #endif
 
 #ifdef L_subvsi3
@@ -120,6 +125,7 @@ __subvSI3 (Wtype a, Wtype b)
 
   return w;
 }
+ELF_ALIAS(__subvsi3)
 #ifdef COMPAT_SIMODE_TRAPPING_ARITHMETIC
 SItype
 __subvsi3 (SItype a, SItype b)
@@ -145,6 +151,7 @@ __subvDI3 (DWtype a, DWtype b)
 
   return w;
 }
+ELF_ALIAS(__subvdi3)
 #endif
 
 #ifdef L_mulvsi3
@@ -158,6 +165,7 @@ __mulvSI3 (Wtype a, Wtype b)
 
   return w;
 }
+ELF_ALIAS(__mulvsi3)
 #ifdef COMPAT_SIMODE_TRAPPING_ARITHMETIC
 SItype
 __mulvsi3 (SItype a, SItype b)
@@ -183,6 +191,7 @@ __negvSI2 (Wtype a)
 
   return w;
 }
+ELF_ALIAS(__negvsi2)
 #ifdef COMPAT_SIMODE_TRAPPING_ARITHMETIC
 SItype
 __negvsi2 (SItype a)
@@ -208,6 +217,7 @@ __negvDI2 (DWtype a)
 
   return w;
 }
+ELF_ALIAS(__negvdi2)
 #endif
 
 #ifdef L_absvsi2
@@ -222,6 +232,7 @@ __absvSI2 (Wtype a)
 
   return v ^ w;
 }
+ELF_ALIAS(__absvsi2)
 #ifdef COMPAT_SIMODE_TRAPPING_ARITHMETIC
 SItype
 __absvsi2 (SItype a)
@@ -249,6 +260,7 @@ __absvDI2 (DWtype a)
 
   return v ^ w;
 }
+ELF_ALIAS(__absvdi2)
 #endif
 
 #ifdef L_mulvdi3
@@ -374,6 +386,7 @@ __mulvDI3 (DWtype u, DWtype v)
   /* Overflow.  */
   abort ();
 }
+ELF_ALIAS(__mulvdi3)
 #endif
 
 
@@ -405,6 +418,7 @@ __lshrdi3 (DWtype u, shift_count_type b)
 
   return w.ll;
 }
+ELF_ALIAS(__lshrdi3)
 #endif
 
 #ifdef L_ashldi3
@@ -433,6 +447,7 @@ __ashldi3 (DWtype u, shift_count_type b)
 
   return w.ll;
 }
+ELF_ALIAS(__ashldi3)
 #endif
 
 #ifdef L_ashrdi3
@@ -462,6 +477,7 @@ __ashrdi3 (DWtype u, shift_count_type b)
 
   return w.ll;
 }
+ELF_ALIAS(__ashrdi3)
 #endif
 
 #ifdef L_bswapsi2
@@ -473,6 +489,7 @@ __bswapsi2 (SItype u)
 	  | (((u) & 0x0000ff00u) <<  8)
 	  | (((u) & 0x000000ffu) << 24));
 }
+ELF_ALIAS(__bswapsi2)
 #endif
 #ifdef L_bswapdi2
 DItype
@@ -487,6 +504,7 @@ __bswapdi2 (DItype u)
 	  | (((u) & 0x000000000000ff00ull) << 40)
 	  | (((u) & 0x00000000000000ffull) << 56));
 }
+ELF_ALIAS(__bswapdi2)
 #endif
 #ifdef L_ffssi2
 #undef int
@@ -501,6 +519,7 @@ __ffsSI2 (UWtype u)
   count_trailing_zeros (count, u);
   return count + 1;
 }
+ELF_ALIAS(__ffssi2)
 #endif
 
 #ifdef L_ffsdi2
@@ -521,6 +540,7 @@ __ffsDI2 (DWtype u)
   count_trailing_zeros (count, word);
   return count + add + 1;
 }
+ELF_ALIAS(__ffsdi2)
 #endif
 
 #ifdef L_muldi3
@@ -536,6 +556,7 @@ __muldi3 (DWtype u, DWtype v)
 
   return w.ll;
 }
+ELF_ALIAS(__muldi3)
 #endif
 
 #if (defined (L_udivdi3) || defined (L_divdi3) || \
@@ -691,6 +712,7 @@ __clzSI2 (UWtype x)
 
   return ret;
 }
+ELF_ALIAS(__clzsi2)
 #endif
 
 #ifdef L_clzdi2
@@ -710,6 +732,7 @@ __clzDI2 (UDWtype x)
   count_leading_zeros (ret, word);
   return ret + add;
 }
+ELF_ALIAS(__clzdi2)
 #endif
 
 #ifdef L_ctzsi2
@@ -723,6 +746,7 @@ __ctzSI2 (UWtype x)
 
   return ret;
 }
+ELF_ALIAS(__ctzsi2)
 #endif
 
 #ifdef L_ctzdi2
@@ -742,6 +766,7 @@ __ctzDI2 (UDWtype x)
   count_trailing_zeros (ret, word);
   return ret + add;
 }
+ELF_ALIAS(__ctzdi2)
 #endif
 
 #ifdef L_clrsbsi2
@@ -758,6 +783,7 @@ __clrsbSI2 (Wtype x)
   count_leading_zeros (ret, x);
   return ret - 1;
 }
+ELF_ALIAS(__clrsbsi2)
 #endif
 
 #ifdef L_clrsbdi2
@@ -785,6 +811,7 @@ __clrsbDI2 (DWtype x)
 
   return ret + add - 1;
 }
+ELF_ALIAS(__clrsbdi2)
 #endif
 
 #ifdef L_popcount_tab
@@ -838,6 +865,7 @@ __popcountSI2 (UWtype x)
   return ret;
 #endif
 }
+ELF_ALIAS(__popcountsi2)
 #endif
 
 #ifdef L_popcountdi2
@@ -868,6 +896,7 @@ __popcountDI2 (UDWtype x)
   return ret;
 #endif
 }
+ELF_ALIAS(__popcountdi2)
 #endif
 
 #ifdef L_paritysi2
@@ -889,6 +918,7 @@ __paritySI2 (UWtype x)
   x &= 0xf;
   return (0x6996 >> x) & 1;
 }
+ELF_ALIAS(__paritysi2)
 #endif
 
 #ifdef L_paritydi2
@@ -913,6 +943,7 @@ __parityDI2 (UDWtype x)
   nx &= 0xf;
   return (0x6996 >> nx) & 1;
 }
+ELF_ALIAS(__paritydi2)
 #endif
 
 #ifdef L_udivmoddi4
@@ -1204,6 +1235,11 @@ __udivmoddi4 (UDWtype n, UDWtype d, UDWtype *rp)
   return ww.ll;
 }
 #endif
+#if !((defined (L_udivdi3) || defined (L_divdi3) || \
+     defined (L_umoddi3) || defined (L_moddi3) || \
+     defined (L_divmoddi4)))
+ELF_ALIAS(__udivmoddi4)
+#endif
 #endif
 
 #ifdef L_divdi3
@@ -1228,6 +1264,7 @@ __divdi3 (DWtype u, DWtype v)
 
   return w;
 }
+ELF_ALIAS(__divdi3)
 #endif
 
 #ifdef L_moddi3
@@ -1251,6 +1288,7 @@ __moddi3 (DWtype u, DWtype v)
 
   return w;
 }
+ELF_ALIAS(__moddi3)
 #endif
 
 #ifdef L_divmoddi4
@@ -1279,6 +1317,7 @@ __divmoddi4 (DWtype u, DWtype v, DWtype *rp)
   *rp = r;
   return w;
 }
+ELF_ALIAS(__divmoddi4)
 #endif
 
 #ifdef L_umoddi3
@@ -1291,6 +1330,7 @@ __umoddi3 (UDWtype u, UDWtype v)
 
   return w;
 }
+ELF_ALIAS(__umoddi3)
 #endif
 
 #ifdef L_udivdi3
@@ -1299,6 +1339,7 @@ __udivdi3 (UDWtype n, UDWtype d)
 {
   return __udivmoddi4 (n, d, (UDWtype *) 0);
 }
+ELF_ALIAS(__udivdi3)
 #endif
 
 #ifdef L_cmpdi2
@@ -1307,6 +1348,7 @@ __cmpdi2 (DWtype a, DWtype b)
 {
   return (a > b) - (a < b) + 1;
 }
+ELF_ALIAS(__cmpdi2)
 #endif
 
 #ifdef L_ucmpdi2
@@ -1315,6 +1357,7 @@ __ucmpdi2 (UDWtype a, UDWtype b)
 {
   return (a > b) - (a < b) + 1;
 }
+ELF_ALIAS(__ucmpdi2)
 #endif
 
 #if defined(L_fixunstfdi) && LIBGCC2_HAS_TF_MODE
@@ -1341,6 +1384,7 @@ __fixunstfDI (TFtype a)
     v += (UWtype) a;
   return v;
 }
+ELF_ALIAS(__fixunstfdi)
 #endif
 
 #if defined(L_fixtfdi) && LIBGCC2_HAS_TF_MODE
@@ -1351,6 +1395,7 @@ __fixtfdi (TFtype a)
     return - __fixunstfDI (-a);
   return __fixunstfDI (a);
 }
+ELF_ALIAS(__fixtfdi)
 #endif
 
 #if defined(L_fixunsxfdi) && LIBGCC2_HAS_XF_MODE
@@ -1377,6 +1422,7 @@ __fixunsxfDI (XFtype a)
     v += (UWtype) a;
   return v;
 }
+ELF_ALIAS(__fixunsxfdi)
 #endif
 
 #if defined(L_fixxfdi) && LIBGCC2_HAS_XF_MODE
@@ -1387,6 +1433,7 @@ __fixxfdi (XFtype a)
     return - __fixunsxfDI (-a);
   return __fixunsxfDI (a);
 }
+ELF_ALIAS(__fixxfdi)
 #endif
 
 #if defined(L_fixunsdfdi) && LIBGCC2_HAS_DF_MODE
@@ -1406,6 +1453,7 @@ __fixunsdfDI (DFtype a)
   /* Assemble result from the two parts.  */
   return ((UDWtype) hi << W_TYPE_SIZE) | lo;
 }
+ELF_ALIAS(__fixunsdfdi)
 #endif
 
 #if defined(L_fixdfdi) && LIBGCC2_HAS_DF_MODE
@@ -1416,6 +1464,7 @@ __fixdfdi (DFtype a)
     return - __fixunsdfDI (-a);
   return __fixunsdfDI (a);
 }
+ELF_ALIAS(__fixdfdi)
 #endif
 
 #if defined(L_fixunssfdi) && LIBGCC2_HAS_SF_MODE
@@ -1480,6 +1529,7 @@ __fixunssfDI (SFtype a)
 # error
 #endif
 }
+ELF_ALIAS(__fixunssfdi)
 #endif
 
 #if defined(L_fixsfdi) && LIBGCC2_HAS_SF_MODE
@@ -1490,6 +1540,7 @@ __fixsfdi (SFtype a)
     return - __fixunssfDI (-a);
   return __fixunssfDI (a);
 }
+ELF_ALIAS(__fixsfdi)
 #endif
 
 #if defined(L_floatdixf) && LIBGCC2_HAS_XF_MODE
@@ -1504,6 +1555,7 @@ __floatdixf (DWtype u)
   d += (UWtype)u;
   return d;
 }
+ELF_ALIAS(__floatdixf)
 #endif
 
 #if defined(L_floatundixf) && LIBGCC2_HAS_XF_MODE
@@ -1518,6 +1570,7 @@ __floatundixf (UDWtype u)
   d += (UWtype)u;
   return d;
 }
+ELF_ALIAS(__floatundixf)
 #endif
 
 #if defined(L_floatditf) && LIBGCC2_HAS_TF_MODE
@@ -1532,6 +1585,7 @@ __floatditf (DWtype u)
   d += (UWtype)u;
   return d;
 }
+ELF_ALIAS(__floatditf)
 #endif
 
 #if defined(L_floatunditf) && LIBGCC2_HAS_TF_MODE
@@ -1546,6 +1600,7 @@ __floatunditf (UDWtype u)
   d += (UWtype)u;
   return d;
 }
+ELF_ALIAS(__floatunditf)
 #endif
 
 #if (defined(L_floatdisf) && LIBGCC2_HAS_SF_MODE)	\
@@ -1667,6 +1722,11 @@ FUNC (DWtype u)
   return f * e;
 #endif
 }
+#if defined(L_floatdisf)
+ELF_ALIAS(__floatdisf)
+#elif defined(L_floatdidf)
+ELF_ALIAS(__floatdidf)
+#endif
 #endif
 
 #if (defined(L_floatundisf) && LIBGCC2_HAS_SF_MODE)	\
@@ -1776,6 +1836,11 @@ FUNC (UDWtype u)
   return f * e;
 #endif
 }
+#if defined(L_floatundisf)
+ELF_ALIAS(__floatundisf)
+#elif defined(L_floatundidf)
+ELF_ALIAS(__floatundidf)
+#endif
 #endif
 
 #if defined(L_fixunsxfsi) && LIBGCC2_HAS_XF_MODE
@@ -1786,6 +1851,7 @@ __fixunsxfSI (XFtype a)
     return (Wtype) (a + Wtype_MIN) - Wtype_MIN;
   return (Wtype) a;
 }
+ELF_ALIAS(__fixunsxfsi)
 #endif
 
 #if defined(L_fixunsdfsi) && LIBGCC2_HAS_DF_MODE
@@ -1796,6 +1862,7 @@ __fixunsdfSI (DFtype a)
     return (Wtype) (a + Wtype_MIN) - Wtype_MIN;
   return (Wtype) a;
 }
+ELF_ALIAS(__fixunsdfsi)
 #endif
 
 #if defined(L_fixunssfsi) && LIBGCC2_HAS_SF_MODE
@@ -1806,6 +1873,7 @@ __fixunssfSI (SFtype a)
     return (Wtype) (a + Wtype_MIN) - Wtype_MIN;
   return (Wtype) a;
 }
+ELF_ALIAS(__fixunssfsi)
 #endif
 
 /* Integer power helper used from __builtin_powi for non-constant
@@ -1844,6 +1912,15 @@ NAME (TYPE x, int m)
     }
   return m < 0 ? 1/y : y;
 }
+#if defined(L_powisf2)
+ELF_ALIAS(__powisf2)
+#elif defined(L_powidf2)
+ELF_ALIAS(__powidf2)
+#elif defined(L_powixf2)
+ELF_ALIAS(__powixf2)
+#elif defined(L_powitf2)
+ELF_ALIAS(__powitf2)
+#endif
 
 #endif
 
@@ -2015,6 +2092,17 @@ CONCAT3(__mul,MODE,3) (MTYPE a, MTYPE b, MTYPE c, MTYPE d)
   __imag__ res = y;
   return res;
 }
+#if defined(L_mulhc3)
+ELF_ALIAS(__mulhc3)
+#elif defined(L_mulsc3)
+ELF_ALIAS(__mulsc3)
+#elif defined(L_muldc3)
+ELF_ALIAS(__muldc3)
+#elif defined(L_mulxc3)
+ELF_ALIAS(__mulxc3)
+#elif defined(L_multc3)
+ELF_ALIAS(__multc3)
+#endif
 #endif /* complex multiply */
 
 #if defined(L_divhc3) || defined(L_divsc3) || defined(L_divdc3) \
@@ -2180,6 +2268,17 @@ CONCAT3(__div,MODE,3) (MTYPE a, MTYPE b, MTYPE c, MTYPE d)
   __imag__ res = y;
   return res;
 }
+#if defined(L_divhc3)
+ELF_ALIAS(__divhc3)
+#elif defined(L_divsc3)
+ELF_ALIAS(__divsc3)
+#elif defined(L_divdc3)
+ELF_ALIAS(__divdc3)
+#elif defined(L_divxc3)
+ELF_ALIAS(__divxc3)
+#elif defined(L_divtc3)
+ELF_ALIAS(__divtc3)
+#endif
 #endif /* complex divide */
 
 #endif /* all complex float routines */
@@ -2225,6 +2324,7 @@ __gcc_bcmp (const unsigned char *s1, const unsigned char *s2, size_t size)
     }
   return 0;
 }
+ELF_ALIAS(__gcc_bcmp)
 
 #endif
 
@@ -2246,6 +2346,7 @@ __eprintf (const char *string, const char *expression,
   fflush (stderr);
   abort ();
 }
+ELF_ALIAS(__eprintf)
 
 #endif
 #endif
@@ -2265,6 +2366,7 @@ __clear_cache (void *beg __attribute__((__unused__)),
   CLEAR_INSN_CACHE ((char *) beg, (char *) end);
 #endif /* CLEAR_INSN_CACHE */
 }
+ELF_ALIAS(__clear_cache)
 
 #endif /* L_clear_cache */
 
@@ -2422,6 +2524,7 @@ SYMBOL__MAIN (void)
       __do_global_ctors ();
     }
 }
+ELF_ALIAS(__main)
 #endif /* no HAS_INIT_SECTION or INVOKE__main */
 
 #endif /* L__main */
