@@ -51,6 +51,8 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 #define SYM(x) CONCAT1 (__USER_LABEL_PREFIX__, x)
 
+#include "elf-alias.h"
+
 /* Note that X is a function.  */
 
 #ifdef __ELF__
@@ -362,6 +364,7 @@ OPER2  = __operand2 - SYM (_fpCCR)
 
 | void __clear_sticky_bits(void);
 SYM (__clear_sticky_bit):
+ELF_ALIAS(__clear_sticky_bit)
 	PICLEA	SYM (_fpCCR),a0
 	clr.w	a0@(STICK)
 	rts
@@ -466,6 +469,7 @@ $_exception_handler:
 	.hidden	SYM (__mulsi3_internal)
 #endif
 SYM (__mulsi3):
+ELF_ALIAS(__mulsi3)
 SYM (__mulsi3_internal):
 	movew	sp@(4), d0	/* x0 -> d0 */
 	muluw	sp@(10), d0	/* x0*y1 */
@@ -494,6 +498,7 @@ SYM (__mulsi3_internal):
 	.hidden	SYM (__udivsi3_internal)
 #endif
 SYM (__udivsi3):
+ELF_ALIAS(__udivsi3)
 SYM (__udivsi3_internal):
 #ifndef __mcoldfire__
 	movel	d2, sp@-
@@ -575,6 +580,7 @@ L2:	subql	IMM (1),d4
 	.hidden	SYM (__divsi3_internal)
 #endif
 SYM (__divsi3):
+ELF_ALIAS(__divsi3)
 SYM (__divsi3_internal):
 	movel	d2, sp@-
 
@@ -614,6 +620,7 @@ L3:	movel	sp@+, d2
 	FUNC(__umodsi3)
 	.globl	SYM (__umodsi3)
 SYM (__umodsi3):
+ELF_ALIAS (__umodsi3)
 	movel	sp@(8), d1	/* d1 = divisor */
 	movel	sp@(4), d0	/* d0 = dividend */
 	movel	d1, sp@-
@@ -640,6 +647,7 @@ SYM (__umodsi3):
 	FUNC(__modsi3)
 	.globl	SYM (__modsi3)
 SYM (__modsi3):
+ELF_ALIAS(__modsi3)
 	movel	sp@(8), d1	/* d1 = divisor */
 	movel	sp@(4), d0	/* d0 = dividend */
 	movel	d1, sp@-
@@ -764,6 +772,7 @@ Ld$div$0:
 | double __subdf3(double, double);
 	FUNC(__subdf3)
 SYM (__subdf3):
+ELF_ALIAS(__subdf3)
 	bchg	IMM (31),sp@(12) | change sign of second operand
 				| and fall through, so we always add
 
@@ -774,6 +783,7 @@ SYM (__subdf3):
 | double __adddf3(double, double);
 	FUNC(__adddf3)
 SYM (__adddf3):
+ELF_ALIAS(__adddf3)
 	link	a6,IMM (-40)	| everything will be done in registers
 	moveml	d2-d7/a2-a5,sp@	| save all data registers and a2-a5 (but d0-d1)
 	moveml	a6@(8),d0-d3	| get first operand into d0-d1, and second operand into d2-d3
@@ -1434,6 +1444,7 @@ Ladddf$nf:
 | double __muldf3(double, double);
 	FUNC(__muldf3)
 SYM (__muldf3):
+ELF_ALIAS(__muldf3)
 	link	a6,IMM (-40)	| everything will be done in registers
 	moveml	d2-d7/a2-a5,sp@	| save all data registers and a2-a5 (but d0-d1)
 	moveml	a6@(8),d0-d3	| get a into d0-d1, and b into d2-d3
@@ -1741,6 +1752,7 @@ Lmuldf$b$den:
 | double __divdf3(double, double);
 	FUNC(__divdf3)
 SYM (__divdf3):
+ELF_ALIAS(__divdf3)
 	link	a6,IMM (-40)	| everything will be done in registers
 	moveml	d2-d7/a2-a5,sp@	| save all data registers and a2-a5 (but d0-d1)
 	moveml	a6@(8),d0-d3	| get a into d0-d1, and b into d2-d3
@@ -2167,6 +2179,7 @@ Lround$0:
 | double __negdf2(double, double);
 	FUNC(__negdf2)
 SYM (__negdf2):
+ELF_ALIAS(__negdf2)
 	link	a6,IMM (-40)	| everything will be done in registers
 	moveml	d2-d7/a2-a5,sp@	| save all data registers and a2-a5 (but d0-d1)
 	moveq	IMM (NEGATE),d5
@@ -2212,28 +2225,35 @@ SYM (__negdf2):
 	FUNC(__gtdf2)
 	.globl	SYM (__gtdf2)
 SYM (__gtdf2):
+ELF_ALIAS(__gtdf2)
 	FUNC(__gedf2)
 	.globl	SYM (__gedf2)
 SYM (__gedf2):
+ELF_ALIAS(__gedf2)
 	lea	LESS,a0
 	jbra SYM(__cmpdf2_internal)
 
 	FUNC(__eqdf2)
 	.globl	SYM (__eqdf2)
 SYM (__eqdf2):
+ELF_ALIAS(__eqdf2)
 	FUNC(__nedf2)
 	.globl	SYM (__nedf2)
 SYM (__nedf2):
+ELF_ALIAS(__nedf2)
 	FUNC(__ltdf2)
 	.globl	SYM (__ltdf2)
 SYM (__ltdf2):
+ELF_ALIAS(__ltdf2)
 	FUNC(__ledf2)
 	.globl	SYM (__ledf2)
 SYM (__ledf2):
+ELF_ALIAS(__ledf2)
 
 | int __cmpdf2(double, double);
 	FUNC(__cmpdf2)
 SYM (__cmpdf2):
+ELF_ALIAS(__cmpdf2)
 	lea	GREATER,a0
 
 | int __cmpdf2_internal(double, double, int);
@@ -2539,6 +2559,7 @@ Lf$div$0:
 | float __subsf3(float, float);
 	FUNC(__subsf3)
 SYM (__subsf3):
+ELF_ALIAS(__subsf3)
 #ifdef __FASTCALL__
 	bchg	IMM (31),d1   	| change sign of second operand
 				| and fall through
@@ -2554,6 +2575,7 @@ SYM (__subsf3):
 | float __addsf3(float, float);
 	FUNC(__addsf3)
 SYM (__addsf3):
+ELF_ALIAS(__addsf3)
 	link	a6,IMM (-40)	| everything will be done in registers
 	moveml	d2-d7/a2-a5,sp@	| save all data registers and a2-a5 (but d0-d1)
 #ifndef __FASTCALL__
@@ -3028,6 +3050,7 @@ Laddsf$nf:
 | float __mulsf3(float, float);
 	FUNC(__mulsf3)
 SYM (__mulsf3):
+ELF_ALIAS(__mulsf3)
 	link	a6,IMM (-40)	| everything will be done in registers
 	moveml	d2-d7/a2-a5,sp@	| save all data registers and a2-a5 (but d0-d1)
 #ifndef __FASTCALL__
@@ -3238,6 +3261,7 @@ Lmulsf$b$den:
 | float __divsf3(float, float);
 	FUNC(__divsf3)
 SYM (__divsf3):
+ELF_ALIAS(__divsf3)
 	link	a6,IMM (-40)	| everything will be done in registers
 	moveml	d2-d7/a2-a5,sp@	| save all data registers and a2-a5 (but d0-d1)
 #ifndef __FASTCALL
@@ -3553,6 +3577,7 @@ Lround$0:
 | float __negsf2(float);
 	FUNC(__negsf2)
 SYM (__negsf2):
+ELF_ALIAS(__negsf2)
 	link	a6,IMM (-40)	| everything will be done in registers
 	moveml	d2-d7/a2-a5,sp@	| save all data registers and a2-a5 (but d0-d1)
 	moveq	IMM (NEGATE),d5
@@ -3590,25 +3615,32 @@ SYM (__negsf2):
 	FUNC(__gtsf2)
 	.globl	SYM (__gtsf2)
 SYM (__gtsf2):
+ELF_ALIAS(__gtsf2)
 	FUNC(__gesf2)
 	.globl	SYM (__gesf2)
 SYM (__gesf2):
+ELF_ALIAS(__gesf2)
 	lea	LESS,a0
 	jbra	SYM (__cmpsf2_internal)
 
 SYM (__cmpsf2):
+ELF_ALIAS(__cmpsf2)
 	FUNC(__eqsf2)
 	.globl	SYM (__eqsf2)
 SYM (__eqsf2):
+ELF_ALIAS(__eqsf2)
 	FUNC(__nesf2)
 	.globl	SYM (__nesf2)
 SYM (__nesf2):
+ELF_ALIAS(__nesf2)
 	FUNC(__ltsf2)
 	.globl	SYM (__ltsf2)
 SYM (__ltsf2):
+ELF_ALIAS(__ltsf2)
 	FUNC(__lesf2)
 	.globl	SYM (__lesf2)
 SYM (__lesf2):
+ELF_ALIAS(__lesf2)
 
 | int __cmpsf2(float, float);
 	FUNC(__cmpsf2)
@@ -3845,6 +3877,7 @@ Lx$inop:
 | long double __negxf2(long double, long double);
 	FUNC(__negxf2)
 SYM (__negxf2):
+ELF_ALIAS(__negxf2)
 	link	a6,IMM (-40)	| everything will be done in registers
 	moveml	d2-d7/a2-a5,sp@	| save all data registers and a2-a5 (but d0-d1)
 	moveq	IMM (NEGATE),d5
@@ -3891,28 +3924,35 @@ EQUAL   =  0
 	FUNC(__gtxf2)
 	.globl	SYM (__gtxf2)
 SYM (__gtxf2):
+ELF_ALIAS(__gtxf2)
 	FUNC(__gexf2)
 	.globl	SYM (__gexf2)
 SYM (__gexf2):
+ELF_ALIAS(__gexf2)
 	lea LESS,a0
 	jbra SYM(__cmpxf2_internal)
 
 	FUNC(__eqxf2)
 	.globl	SYM (__eqxf2)
 SYM (__eqxf2):
+ELF_ALIAS(__eqxf2)
 	FUNC(__nexf2)
 	.globl	SYM (__nexf2)
 SYM (__nexf2):
+ELF_ALIAS(__nexf2)
 	FUNC(__ltxf2)
 	.globl	SYM (__ltxf2)
 SYM (__ltxf2):
+ELF_ALIAS(__ltxf2)
 	FUNC(__lexf2)
 	.globl	SYM (__lexf2)
 SYM (__lexf2):
+ELF_ALIAS(__lexf2)
 
 | int __cmpxf2(long double, long double);
 	FUNC(__cmpxf2)
 SYM (__cmpxf2):
+ELF_ALIAS(__cmpxf2)
 	lea	GREATER,a0
 
 | int __cmpxf2_internal(long double, long double, int);

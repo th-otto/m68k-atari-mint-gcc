@@ -28,6 +28,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #include "coretypes.h"
 #include "tm.h"
 #include "gthr.h"
+#include "elf-alias.h"
 
 typedef unsigned int word __attribute__((mode(word)));
 typedef unsigned int pointer __attribute__((mode(pointer)));
@@ -188,6 +189,7 @@ __emutls_get_address (struct __emutls_object *obj)
   return ret;
 #endif
 }
+ELF_ALIAS(__emutls_get_address)
 
 void
 __emutls_register_common (struct __emutls_object *obj,
@@ -203,3 +205,4 @@ __emutls_register_common (struct __emutls_object *obj,
   if (templ && size == obj->size)
     obj->templ = templ;
 }
+ELF_ALIAS(__emutls_register_common)

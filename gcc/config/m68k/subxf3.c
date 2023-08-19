@@ -26,6 +26,8 @@
    License along with the GNU C Library; if not, see
    <https://www.gnu.org/licenses/>.  */
 
+#include "elf-alias.h"
+
 long double __subxf3 (long double x1, long double x2);
 long double __addxf3 (long double x1, long double x2);
 
@@ -41,3 +43,4 @@ __subxf3 (long double a, long double b)
 	: "cc", "memory");
 	__builtin_unreachable();
 }
+ELF_ALIAS(__subxf3)

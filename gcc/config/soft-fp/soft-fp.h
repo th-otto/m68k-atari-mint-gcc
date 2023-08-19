@@ -210,4 +210,6 @@ typedef USItype UHWtype;
 extern void abort (void);
 #endif
 
+#include "elf-alias.h"
+
 #endif

@@ -47,3 +47,4 @@ __mulxf3 (XFtype a, XFtype b)
 
   return r;
 }
+ELF_ALIAS(__mulxf3)
