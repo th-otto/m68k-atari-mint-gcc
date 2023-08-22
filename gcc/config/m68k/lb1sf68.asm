@@ -90,6 +90,10 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #define sp REG (sp)
 #define pc REG (pc)
 
+#ifndef M68K_STRUCT_VALUE_REGNUM
+#define M68K_STRUCT_VALUE_REGNUM a1
+#endif
+
 /* Provide a few macros to allow for PIC code support.
  * With PIC, data is stored A5 relative so we've got to take a bit of special
  * care to ensure that all loads of global data is via A5.  PIC also requires
@@ -416,8 +420,8 @@ $_exception_handler:
 	subql	IMM (2),d6
 #endif
 	beq		4f
-	moveml	d0-d2,a1@			| write return value for long double
-	movel	a1,d0
+	moveml	d0-d2,M68K_STRUCT_VALUE_REGNUM@			| write return value for long double
+	movel	M68K_STRUCT_VALUE_REGNUM,d0
 	bra	4f
 2:
 	movel	a6@(8),a0@(OPER1)
@@ -3863,8 +3867,8 @@ SYM (__negxf2):
 	bra	Lx$infty
 1:	PICLEA	SYM (_fpCCR),a0
 	clrw	a0@
-	moveml	d0-d2,a1@
-	movel	a1,d0
+	moveml	d0-d2,M68K_STRUCT_VALUE_REGNUM@
+	movel	M68K_STRUCT_VALUE_REGNUM,d0
 	moveml	sp@,d2-d7/a2-a5
 	| XXX if frame pointer is ever removed, stack pointer must
 	| be adjusted here.
