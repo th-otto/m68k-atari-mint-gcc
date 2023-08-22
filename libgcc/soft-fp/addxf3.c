@@ -48,4 +48,5 @@ __addxf3 (XFtype a, XFtype b)
 
   return r;
 }
+ELF_ALIAS(__addxf3)
 #endif

@@ -21,6 +21,8 @@ a copy of the GCC Runtime Library Exception along with this program;
 see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 <http://www.gnu.org/licenses/>.  */
 
+#include "elf-alias.h"
+
 extern unsigned long __udivmodsi4(unsigned long num, unsigned long den,
 								  int modwanted);
 
@@ -29,10 +31,11 @@ __udivsi3 (long a, long b)
 {
   return __udivmodsi4 (a, b, 0);
 }
+ELF_ALIAS(__udivsi3)
 
 long
 __umodsi3 (long a, long b)
 {
   return __udivmodsi4 (a, b, 1);
 }
-
+ELF_ALIAS(__umodsi3)

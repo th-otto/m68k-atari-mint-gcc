@@ -48,4 +48,5 @@ __divxf3 (XFtype a, XFtype b)
 
   return r;
 }
+ELF_ALIAS(__divxf3)
 #endif
