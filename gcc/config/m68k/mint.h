@@ -109,6 +109,45 @@ along with GCC; see the file COPYING3.  If not see
 /* The system headers are C++-aware.  */
 #define NO_IMPLICIT_EXTERN_C
 
+/* Finalize the trampoline by flushing the insn cache.  */
+
+#undef FINALIZE_TRAMPOLINE
+#define FINALIZE_TRAMPOLINE(TRAMP)					\
+  if (TARGET_68020 || TARGET_COLDFIRE) \
+    emit_library_call (gen_rtx_SYMBOL_REF (Pmode, "__clear_cache"),	\
+		     LCT_NORMAL, VOIDmode, TRAMP, Pmode,		\
+		     plus_constant (Pmode, TRAMP, TRAMPOLINE_SIZE), \
+		     Pmode);
+
+/* Clear the instruction cache from `beg' to `end'.  This makes an
+   inline system call to Ssystem(S_FLUSHCACHE).  The arguments are as
+   follows:
+
+	Ssystem(S_FLUSHCACHE, addr, len)
+
+   addr	  - the start address for the flush
+   len    - the number of bytes to flush
+
+   The kernel will push the instruction cache
+	    */
+
+#define CLEAR_INSN_CACHE(BEG, END)					\
+{									\
+  register unsigned long _beg __asm ("%d0") = (unsigned long) (BEG);	\
+  unsigned long _end = (unsigned long) (END);				\
+  register unsigned long _len __asm ("%d1") = (_end - _beg);	\
+  __asm __volatile							\
+    ("move%.l %1,-(%%sp)\n\t"	/* len */			\
+     "move%.l %0,-(%%sp)\n\t"	/* beg */			\
+     "move%.w #22,-(%%sp)\n\t"	/* S_FLUSHCACHE */			\
+     "move%.w #340,-(%%sp)\n\t"	/* system call nr */			\
+     "trap #1\n\t"								\
+     "lea 12(%%sp),%%sp" /* correct stack */ \
+     : /* no outputs */							\
+     : "r" (_beg), "r" (_len)						\
+     : "%d2", "%a0", "%a1", "%a2", "cc", "memory");						\
+}
+
 /* By default, the vtable entries are void pointers, the so the alignment
    is the same as pointer alignment.  The value of this macro specifies
    the alignment of the vtable entry in bits.  It should be defined only
