@@ -168,6 +168,7 @@ static void m68k_trampoline_init (rtx, tree, rtx);
 static int m68k_return_pops_args (tree, tree, int);
 static rtx m68k_delegitimize_address (rtx);
 static void m68k_maybe_switch_abi (void);
+static void m68k_file_end (void);
 
 
 /* Specify the identification number of the library being built */
@@ -210,6 +211,8 @@ const char *m68k_library_id_string = "_current_shared_library_a5_offset_";
 
 #undef TARGET_ASM_FILE_START_APP_OFF
 #define TARGET_ASM_FILE_START_APP_OFF true
+#undef TARGET_ASM_FILE_END
+#define TARGET_ASM_FILE_END m68k_file_end
 
 #undef TARGET_LEGITIMIZE_ADDRESS
 #define TARGET_LEGITIMIZE_ADDRESS m68k_legitimize_address
@@ -7084,6 +7087,22 @@ m68k_conditional_register_usage (void)
         if (TEST_HARD_REG_BIT (x, i))
 	  fixed_regs[i] = call_used_regs[i] = 1;
     }
+}
+
+/* Do not emit .note.GNU-stack by default.  */
+#undef NEED_INDICATE_EXEC_STACK
+#ifdef USING_ELFOS_H
+#define NEED_INDICATE_EXEC_STACK	1
+#else
+#define NEED_INDICATE_EXEC_STACK	0
+#endif
+
+static void
+m68k_file_end (void)
+{
+  if (NEED_INDICATE_EXEC_STACK)
+    /* Add .note.GNU-stack.  */
+    file_end_indicate_exec_stack ();
 }
 
 #include "gt-m68k.h"

@@ -38,3 +38,9 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 	.section .fini
 	unlk %fp
 	rts
+
+
+#if defined (__ELF__)
+	/* Make stack non-executable for ELF linux targets.  */
+	.section	.note.GNU-stack,"",@progbits
+#endif
