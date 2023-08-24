@@ -3904,6 +3904,9 @@ x:
 	addiu $4, $4, %tprel_lo(x)'
 	tls_as_opt='-32 --fatal-warnings'
 	;;
+  m68k-*-mintelf*)
+	# the assembler will support that, but we want to use emutls at runtime
+	;;
   m68k-*-*)
     conftest_s='
 	.section .tdata,"awT",@progbits
