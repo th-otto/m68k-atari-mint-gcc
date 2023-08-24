@@ -3872,6 +3872,9 @@ x:
 	tls_first_minor=16
 	tls_as_opt='-32 --fatal-warnings'
 	;;
+  m68k-*-mintelf*)
+	# the assembler will support that, but we want to use emutls at runtime
+	;;
   m68k-*-*)
     conftest_s='
 	.section .tdata,"awT",@progbits
