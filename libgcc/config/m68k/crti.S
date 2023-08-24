@@ -42,3 +42,9 @@ _init:
 	.type   _fini,@function
 _fini:
 	linkw %fp,#0
+
+
+#if defined (__ELF__)
+	/* Make stack non-executable for ELF linux targets.  */
+	.section	.note.GNU-stack,"",@progbits
+#endif
