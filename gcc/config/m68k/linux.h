@@ -226,8 +226,6 @@ along with GCC; see the file COPYING3.  If not see
      : "%d0", "%d2", "%d3");						\
 }
 
-#define TARGET_ASM_FILE_END file_end_indicate_exec_stack
-
 #undef DEBUGGER_REGNO
 #define DEBUGGER_REGNO(REGNO) (REGNO)
 
