@@ -6691,6 +6691,12 @@ m68k_promote_function_mode (const_tree type, machine_mode mode,
 static void
 m68k_file_end (void)
 {
+#if defined(HAVE_AS_GNU_ATTRIBUTE) && 0
+  /* Emit .gnu_attribute directive for Tag_GNU_M68K_ABI_FP.  */
+  int fp_abi = TARGET_68881 ? (FUNCTION_VALUE_REGNO_P(FP0_REG) ? 1 : 2) : 0;
+  fprintf (asm_out_file, "\t.gnu_attribute 4, %d\n", fp_abi);
+#endif
+
   if (NEED_INDICATE_EXEC_STACK)
     /* Add .note.GNU-stack.  */
     file_end_indicate_exec_stack ();
