@@ -4443,6 +4443,14 @@ gd:
       [Define 0/1 if your assembler and linker support calling ___tls_get_addr via GOT.])
     ;;
 
+   m68k-*-*)
+     gcc_GAS_CHECK_FEATURE([.gnu_attribute support],
+      gcc_cv_as_m68k_gnu_attribute,,
+      [.gnu_attribute 4,1],,
+      [AC_DEFINE(HAVE_AS_GNU_ATTRIBUTE, 1,
+	  [Define if your assembler supports .gnu_attribute.])])
+    ;;
+
   ia64*-*-*)
     gcc_GAS_CHECK_FEATURE([ltoffx and ldxmov relocs],
 	gcc_cv_as_ia64_ltoffx_ldxmov_relocs, [2,14,0],,
