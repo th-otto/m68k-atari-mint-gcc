@@ -820,15 +820,23 @@ do { if (cc_prev_status.flags & CC_IN_68881)			\
 
 /* Control the assembler format that we output.  */
 
+extern const char *m68k_text_section, *m68k_data_section, *m68k_rodata_section;
+
 #define ASM_APP_ON "#APP\n"
 #define ASM_APP_OFF "#NO_APP\n"
-#define TEXT_SECTION_ASM_OP "\t.text"
-#define DATA_SECTION_ASM_OP "\t.data"
+#define TEXT_SECTION_ASM_OP m68k_text_section
+#define DATA_SECTION_ASM_OP m68k_data_section
+#undef READONLY_DATA_SECTION_ASM_OP
+#define READONLY_DATA_SECTION_ASM_OP	m68k_rodata_section
 #define GLOBAL_ASM_OP "\t.globl\t"
 #define REGISTER_PREFIX ""
 #define LOCAL_LABEL_PREFIX ""
 #define USER_LABEL_PREFIX "_"
 #define IMMEDIATE_PREFIX "#"
+
+#define M68K_DEFAULT_TEXT_SECTION ".text"
+#define M68K_DEFAULT_DATA_SECTION ".data"
+#define M68K_DEFAULT_RODATA_SECTION ".rodata"
 
 #define REGISTER_NAMES \
 {REGISTER_PREFIX"d0", REGISTER_PREFIX"d1", REGISTER_PREFIX"d2",	\
