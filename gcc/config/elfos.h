@@ -206,7 +206,13 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #define ASCII_DATA_ASM_OP	"\t.ascii\t"
 
 /* Support a read-only data section.  */
-#define READONLY_DATA_SECTION_ASM_OP	"\t.section\t.rodata"
+#ifndef READONLY_DATA_SECTION_ASM_OP
+#define READONLY_DATA_SECTION_ASM_OP	"\t.section\t" ELF_DEFAULT_RODATA_SECTION
+#endif
+#define ELF_SECTION_FORMAT		"\t.section %s"
+#define ELF_DEFAULT_TEXT_SECTION	".text"
+#define ELF_DEFAULT_DATA_SECTION	".data"
+#define ELF_DEFAULT_RODATA_SECTION	".rodata"
 
 /* On svr4, we *do* have support for the .init and .fini sections, and we
    can put stuff in there to be executed before and after `main'.  We let
