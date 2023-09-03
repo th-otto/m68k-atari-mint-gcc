@@ -84,6 +84,11 @@ enum reg_class regno_reg_class[] =
 };
 
 
+/* Name of text, data, and rodata sections used in varasm.c.  */
+const char *m68k_text_section;
+const char *m68k_data_section;
+const char *m68k_rodata_section;
+
 /* The minimum number of integer registers that we want to save with the
    movem instruction.  Using two movel instructions instead of a single
    moveml is about 15% faster for the 68020 and 68030 at no expense in
@@ -661,6 +666,27 @@ m68k_option_override (void)
     default:
       gcc_unreachable ();
     }
+
+  /* Set the pseudo-ops for the various standard sections.  */
+#ifdef ELF_SECTION_FORMAT
+  {
+  char *tmp;
+  const char *name;
+  name = m68k_text_string ? m68k_text_string : M68K_DEFAULT_TEXT_SECTION;
+  m68k_text_section = tmp = XNEWVEC (char, strlen (name) + sizeof (ELF_SECTION_FORMAT) + 1);
+  sprintf (tmp, ELF_SECTION_FORMAT, name);
+  name = m68k_data_string ? m68k_data_string : M68K_DEFAULT_DATA_SECTION;
+  m68k_data_section = tmp = XNEWVEC (char, strlen (name) + sizeof (ELF_SECTION_FORMAT) + 1);
+  sprintf (tmp, ELF_SECTION_FORMAT, name);
+  name = m68k_rodata_string ? m68k_rodata_string : M68K_DEFAULT_RODATA_SECTION;
+  m68k_rodata_section = tmp = XNEWVEC (char, strlen (name) + sizeof (ELF_SECTION_FORMAT) + 1);
+  sprintf (tmp, ELF_SECTION_FORMAT, name);
+  }
+#else
+  m68k_text_section = "\t" M68K_DEFAULT_TEXT_SECTION;
+  m68k_data_section = "\t" M68K_DEFAULT_DATA_SECTION;
+  m68k_rodata_section = m68k_text_section;
+#endif
 
 #ifndef ASM_OUTPUT_ALIGN_WITH_NOP
   parse_alignment_opts ();
