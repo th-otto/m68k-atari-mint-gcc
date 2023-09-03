@@ -197,3 +197,15 @@ Support more than 8192 GOT entries on ColdFire.
 mxtls
 Target Mask(XTLS)
 Support TLS segment larger than 64K.
+
+mtext=
+Target RejectNegative Joined Var(m68k_text_string) Init(0)
+Put functions in SECTION
+
+mdata=
+Target RejectNegative Joined Var(m68k_data_string) Init(0)
+Put data in SECTION
+
+mrodata=
+Target RejectNegative Joined Var(m68k_rodata_string) Init(0)
+Put read-only data in SECTION
