@@ -387,6 +387,10 @@ m68k-*-linux*)		# Motorola m68k's running GNU/Linux
 				# with ELF format using glibc 2
 				# aka the GNU/Linux C library 6.
 	;;
+m68k-*-mintelf*)
+	tmake_file="$tmake_file m68k/t-floatlib m68k/t-mint"
+	extra_parts="$extra_parts crtbegin.o crtend.o"
+	;;
 m68k-*-mint*)
 	;;
 m68k-*-rtems*)

@@ -78,7 +78,13 @@ along with GCC; see the file COPYING3.  If not see
   "%{!m680*:%{!mc680*:-D__M68000__}} "	\
   "%{mshort:-D__MSHORT__}"
 
-#define STARTFILE_SPEC	"%{pg|p|profile:gcrt0.o%s;:crt0.o%s}"
+#undef  STARTFILE_SPEC
+#define STARTFILE_SPEC	"%{pg|p|profile:gcrt0.o%s;:crt0.o%s} crtbegin.o%s"
+ 
+#undef  ENDFILE_SPEC
+#define ENDFILE_SPEC "crtend.o%s"
+
+#undef  LIB_SPEC
 #define LIB_SPEC	"-lc"
 #define LINKER_NAME	"collect2 %{v:-v}"
 
