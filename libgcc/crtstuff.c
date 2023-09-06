@@ -64,6 +64,8 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #include "libgcc_tm.h"
 #include "unwind-dw2-fde.h"
 
+#include "elf-alias.h"
+
 #ifndef FORCE_CODE_SECTION_ALIGN
 # define FORCE_CODE_SECTION_ALIGN
 #endif
@@ -198,7 +200,12 @@ extern void _ITM_deregisterTMCloneTable (void *) TARGET_ATTRIBUTE_WEAK;
 
 /*  Declare a pointer to void function type.  */
 typedef void (*func_ptr) (void);
+#ifdef HAS_INIT_SECTION
 #define STATIC static
+#else
+/* Define global arrays because they are referred by __main.o.  */
+#define STATIC
+#endif
 
 #else  /* OBJECT_FORMAT_ELF */
 
@@ -252,6 +259,7 @@ STATIC func_ptr __DTOR_LIST__[1]
   = { (func_ptr) (-1) };
 #else
 STATIC func_ptr __DTOR_LIST__[1]
+  __attribute__((__used__))
   __attribute__((section(".dtors"), aligned(__alignof__(func_ptr))))
   = { (func_ptr) (-1) };
 #endif /* __DTOR_LIST__ alternatives */
@@ -260,7 +268,9 @@ STATIC func_ptr __DTOR_LIST__[1]
 #ifdef USE_EH_FRAME_REGISTRY
 /* Stick a label at the beginning of the frame unwind info so we can register
    and deregister it with the exception handling library code.  */
+
 STATIC EH_FRAME_SECTION_CONST char __EH_FRAME_BEGIN__[]
+     __attribute__((__used__))
      __attribute__((section(__LIBGCC_EH_FRAME_SECTION_NAME__),
 		    aligned(__alignof__ (void *))))
      = { };
@@ -594,6 +604,8 @@ __do_global_ctors_1(void)
 }
 #endif /* USE_EH_FRAME_REGISTRY || USE_TM_CLONE_REGISTRY */
 
+#elif defined(__MINT__) && defined(__ELF__)
+/* already done in libgcc2.c */
 #else /* ! __LIBGCC_INIT_SECTION_ASM_OP__ && ! HAS_INIT_SECTION */
 #error "What are you doing with crtstuff.c, then?"
 #endif
@@ -621,6 +633,7 @@ STATIC func_ptr __CTOR_END__[1]
   = { (func_ptr) 0 };
 #else
 STATIC func_ptr __CTOR_END__[1]
+  __attribute__((__used__))
   __attribute__((section(".ctors"), aligned(__alignof__(func_ptr))))
   = { (func_ptr) 0 };
 #endif
@@ -753,6 +766,8 @@ __do_global_ctors (void)
     (*p) ();
 }
 
+#elif defined(__MINT__) && defined(__ELF__)
+/* already done in libgcc2.c */
 #else /* ! __LIBGCC_INIT_SECTION_ASM_OP__ && ! HAS_INIT_SECTION */
 #error "What are you doing with crtstuff.c, then?"
 #endif
