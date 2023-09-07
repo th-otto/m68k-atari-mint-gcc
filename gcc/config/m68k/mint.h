@@ -1,7 +1,5 @@
-/* Definitions of target machine for GNU compiler.
-   Atari ST TOS/MiNT.
-   Copyright (C) 1994, 1995, 2007, 2008, 2009, 2010, 2011
-   Free Software Foundation, Inc.
+/* Definitions of target machine for GCC for Atari ST TOS/MiNT.
+   Copyright (C) 1994-2023 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -171,7 +169,27 @@ along with GCC; see the file COPYING3.  If not see
 
    MiNT: DWARF 2 frame unwind is not supported by a.out-mint.
 */
+#undef DWARF2_UNWIND_INFO
+/* If configured with --disable-sjlj-exceptions, use DWARF2
+   else default to SJLJ.  */
+#if defined(USING_ELFOS_H) && defined (CONFIG_SJLJ_EXCEPTIONS) && !CONFIG_SJLJ_EXCEPTIONS
+/* The logic of this #if must be kept synchronised with the logic
+   for selecting the tmake_eh_file fragment in libgcc/config.host.  */
+#define DWARF2_UNWIND_INFO 1
+#else
 #define DWARF2_UNWIND_INFO 0
+#endif
+
+#if DWARF2_UNWIND_INFO
+/* the default of DW_EH_PE_absptr creates relocations at odd addresses, which we cannot handle */
+#undef ASM_PREFERRED_EH_DATA_FORMAT
+#define ASM_PREFERRED_EH_DATA_FORMAT(CODE, GLOBAL)			   \
+  (flag_pic								   \
+   && !((TARGET_ID_SHARED_LIBRARY || TARGET_SEP_DATA)			   \
+	&& ((GLOBAL) || (CODE)))					   \
+   ? ((GLOBAL) ? DW_EH_PE_indirect : 0) | DW_EH_PE_pcrel | DW_EH_PE_sdata4 \
+   : DW_EH_PE_aligned)
+#endif
 
 /* config/m68k.md has an explicit reference to the program counter,
    prefix this by the register prefix.  */
@@ -220,9 +238,18 @@ along with GCC; see the file COPYING3.  If not see
 #undef HAVE_INITFINI_ARRAY_SUPPORT
 #define HAVE_INITFINI_ARRAY_SUPPORT 0
 
-#undef OBJECT_FORMAT_ELF 
 #undef INIT_SECTION_ASM_OP
 #undef FINI_SECTION_ASM_OP
+
+/* This is how to output an assembler line that says to advance the
+   location counter to a multiple of 2**LOG bytes.  */
+
+#undef ASM_OUTPUT_ALIGN
+#define ASM_OUTPUT_ALIGN(FILE,LOG)				\
+do {								\
+  if ((LOG) > 0)						\
+    fprintf ((FILE), "%s%u\n", ALIGN_ASM_OP, 1 << (LOG));	\
+} while (0)
 
 #else
 #define BSS_SECTION_ASM_OP "\t.bss"
