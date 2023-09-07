@@ -169,6 +169,7 @@ static int m68k_return_pops_args (tree, tree, int);
 static rtx m68k_delegitimize_address (rtx);
 static void m68k_maybe_switch_abi (void);
 static void m68k_file_end (void);
+static enum unwind_info_type m68k_except_unwind_info (struct gcc_options *opts);
 
 
 /* Specify the identification number of the library being built */
@@ -253,6 +254,9 @@ const char *m68k_library_id_string = "_current_shared_library_a5_offset_";
 
 #undef TARGET_OVERRIDE_OPTIONS_AFTER_CHANGE
 #define TARGET_OVERRIDE_OPTIONS_AFTER_CHANGE m68k_override_options_after_change
+
+#undef TARGET_EXCEPT_UNWIND_INFO
+#define TARGET_EXCEPT_UNWIND_INFO m68k_except_unwind_info
 
 #undef TARGET_RTX_COSTS
 #define TARGET_RTX_COSTS m68k_rtx_costs
@@ -867,6 +871,25 @@ m68k_override_options_after_change (void)
       flag_schedule_insns_after_reload = 0;
       flag_modulo_sched = 0;
     }
+}
+
+/* Implement TARGET_EXCEPT_UNWIND_INFO.  */
+
+static enum unwind_info_type
+m68k_except_unwind_info (struct gcc_options *opts ATTRIBUTE_UNUSED)
+{
+#ifdef USING_ELFOS_H
+  /* Honor the --enable-sjlj-exceptions configure switch.  */
+#ifdef CONFIG_SJLJ_EXCEPTIONS
+  if (CONFIG_SJLJ_EXCEPTIONS)
+    return UI_SJLJ;
+#endif
+
+  if (DWARF2_UNWIND_INFO)
+    return UI_DWARF2;
+#endif
+
+  return UI_SJLJ;
 }
 
 /* Generate a macro of the form __mPREFIX_cpu_NAME, where PREFIX is the
