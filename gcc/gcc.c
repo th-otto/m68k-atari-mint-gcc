@@ -42,6 +42,7 @@ compilation is specified by a string called a "spec".  */
 #include "opts.h"
 #include "params.h"
 #include "filenames.h"
+#include "common/common-target.h"
 #include "spellcheck.h"
 
 /*
@@ -6677,6 +6678,13 @@ print_configuration (FILE *file)
 #endif
 
   fnotice (file, "Thread model: %s\n", thrmod);
+  enum unwind_info_type unwind_info = targetm_common.except_unwind_info (&global_options);
+  fnotice (file, "Exceptions: %s\n",
+    unwind_info == UI_NONE ? "none" :
+    unwind_info == UI_SJLJ ? "SJLJ" :
+    unwind_info == UI_DWARF2 ? "Dwarf2" :
+    unwind_info == UI_SEH ? "SEH" :
+    "target");
 
   /* compiler_version is truncated at the first space when initialized
   from version string, so truncate version_string at the first space
