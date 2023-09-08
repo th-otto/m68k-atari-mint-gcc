@@ -2023,6 +2023,9 @@ m68k-*-mintelf*)
 	xm_file=m68k/xm-mint.h
 	gas=yes
 	gnu_ld=yes
+	if test x${disable_initfini_array} != xyes; then
+		gcc_cv_initfini_array=yes
+	fi
 	;;
 m68k-*-mint*)
 	default_m68k_cpu=68000
