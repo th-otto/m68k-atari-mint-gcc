@@ -47,11 +47,18 @@ along with GCC; see the file COPYING3.  If not see
 #undef WCHAR_TYPE_SIZE
 #define WCHAR_TYPE_SIZE SHORT_TYPE_SIZE
 
+#if HAVE_INITFINI_ARRAY_SUPPORT
+#define GCC_HAVE_INITFINI_ARRAY_SUPPORT builtin_define ("__GCC_HAVE_INITFINI_ARRAY_SUPPORT");
+#else
+#define GCC_HAVE_INITFINI_ARRAY_SUPPORT
+#endif
+
 #undef TARGET_OS_CPP_BUILTINS
 #define TARGET_OS_CPP_BUILTINS()		\
   do						\
     {						\
       builtin_define ("__MINT__");		\
+      GCC_HAVE_INITFINI_ARRAY_SUPPORT \
       builtin_define_std ("atarist");		\
       builtin_assert ("machine=atari");		\
       builtin_assert ("system=mint");		\
@@ -229,11 +236,8 @@ along with GCC; see the file COPYING3.  If not see
 
 #define EH_TABLES_CAN_BE_READ_ONLY 1
 
-/*
- * our object format is elf, but not our executable format
- */
-#undef HAVE_INITFINI_ARRAY_SUPPORT
-#define HAVE_INITFINI_ARRAY_SUPPORT 0
+/* avoid pulling in the tm_clone support which we don't need */
+#define USE_TM_CLONE_REGISTRY 0
 
 #undef INIT_SECTION_ASM_OP
 #undef FINI_SECTION_ASM_OP
