@@ -164,7 +164,8 @@ gm2_langhook_init_options_struct (struct gcc_options *opts)
 #if (defined(INVOKE__main)				\
      || (!defined(HAS_INIT_SECTION)			\
 	 && !defined(INIT_SECTION_ASM_OP)		\
-	 && !defined(INIT_ARRAY_SECTION_ASM_OP)))
+	 && !defined(INIT_ARRAY_SECTION_ASM_OP) \
+	 && !HAVE_INITFINI_ARRAY_SUPPORT))
   M2Scaffold_SetNeedsMain();
 #endif
 }
