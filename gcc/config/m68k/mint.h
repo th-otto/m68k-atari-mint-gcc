@@ -236,7 +236,7 @@ along with GCC; see the file COPYING3.  If not see
 
 /* Currently, JUMP_TABLES_IN_TEXT_SECTION must be defined in order to
    keep switch tables in the text section.  */
-   
+
 #define JUMP_TABLES_IN_TEXT_SECTION 1
 
 #define EH_TABLES_CAN_BE_READ_ONLY 1
@@ -259,7 +259,7 @@ do {								\
 
 #undef  STARTFILE_SPEC
 #define STARTFILE_SPEC	"%{pg|p|profile:gcrt0.o%s;:crt0.o%s} crtbegin.o%s"
- 
+
 #undef  ENDFILE_SPEC
 #define ENDFILE_SPEC "crtend.o%s"
 
@@ -288,7 +288,7 @@ do {								\
 
 #undef  STARTFILE_SPEC
 #define STARTFILE_SPEC	"%{pg|p|profile:gcrt0.o%s;:crt0.o%s}"
- 
+
 #undef  ENDFILE_SPEC
 #define ENDFILE_SPEC ""
 
