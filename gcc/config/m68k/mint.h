@@ -83,12 +83,6 @@ along with GCC; see the file COPYING3.  If not see
   "%{!m680*:%{!mc680*:-D__M68000__}} "	\
   "%{mshort:-D__MSHORT__}"
 
-#undef  STARTFILE_SPEC
-#define STARTFILE_SPEC	"%{pg|p|profile:gcrt0.o%s;:crt0.o%s} crtbegin.o%s"
- 
-#undef  ENDFILE_SPEC
-#define ENDFILE_SPEC "crtend.o%s"
-
 #undef  LIB_SPEC
 #define LIB_SPEC	"-lc"
 #define LINKER_NAME	"collect2 %{v:-v}"
@@ -195,6 +189,14 @@ along with GCC; see the file COPYING3.  If not see
 	&& ((GLOBAL) || (CODE)))					   \
    ? ((GLOBAL) ? DW_EH_PE_indirect : 0) | DW_EH_PE_pcrel | DW_EH_PE_sdata4 \
    : DW_EH_PE_aligned)
+
+/* Define how the m68k registers should be numbered for Dwarf output.
+   The numbering provided here should be compatible with the native
+   SVR4 debugger in the m68k/SVR4 reference port, where d0-d7
+   are 0-7, a0-a7 are 8-15, and fp0-fp7 are 16-23.  */
+
+#undef DBX_REGISTER_NUMBER
+#define DBX_REGISTER_NUMBER(REGNO) (REGNO)
 #endif
 
 /* config/m68k.md has an explicit reference to the program counter,
@@ -218,6 +220,11 @@ along with GCC; see the file COPYING3.  If not see
 #undef ADDR_VEC_ALIGN
 #define ADDR_VEC_ALIGN(ADDR_VEC) 0
 
+/* we must define this to prevent alignment of the table,
+   otherwise the relative offset from ASM_RETURN_CASE_JUMP might not match */
+#undef ASM_OUTPUT_BEFORE_CASE_LABEL
+#define ASM_OUTPUT_BEFORE_CASE_LABEL(FILE,PREFIX,NUM,TABLE)
+
 /* If defined, a C expression whose value is a string containing the
    assembler operation to identify the following data as uninitialized global
    data.  */
@@ -229,7 +236,7 @@ along with GCC; see the file COPYING3.  If not see
 
 /* Currently, JUMP_TABLES_IN_TEXT_SECTION must be defined in order to
    keep switch tables in the text section.  */
-   
+
 #define JUMP_TABLES_IN_TEXT_SECTION 1
 
 #define EH_TABLES_CAN_BE_READ_ONLY 1
@@ -250,10 +257,27 @@ do {								\
     fprintf ((FILE), "%s%u\n", ALIGN_ASM_OP, 1 << (LOG));	\
 } while (0)
 
+#undef  STARTFILE_SPEC
+#define STARTFILE_SPEC	"%{pg|p|profile:gcrt0.o%s;:crt0.o%s} crtbegin.o%s"
+ 
+#undef  ENDFILE_SPEC
+#define ENDFILE_SPEC "crtend.o%s"
+
 #else
+/* We can only do STABS.  */
+#undef PREFERRED_DEBUGGING_TYPE
+#define PREFERRED_DEBUGGING_TYPE DBX_DEBUG
+
 #define BSS_SECTION_ASM_OP "\t.bss"
 
 #define TARGET_HAVE_NAMED_SECTIONS false
+
+#undef  STARTFILE_SPEC
+#define STARTFILE_SPEC	"%{pg|p|profile:gcrt0.o%s;:crt0.o%s}"
+ 
+#undef  ENDFILE_SPEC
+#define ENDFILE_SPEC ""
+
 #endif
 
 /* A C statement (sans semicolon) to output to the stdio stream
@@ -271,7 +295,7 @@ do {								\
 #define SUBTARGET_OVERRIDE_OPTIONS					\
 do {									\
   if (flag_pic && !TARGET_PCREL)					\
-      error ("-f%s is not supported on this target",			\
+      error ("%<-f%s%> is not supported on this target",			\
 	       (flag_pic > 1) ? "PIC" : "pic");				\
 } while (0)
 
