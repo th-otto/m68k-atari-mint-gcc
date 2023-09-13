@@ -17,12 +17,6 @@ You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING3.  If not see
 <http://www.gnu.org/licenses/>.  */
 
-#ifndef USING_ELFOS_H
-/* We can only do STABS.  */
-#undef PREFERRED_DEBUGGING_TYPE
-#define PREFERRED_DEBUGGING_TYPE DBX_DEBUG
-#endif
-
 /* Here are four prefixes that are used by asm_fprintf to
    facilitate customization for alternate assembler syntaxes.
    Machines with no likelihood of an alternate syntax need not
@@ -88,17 +82,8 @@ along with GCC; see the file COPYING3.  If not see
   "%{!m680*:%{!mc680*:%{!mcpu=680*:-D__M68000__}}} "	\
   "%{mshort:-D__MSHORT__}"
 
-#undef  STARTFILE_SPEC
-#define STARTFILE_SPEC	"%{pg|p|profile:gcrt0.o%s;:crt0.o%s} crtbegin.o%s"
- 
-#undef  ENDFILE_SPEC
-#define ENDFILE_SPEC "crtend.o%s"
-
 #undef  LIB_SPEC
 #define LIB_SPEC	"-lc"
-
-/* Every structure or union's size must be a multiple of 2 bytes.  */
-#define STRUCTURE_SIZE_BOUNDARY 16
 
 /* The -g option generates stabs debug information.  */
 #define DBX_DEBUGGING_INFO 1
@@ -200,6 +185,14 @@ along with GCC; see the file COPYING3.  If not see
 	&& ((GLOBAL) || (CODE)))					   \
    ? ((GLOBAL) ? DW_EH_PE_indirect : 0) | DW_EH_PE_pcrel | DW_EH_PE_sdata4 \
    : DW_EH_PE_aligned)
+
+/* Define how the m68k registers should be numbered for Dwarf output.
+   The numbering provided here should be compatible with the native
+   SVR4 debugger in the m68k/SVR4 reference port, where d0-d7
+   are 0-7, a0-a7 are 8-15, and fp0-fp7 are 16-23.  */
+
+#undef DEBUGGER_REGNO
+#define DEBUGGER_REGNO(REGNO) (REGNO)
 #endif
 
 /* config/m68k.md has an explicit reference to the program counter,
@@ -226,6 +219,11 @@ along with GCC; see the file COPYING3.  If not see
 
 #undef ADDR_VEC_ALIGN
 #define ADDR_VEC_ALIGN(ADDR_VEC) 0
+
+/* we must define this to prevent alignment of the table,
+   otherwise the relative offset from ASM_RETURN_CASE_JUMP might not match */
+#undef ASM_OUTPUT_BEFORE_CASE_LABEL
+#define ASM_OUTPUT_BEFORE_CASE_LABEL(FILE,PREFIX,NUM,TABLE)
 
 /* If defined, a C expression whose value is a string containing the
    assembler operation to identify the following data as uninitialized global
@@ -259,10 +257,44 @@ do {								\
     fprintf ((FILE), "%s%u\n", ALIGN_ASM_OP, 1 << (LOG));	\
 } while (0)
 
+#undef  STARTFILE_SPEC
+#define STARTFILE_SPEC	"%{pg|p|profile:gcrt0.o%s;:crt0.o%s} crtbegin.o%s"
+ 
+#undef  ENDFILE_SPEC
+#define ENDFILE_SPEC "crtend.o%s"
+
+/* In order for bitfields to work on a 68000, or with -mnobitfield, we must
+   define either PCC_BITFIELD_TYPE_MATTERS or STRUCTURE_SIZE_BOUNDARY.
+   Defining STRUCTURE_SIZE_BOUNDARY results in structure packing problems,
+   so we define PCC_BITFIELD_TYPE_MATTERS.  */
+/*
+ * However for compatibility reasons, we keep the previous setting.
+ */
+#if 0
+#define PCC_BITFIELD_TYPE_MATTERS 1
 #else
+/* Every structure or union's size must be a multiple of 2 bytes.  */
+#define STRUCTURE_SIZE_BOUNDARY 16
+#endif
+
+#else
+/* We can only do STABS.  */
+#undef PREFERRED_DEBUGGING_TYPE
+#define PREFERRED_DEBUGGING_TYPE DBX_DEBUG
+
 #define BSS_SECTION_ASM_OP "\t.bss"
 
 #define TARGET_HAVE_NAMED_SECTIONS false
+
+#undef  STARTFILE_SPEC
+#define STARTFILE_SPEC	"%{pg|p|profile:gcrt0.o%s;:crt0.o%s}"
+ 
+#undef  ENDFILE_SPEC
+#define ENDFILE_SPEC ""
+
+/* Every structure or union's size must be a multiple of 2 bytes.  */
+#define STRUCTURE_SIZE_BOUNDARY 16
+
 #endif
 
 /* A C statement (sans semicolon) to output to the stdio stream
