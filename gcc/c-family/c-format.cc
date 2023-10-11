@@ -4218,6 +4218,31 @@ check_format_types (const substring_loc &fmt_loc,
 			  || cur_type == signed_char_type_node
 			  || cur_type == unsigned_char_type_node);
 
+      if (warn_format_short)
+	{
+	  if (cur_type == char_type_node ||
+	      cur_type == signed_char_type_node ||
+	      cur_type == integer_type_node ||
+	      cur_type == short_integer_type_node ||
+	      cur_type == intHI_type_node ||
+	      cur_type == intSI_type_node ||
+	      cur_type == intDI_type_node ||
+	      cur_type == truthvalue_type_node)
+	    cur_type = long_integer_type_node;
+	  else if (cur_type == unsigned_char_type_node ||
+	      cur_type == unsigned_type_node ||
+	      cur_type == short_unsigned_type_node ||
+	      cur_type == unsigned_intHI_type_node ||
+	      cur_type == unsigned_intSI_type_node ||
+	      cur_type == unsigned_intDI_type_node)
+	    cur_type = long_unsigned_type_node;
+	  else if (cur_type == long_long_integer_type_node ||
+	      cur_type == long_long_unsigned_type_node)
+	    cur_type = long_double_type_node;
+	  else if (cur_type == float_type_node ||
+	      cur_type == double_type_node)
+	    cur_type = long_double_type_node;
+	}
       /* Check the type of the "real" argument, if there's a type we want.  */
       if (lang_hooks.types_compatible_p (wanted_type, cur_type))
 	continue;

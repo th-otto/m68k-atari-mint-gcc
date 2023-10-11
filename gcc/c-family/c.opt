@@ -724,6 +724,11 @@ Wformat-zero-length
 C ObjC C++ ObjC++ Var(warn_format_zero_length) Warning LangEnabledBy(C ObjC C++ ObjC++,Wformat=,warn_format >= 1, 0)
 Warn about zero-length formats.
 
+Wformat-short
+C Var(warn_format_short) Warning
+Warn about printf/scanf/strftime/strfmon format string anomalies that
+behave differently when interpreted by a compiler with a different int size
+
 Wformat=
 C ObjC C++ ObjC++ Joined RejectNegative UInteger Var(warn_format) Warning LangEnabledBy(C ObjC C++ ObjC++,Wall, 1, 0) IntegerRange(0, 2)
 Warn about printf/scanf/strftime/strfmon format string anomalies.
