@@ -35,6 +35,8 @@ along with GCC; see the file COPYING3.  If not see
 #undef LOCAL_LABEL_PREFIX
 #define LOCAL_LABEL_PREFIX "."
 
+/* How to start an assembler comment.  */
+
 #undef ASM_COMMENT_START
 #define ASM_COMMENT_START "|"
 
