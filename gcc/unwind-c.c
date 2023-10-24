@@ -227,3 +227,11 @@ PERSONALITY_FUNCTION (int version,
   _Unwind_SetIP (context, landing_pad);
   return _URC_INSTALL_CONTEXT;
 }
+
+#if defined(__MINT__)
+void *__DW_EH_PE_aligned_var
+#ifdef __ELF__
+	__attribute__((__aligned__(sizeof(void *))))
+#endif
+;
+#endif
