@@ -15788,7 +15788,7 @@ if test "x$VTV_SUPPORTED" = "xyes"; then
 fi
 
 case "$target_os" in
-  cygwin*|mingw32*)
+  cygwin*|mingw*)
     vtv_cygmin="yes"
     ;;
   *)
