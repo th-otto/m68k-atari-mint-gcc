@@ -18797,7 +18797,7 @@ $as_echo "$enable_vtable_verify" >&6; }
   vtv_cygmin=no
   if test $enable_vtable_verify = yes; then
     case ${target_os} in
-      cygwin*|mingw32*)
+      cygwin*|mingw*)
         VTV_CXXFLAGS="-fvtable-verify=std -Wl,-lvtv,-u_vtable_map_vars_start,-u_vtable_map_vars_end"
         VTV_CXXLINKFLAGS="-L${toplevel_builddir}/libvtv/.libs -Wl,--rpath -Wl,${toplevel_builddir}/libvtv/.libs"
         vtv_cygmin=yes
@@ -54385,7 +54385,7 @@ _ACEOF
   fi
 
     ;;
-  *-mingw32*)
+  *-mingw*)
 
   # If we're not using GNU ld, then there's no point in even trying these
   # tests.  Check for that first.  We should have already tested for gld
