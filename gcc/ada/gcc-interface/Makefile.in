@@ -1776,7 +1776,7 @@ ifeq ($(strip $(filter-out %djgpp,$(target_os))),)
 endif
 
 # Cygwin/Mingw32
-ifeq ($(strip $(filter-out cygwin% mingw32% pe,$(target_os))),)
+ifeq ($(strip $(filter-out cygwin% mingw% pe,$(target_os))),)
   # Cygwin provides a full Posix environment, and so we use the default
   # versions of s-memory and g-socthi rather than the Windows-specific
   # MinGW versions.  Ideally we would use all the default versions for
