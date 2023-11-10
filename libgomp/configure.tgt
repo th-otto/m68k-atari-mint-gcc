@@ -135,7 +135,7 @@ case "${target}" in
 	esac
 	;;
 
-  *-*-mingw32*)
+  *-*-mingw*)
 	config_path="mingw32 posix"
 	;;
 

@@ -190,7 +190,7 @@ _EOF
 fi
 
 case "$target_os" in
-  cygwin*|mingw32*)
+  cygwin*|mingw*)
     vtv_cygmin="yes"
     ;;
   *)
