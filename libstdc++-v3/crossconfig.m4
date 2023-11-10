@@ -200,7 +200,7 @@ case "${host}" in
     AC_CHECK_FUNCS(sockatmark)
     AM_ICONV
     ;;
-  *-mingw32*)
+  *-mingw*)
     GLIBCXX_CHECK_LINKER_FEATURES
     GLIBCXX_CHECK_MATH_SUPPORT
     GLIBCXX_CHECK_STDLIB_SUPPORT
