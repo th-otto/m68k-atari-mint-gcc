@@ -2240,7 +2240,7 @@ endif
 
 # Cygwin/Mingw32
 ifeq ($(SELECTED_PAIRS),PAIRS_NONE)
-ifeq ($(strip $(filter-out cygwin% mingw32% pe,$(target_os))),)
+ifeq ($(strip $(filter-out cygwin% mingw% pe,$(target_os))),)
 
   SELECTED_PAIRS=cygming
 
