@@ -137,7 +137,7 @@ case "${target}" in
 
     EXTRA_GNATTOOLS='../../gnatlbr$(exeext) ../../gnatsym$(exeext)'
     ;;
-  *-*-cygwin32* | *-*-mingw32* | *-*-pe)
+  *-*-cygwin* | *-*-mingw* | *-*-pe)
     TOOLS_TARGET_PAIRS="\
     mlib-tgt-specific.adb<mlib-tgt-specific-mingw.adb \
     indepsw.adb<indepsw-mingw.adb"

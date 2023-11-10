@@ -1583,7 +1583,7 @@ ifeq ($(strip $(filter-out avr none powerpc% eabispe leon% erc32% unknown elf,$(
   indepsw.adb<indepsw-gnu.adb
 endif
 
-ifeq ($(strip $(filter-out cygwin32% mingw32% pe,$(osys))),)
+ifeq ($(strip $(filter-out cygwin% mingw% pe,$(osys))),)
   LIBGNAT_TARGET_PAIRS = \
   a-dirval.adb<a-dirval-mingw.adb \
   a-excpol.adb<a-excpol-abort.adb \

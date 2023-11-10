@@ -16,7 +16,7 @@ case $machine in
     i?86-*-pe | \
     i?86-*-cygwin* | \
     i?86-*-mingw32* | \
-    x86_64-*-mingw32* | \
+    x86_64-*-mingw* | \
     i?86-*-interix* | \
     *-*-vxworks* | \
     powerpc-*-eabisim* | \

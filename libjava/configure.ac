@@ -1481,7 +1481,7 @@ fi
 
 # Use a semicolon as CLASSPATH separator for MinGW, otherwise a colon.
 case $build in
-    *-mingw32) CLASSPATH_SEPARATOR=';' ;;
+    *-mingw*)  CLASSPATH_SEPARATOR=';' ;;
     *)         CLASSPATH_SEPARATOR=':' ;;
 esac
 AC_SUBST(CLASSPATH_SEPARATOR)

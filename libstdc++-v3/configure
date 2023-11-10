@@ -50965,7 +50965,7 @@ _ACEOF
   fi
 
     ;;
-  *-mingw32*)
+  *-mingw*)
 
   # If we're not using GNU ld, then there's no point in even trying these
   # tests.  Check for that first.  We should have already tested for gld
