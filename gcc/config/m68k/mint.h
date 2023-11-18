@@ -198,6 +198,7 @@ along with GCC; see the file COPYING3.  If not see
 /* config/m68k.md has an explicit reference to the program counter,
    prefix this by the register prefix.  */
 
+#undef ASM_OUTPUT_CASE_LABEL
 #define ASM_RETURN_CASE_JUMP				\
   do {							\
     if (TARGET_COLDFIRE)				\
@@ -215,7 +216,9 @@ along with GCC; see the file COPYING3.  If not see
       return "jmp %%pc@(2,%0:w)";			\
   } while (0)
 
-/* The ADDR_DIFF_VEC must exactly follow the previous instruction.  */
+/* As offset 2 is hardcoded in the jmp instruction above,
+   the ADDR_VEC must immediately follow the jmp instruction.
+   https://gcc.gnu.org/bugzilla/show_bug.cgi?id=112413  */
 
 #undef ADDR_VEC_ALIGN
 #define ADDR_VEC_ALIGN(ADDR_VEC) 0
