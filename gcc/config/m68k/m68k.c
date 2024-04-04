@@ -4055,6 +4055,135 @@ m68k_movem_pattern_p (rtx pattern, rtx automod_base,
    AUTOMOD_OFFSET is the total adjustment, otherwise it is 0.  STORE_P
    is true if this is a store instruction.  */
 
+static void
+reglist(char *buf, int regmask)
+{
+  int regnum;
+  int liststart;
+  int lastreg;
+  int status;
+
+  if (regmask == 0)
+    {
+      strcpy(buf, "#0");
+      return;
+    }
+#define oad(reg) \
+  *buf++ = '%'; \
+  *buf++ = REGISTER_PREFIX[0]; \
+  *buf++ = reg >= 8 ? 'a' : 'd'; \
+  *buf++ = '0' + (reg & 7)
+
+  liststart = status = 0;
+  lastreg = 20;
+  for (regnum = 0; regnum < 16; regnum++)
+    {
+      if ((1 << regnum) & regmask)
+	{
+	  if (regnum == (lastreg + 1) && regnum != 8)
+	    {
+	      if (liststart != 0)
+		*buf++ = '-';
+	      liststart = 0;
+	      status = 1;
+	      lastreg = regnum;
+	    }
+	  else
+	    {
+	      if (status != 0)
+		{
+		  oad(lastreg);
+		  status = 0;
+		  liststart = 1;
+		}
+	      if (liststart != 0)
+		*buf++ = '/';
+	      oad(regnum);
+	      lastreg = regnum;
+	      liststart = 1;
+	    }
+	}
+    }
+  if (status != 0)
+    {
+      oad(lastreg);
+    }
+  *buf = '\0';
+#undef oad
+}
+
+static void
+freglist(char *buf, int regmask)
+{
+  int regnum;
+  int liststart;
+  int lastreg;
+  int status;
+
+  if (regmask == 0)
+    {
+      strcpy(buf, "#0");
+      return;
+    }
+#define ofpreg(reg) \
+  *buf++ = '%'; \
+  *buf++ = REGISTER_PREFIX[0]; \
+  *buf++ = 'f'; \
+  *buf++ = 'p'; \
+  *buf++ = '0' + reg
+
+  liststart = status = 0;
+  lastreg = 20;
+  for (regnum = 0; regnum < 8; regnum++)
+    {
+      if ((1 << regnum) & regmask)
+	{
+	  if (regnum == (lastreg + 1) && regnum != 8)
+	    {
+	      if (liststart != 0)
+		*buf++ = '-';
+	      liststart = 0;
+	      status = 1;
+	      lastreg = regnum;
+	    }
+	  else
+	    {
+	      if (status != 0)
+		{
+		  ofpreg(lastreg);
+		  status = 0;
+		  liststart = 1;
+		}
+	      if (liststart != 0)
+		*buf++ = '/';
+	      ofpreg(regnum);
+	      lastreg = regnum;
+	      liststart = 1;
+	    }
+	}
+    }
+  if (status != 0)
+    {
+      ofpreg(lastreg);
+    }
+  *buf = '\0';
+#undef ofpreg
+}
+
+static int
+revbits(int mask, int n)
+{
+  int i;
+  int newmask;
+
+  for (newmask = 0, i = n; i > 0; i--)
+    {
+      newmask = (newmask << 1) | (mask & 1);
+      mask >>= 1;
+    }
+  return newmask;
+}
+
 const char *
 m68k_output_movem (rtx *operands, rtx pattern,
 		   HOST_WIDE_INT automod_offset, bool store_p)
@@ -4103,17 +4232,41 @@ m68k_output_movem (rtx *operands, rtx pattern,
   operands[1] = GEN_INT (mask);
   if (FP_REGNO_P (REGNO (XEXP (XVECEXP (pattern, 0, first), store_p))))
     {
+      char buf[8 * 6 + 1];
+
+      if (automod_offset >= 0)
+	 mask = revbits(mask, 8);
       if (store_p)
-	return "fmovem %1,%a0";
+	{
+	  strcpy(buf, "fmovem ");
+	  freglist(buf + 7, mask);
+	  strcat(buf, ",%a0");
+	}
       else
-	return "fmovem %a0,%1";
+	{
+	  strcpy(buf, "fmovem %a0,");
+	  freglist(buf + 11, mask);
+	}
+      return xstrdup(buf);
     }
   else
     {
+      char buf[16 * 5 + 1];
+
+      if (automod_offset < 0)
+	 mask = revbits(mask, 16);
       if (store_p)
-	return "movem%.l %1,%a0";
+	{
+	  strcpy(buf, "movem%.l ");
+	  reglist(buf + 9, mask);
+	  strcat(buf, ",%a0");
+	}
       else
-	return "movem%.l %a0,%1";
+	{
+	  strcpy(buf, "movem%.l %a0,");
+	  reglist(buf + 13, mask);
+	}
+      return xstrdup(buf);
     }
 }
 
