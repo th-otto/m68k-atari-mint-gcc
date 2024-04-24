@@ -26,6 +26,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 	.text
 	FUNC(__mulsi3)
 	.globl	SYM (__mulsi3)
+	.globl	SYM (__mulsi3_internal)
 #ifdef __ELF__
 	.hidden	SYM (__mulsi3_internal)
 #endif
