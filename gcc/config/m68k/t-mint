@@ -21,9 +21,9 @@ ifeq ($(filter m$(M68K_MLIB_DEFAULT),$(M68K_MLIB_CPUS)),)
 $(error Error default cpu '$(target_cpu_default)' is not in multilib set '$(M68K_MLIB_CPUS)')
 endif
 
-MULTILIB_OPTIONS = m68020-60/mcpu=5475 mshort
+MULTILIB_OPTIONS = m68020-60/mcpu=5475 mshort mfastcall
 
-MULTILIB_DIRNAMES = m68020-60 m5475 mshort
+MULTILIB_DIRNAMES = m68020-60 m5475 mshort mfastcall
 
 MULTILIB_MATCHES = \
 	m68020-60=m68881 \
