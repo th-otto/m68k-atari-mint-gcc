@@ -61,6 +61,9 @@ along with GCC; see the file COPYING3.  If not see
     {						\
       builtin_define ("__MINT__");		\
       GCC_HAVE_INITFINI_ARRAY_SUPPORT \
+      /* The GNU C++ standard library requires this.  */ \
+      if (c_dialect_cxx ()) \
+       builtin_define ("_GNU_SOURCE"); \
       builtin_define_std ("atarist");		\
       builtin_assert ("machine=atari");		\
       builtin_assert ("system=mint");		\

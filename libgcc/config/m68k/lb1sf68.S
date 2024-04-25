@@ -456,7 +456,7 @@ $_exception_handler:
 
 #ifdef __FASTCALL__
 
-#include "lb1sf68-fast.asm"
+#include "lb1sf68-fast.S"
 
 #else
 

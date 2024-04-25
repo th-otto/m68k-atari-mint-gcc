@@ -45,6 +45,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "emit-rtl.h"
 #include "stmt.h"
 #include "expr.h"
+#include "toplev.h"
 #include "reload.h"
 #include "tm_p.h"
 #include "target.h"
@@ -157,6 +158,7 @@ static void m68k_sched_dfa_post_advance_cycle (void);
 static int m68k_sched_first_cycle_multipass_dfa_lookahead (void);
 
 static bool m68k_can_eliminate (const int, const int);
+static void m68k_set_current_function (tree);
 static void m68k_conditional_register_usage (void);
 static bool m68k_legitimate_address_p (machine_mode, rtx, bool);
 static void m68k_option_override (void);
@@ -169,6 +171,8 @@ static rtx m68k_struct_value_rtx (tree, int);
 static tree m68k_handle_fndecl_attribute (tree *node, tree name,
 					  tree args, int flags,
 					  bool *no_add_attrs);
+static tree m68k_handle_type_attribute (tree *, tree, tree, int, bool *);
+static int m68k_comp_type_attributes (const_tree, const_tree);
 static void m68k_compute_frame_layout (void);
 static bool m68k_save_reg (unsigned int regno, bool interrupt_handler);
 static bool m68k_ok_for_sibcall_p (tree, tree);
@@ -182,10 +186,7 @@ static void m68k_output_dwarf_dtprel (FILE *, int, rtx) ATTRIBUTE_UNUSED;
 static void m68k_trampoline_init (rtx, tree, rtx);
 static int m68k_return_pops_args (tree, tree, int);
 static rtx m68k_delegitimize_address (rtx);
-static void m68k_function_arg_advance (cumulative_args_t, machine_mode,
-				       const_tree, bool);
-static rtx m68k_function_arg (cumulative_args_t, machine_mode,
-			      const_tree, bool);
+static void m68k_maybe_switch_abi (void);
 static bool m68k_cannot_force_const_mem (machine_mode mode, rtx x);
 static bool m68k_output_addr_const_extra (FILE *, rtx);
 static void m68k_init_libfuncs (void) ATTRIBUTE_UNUSED;
@@ -312,6 +313,12 @@ static void m68k_file_end (void);
 #undef TARGET_CAN_ELIMINATE
 #define TARGET_CAN_ELIMINATE m68k_can_eliminate
 
+#undef TARGET_SET_CURRENT_FUNCTION
+#define TARGET_SET_CURRENT_FUNCTION m68k_set_current_function
+
+#undef TARGET_EXPAND_TO_RTL_HOOK
+#define TARGET_EXPAND_TO_RTL_HOOK m68k_maybe_switch_abi
+
 #undef TARGET_CONDITIONAL_REGISTER_USAGE
 #define TARGET_CONDITIONAL_REGISTER_USAGE m68k_conditional_register_usage
 
@@ -356,10 +363,20 @@ static const struct attribute_spec m68k_attribute_table[] =
     m68k_handle_fndecl_attribute, false },
   { "interrupt_thread", 0, 0, true,  false, false,
     m68k_handle_fndecl_attribute, false },
+
+ /* cdecl attribute specifies to pass arguments on the stack */
+  { "cdecl",             0, 0, false, true,  true,  m68k_handle_type_attribute, false },
+  /* Regparm attribute specifies how many integer arguments are to be
+     passed in registers.  */
+  { "regparm",           0, 1, false, true,  true,  m68k_handle_type_attribute, false },
+  /* Fastcall attribute says callee is responsible for popping arguments
+   if they are not variable.  */
+  { "fastcall",          0, 0, false, true,  true,  m68k_handle_type_attribute, false },
   { NULL,                0, 0, false, false, false, NULL, false }
 };
 
-struct gcc_target targetm = TARGET_INITIALIZER;
+#undef TARGET_COMP_TYPE_ATTRIBUTES
+#define TARGET_COMP_TYPE_ATTRIBUTES m68k_comp_type_attributes
 
 /* Base flags for 68k ISAs.  */
 #define FL_FOR_isa_00    FL_ISA_68000
@@ -468,6 +485,9 @@ unsigned int m68k_cpu_flags;
 /* The set of FL_* flags that apply to the processor to be tuned for.  */
 unsigned int m68k_tune_flags;
 
+/* The abi used by target.  */
+enum calling_abi m68k_abi;
+
 /* Asm templates for calling or jumping to an arbitrary symbolic address,
    or NULL if such calls or jumps are not supported.  The address is held
    in operand 0.  */
@@ -478,10 +498,27 @@ const char *m68k_symbolic_jump;
 enum M68K_SYMBOLIC_CALL m68k_symbolic_call_var;
 
 
-/* Implement TARGET_OPTION_OVERRIDE.  */
+/* Clear stack slot assignments remembered from previous functions.
+   This is called from INIT_EXPANDERS once before RTL is emitted for each
+   function.  */
+
+static struct machine_function *
+m68k_init_machine_status (void)
+{
+  struct machine_function *machine;
+
+  machine = ggc_cleared_alloc<machine_function> ();
+  machine->call_abi = m68k_abi;
+
+  return machine;
+}
+
+/* Override various settings based on options.  If MAIN_ARGS_P, the
+   options are from the command line, otherwise they are from
+   attributes.  */
 
 static void
-m68k_option_override (void)
+m68k_option_override_internal (bool main_args_p)
 {
   const struct m68k_target_selection *entry;
   unsigned long target_mask;
@@ -526,6 +563,8 @@ m68k_option_override (void)
     entry = all_devices + TARGET_CPU_DEFAULT;
 
   m68k_cpu_flags = entry->flags;
+
+  m68k_abi = TARGET_FASTCALL ? FASTCALL_ABI : STD_ABI;
 
   /* Use the architecture setting to derive default values for
      certain flags.  */
@@ -716,6 +755,13 @@ m68k_option_override (void)
 	m68k_sched_mac = MAC_NO;
     }
 
+  init_machine_status = m68k_init_machine_status;
+
+  /* Save the initial options in case the user does function specific options */
+  if (main_args_p)
+    target_option_default_node = target_option_current_node
+      = build_target_option_node (&global_options);
+
   /*
    * disable -fcombine-stack-adjustments for coldfire/mshort combination,
    * which generates wrong CFI offsets.
@@ -724,6 +770,15 @@ m68k_option_override (void)
   if (PREFERRED_STACK_BOUNDARY > 16 && INT_TYPE_SIZE <= 16 && (write_symbols & DWARF2_DEBUG))
     flag_combine_stack_adjustments = 0;
 }
+
+/* Implement the TARGET_OPTION_OVERRIDE hook.  */
+
+static void
+m68k_option_override (void)
+{
+  m68k_option_override_internal (true);
+}
+
 
 /* Implement TARGET_OVERRIDE_OPTIONS_AFTER_CHANGE.  */
 
@@ -820,6 +875,282 @@ m68k_handle_fndecl_attribute (tree *node, tree name,
 
   return NULL_TREE;
 }
+
+/* Handle a "regparm" or "cdecl" attribute;
+   arguments as in struct attribute_spec.handler.  */
+
+static void
+m68k_validate_mutually_exclusive_attribute (const char *attr1, const char *attr2, tree *node, tree name ATTRIBUTE_UNUSED)
+{
+  if (lookup_attribute (attr2, TYPE_ATTRIBUTES(*node)))
+    error ("%s and %s attributes are mutually exclusive", attr1, attr2);
+}
+
+static tree
+m68k_handle_type_attribute (tree *node, tree name, tree args ATTRIBUTE_UNUSED,
+        		    int flags ATTRIBUTE_UNUSED, bool *no_add_attrs)
+{
+  if (TREE_CODE (*node) == FUNCTION_TYPE ||
+      TREE_CODE (*node) == METHOD_TYPE ||
+      TREE_CODE (*node) == FIELD_DECL ||
+      TREE_CODE (*node) == TYPE_DECL)
+    {
+      if (is_attribute_p ("cdecl", name))
+        {
+          m68k_validate_mutually_exclusive_attribute ("cdecl", "fastcall", node, name);
+          m68k_validate_mutually_exclusive_attribute ("cdecl", "regparm", node, name);
+        }
+      else if (is_attribute_p ("fastcall", name))
+        {
+          m68k_validate_mutually_exclusive_attribute ("fastcall", "cdecl", node, name);
+          m68k_validate_mutually_exclusive_attribute ("fastcall", "regparm", node, name);
+        }
+      else if (is_attribute_p ("regparm", name))
+        {
+          m68k_validate_mutually_exclusive_attribute ("regparm", "cdecl", node, name);
+          m68k_validate_mutually_exclusive_attribute ("regparm", "fastcall", node, name);
+        }
+    }
+  else
+    {
+      warning (OPT_Wattributes, "%qE attribute only applies to functions",
+               name);
+      *no_add_attrs = true;
+    }
+
+  return NULL_TREE;
+}
+
+/* Return zero if the attributes on TYPE1 and TYPE2 are incompatible,
+   one if they are compatible, and two if they are nearly compatible
+   (which causes a warning to be generated). */
+
+static int
+m68k_comp_exclusive_type_attributes(const char *name1, const char *name2, const_tree type1, const_tree type2)
+{
+	return (!! lookup_attribute (name1, TYPE_ATTRIBUTES (type1)) !=
+            !! lookup_attribute (name1, TYPE_ATTRIBUTES (type2))
+         || !! lookup_attribute (name2, TYPE_ATTRIBUTES (type1)) !=
+            !! lookup_attribute (name2, TYPE_ATTRIBUTES (type2)));
+}
+
+static int
+m68k_comp_type_attributes (const_tree type1, const_tree type2)
+{
+  /* Functions or methods are incompatible if they specify mutually
+     exclusive ways of passing arguments.  */
+  if (TREE_CODE (type1) == FUNCTION_TYPE || TREE_CODE (type1) == METHOD_TYPE)
+    {
+      tree arg1, arg2;
+      if (m68k_comp_exclusive_type_attributes ("cdecl", "regparm", type1, type2)
+	   || m68k_comp_exclusive_type_attributes ("cdecl", "fastcall", type1, type2)
+	   || m68k_comp_exclusive_type_attributes ("regparm", "fastcall", type1, type2))
+        return 0; /* 'regparm' and 'cdecl' are mutually exclusive.  */
+
+      arg1 = lookup_attribute ("regparm", TYPE_ATTRIBUTES (type1));
+      arg2 = lookup_attribute ("regparm", TYPE_ATTRIBUTES (type2));
+      if (arg1 && arg2)
+        {
+          int num1 = 0, num2 = 0;
+          if (TREE_VALUE (arg1) && TREE_CODE (TREE_VALUE (arg1)) == TREE_LIST)
+            {
+              tree numofregs = TREE_VALUE (TREE_VALUE (arg1));
+              if (numofregs)
+        	num1 = TREE_INT_CST_LOW (numofregs);
+            }
+          if (TREE_VALUE (arg2) && TREE_CODE (TREE_VALUE (arg2)) == TREE_LIST)
+            {
+              tree numofregs = TREE_VALUE (TREE_VALUE (arg2));
+              if (numofregs)
+        	num2 = TREE_INT_CST_LOW (numofregs);
+            }
+          if (num1 != num2)
+            return 0; /* Different numbers, or no number in one type.  */
+        }
+    }
+  return 1;
+}
+
+
+/* Implementation of call abi switching target hook. Specific to FNDECL
+   the specific call register sets are set.  See also
+   ix86_conditional_register_usage for more details.  */
+void
+m68k_call_abi_override (const_tree fndecl)
+{
+  if (fndecl == NULL_TREE)
+    cfun->machine->call_abi = m68k_abi;
+  else
+    cfun->machine->call_abi = m68k_function_type_abi (TREE_TYPE (fndecl));
+}
+
+static enum calling_abi
+m68k_function_abi (const_tree fndecl)
+{
+  if (! fndecl)
+    return m68k_abi;
+  return m68k_function_type_abi (TREE_TYPE (fndecl));
+}
+
+/* Returns value STD_ABI, FASTCALL_ABI dependent on cfun, specifying the
+   call abi used.  */
+enum calling_abi
+m68k_cfun_abi (void)
+{
+  if (! cfun)
+    return m68k_abi;
+  return cfun->machine->call_abi;
+}
+
+/* Returns value STD_ABI, FASTCALL_ABI dependent on fntype, specifying the
+   call abi used.  */
+enum calling_abi
+m68k_function_type_abi (const_tree fntype)
+{
+  if (fntype != NULL)
+    {
+      enum calling_abi abi = m68k_abi;
+      if (abi == STD_ABI)
+	{
+	  if (lookup_attribute ("fastcall", TYPE_ATTRIBUTES (fntype)))
+	    abi = FASTCALL_ABI;
+	}
+      else if (lookup_attribute ("cdecl", TYPE_ATTRIBUTES (fntype)))
+	abi = STD_ABI;
+      return abi;
+    }
+  return m68k_abi;
+}
+
+/* STD and FASTCALL ABI have different set of call used registers.  Avoid expensive
+   re-initialization of init_regs each time we switch function context since
+   this is needed only during RTL expansion.  */
+static void
+m68k_maybe_switch_abi (void)
+{
+  if (call_used_regs[D2_REG] == (cfun->machine->call_abi == STD_ABI))
+    reinit_regs ();
+}
+
+/* Initialize a variable CUM of type CUMULATIVE_ARGS
+   for a call to a function whose data type is FNTYPE.
+   For a library call, FNTYPE is 0.  */
+
+void
+m68k_init_cumulative_args (CUMULATIVE_ARGS *cum,  /* Argument info to initialize */
+		      tree fntype,	/* tree ptr for function decl */
+		      rtx libname,	/* SYMBOL_REF of library name or 0 */
+		      tree fndecl,
+		      int caller ATTRIBUTE_UNUSED)
+{
+  cum->last_arg_reg = -1;
+  cum->last_arg_len = 0;
+  CLEAR_HARD_REG_SET(cum->regs_already_used);
+  
+  if (libname)
+    {
+      cum->call_abi = m68k_abi;
+    }
+  else if (fndecl)
+    {
+      cum->call_abi = m68k_function_abi (fndecl);
+    }
+  else
+    {
+      cum->call_abi = m68k_function_type_abi (fntype);
+    }
+
+#if ! defined (PCC_STATIC_STRUCT_RETURN) && defined (M68K_STRUCT_VALUE_REGNUM)
+  /* If return value is a structure, and we pass the buffer address in a
+     register, we can't use this register for our own purposes.
+     FIXME: Something similar would be useful for static chain.  */
+  if (fntype && aggregate_value_p (TREE_TYPE (fntype), fntype))
+    SET_HARD_REG_BIT(cum->regs_already_used, M68K_STRUCT_VALUE_REGNUM);
+#endif
+}
+
+/* Define where to put the arguments to a function.
+   Value is zero to push the argument on the stack,
+   or a hard register in which to store the argument.
+
+   MODE is the argument's machine mode.
+   TYPE is the data type of the argument (as a tree).
+    This is null for libcalls where that information may
+    not be available.
+   CUM is a variable of type CUMULATIVE_ARGS which gives info about
+    the preceding args and about the function being called.  */
+
+static rtx m68k_function_arg (cumulative_args_t cum_v, enum machine_mode mode,
+                              const_tree type, bool named)
+{
+  CUMULATIVE_ARGS *cum = get_cumulative_args (cum_v);
+
+  if (cum->call_abi == FASTCALL_ABI)
+    {
+      int regbegin = -1, regend, len;
+
+      /* FIXME: The last condition below is a workaround for a bug.  */
+      if (!TARGET_68881 && FLOAT_MODE_P (mode) && GET_MODE_UNIT_SIZE (mode) <= 4 &&
+          (GET_MODE_CLASS (mode) != MODE_COMPLEX_FLOAT || mode == SCmode))
+        {
+            regbegin = D0_REG; /* Dx */
+            regend = regbegin + M68K_FASTCALL_DATA_PARM;
+            len = (GET_MODE_SIZE (mode) + (UNITS_PER_WORD - 1)) / UNITS_PER_WORD;
+        }
+      else if (TARGET_68881 && FLOAT_MODE_P (mode) &&
+          GET_MODE_UNIT_SIZE (mode) <= 12 &&
+          (GET_MODE_CLASS (mode) != MODE_COMPLEX_FLOAT || mode == SCmode))
+        {
+          regbegin = FP0_REG; /* FPx */
+          regend = regbegin + M68K_FASTCALL_DATA_PARM;
+          len = GET_MODE_NUNITS (mode);
+        }
+      /* FIXME: Two last conditions below are workarounds for bugs.  */
+      else if (INTEGRAL_MODE_P (mode) && mode != CQImode && mode != CHImode)
+        {
+          len = (GET_MODE_SIZE (mode) + (UNITS_PER_WORD - 1)) / UNITS_PER_WORD;
+          if (len == 1)
+            {
+              if (type && POINTER_TYPE_P (type))  /* THIS */
+                {
+                  regbegin = A0_REG; /* Ax */
+                  regend = regbegin + M68K_FASTCALL_ADDR_PARM;
+                }
+              else
+                {
+                  regbegin = D0_REG; /* Dx */
+                  regend = regbegin + M68K_FASTCALL_DATA_PARM;
+                }
+            }
+        }
+
+      if (regbegin != -1)
+        {
+          int reg;
+          for (reg = regbegin; reg < regend; reg++)
+            {
+              if (!TEST_HARD_REG_BIT(cum->regs_already_used, reg) &&
+                  (reg + len <= regend))
+                {
+                  cum->last_arg_reg = reg;
+                  cum->last_arg_len = len;
+                  break;
+                }
+             }
+         }
+        
+      if (!named)
+        SET_HARD_REG_SET(cum->regs_already_used);
+
+      if (cum->last_arg_reg != -1)
+        {
+          return gen_rtx_REG (mode, cum->last_arg_reg);
+        }
+    }
+  return NULL_RTX;
+}
+
+
 
 static void
 m68k_compute_frame_layout (void)
@@ -1469,11 +1800,24 @@ static bool
 m68k_ok_for_sibcall_p (tree decl, tree exp)
 {
   enum m68k_function_kind kind;
+  tree type;
   
   /* We cannot use sibcalls for nested functions because we use the
      static chain register for indirect calls.  */
   if (CALL_EXPR_STATIC_CHAIN (exp))
     return false;
+
+  if (decl)
+    {
+      type = TREE_TYPE (decl);
+    }
+  else
+    {
+      /* We're looking at the CALL_EXPR, we need the type of the function.  */
+      type = CALL_EXPR_FN (exp);		/* pointer expression */
+      type = TREE_TYPE (type);			/* pointer type */
+      type = TREE_TYPE (type);			/* function type */
+    }
 
   if (!VOID_TYPE_P (TREE_TYPE (DECL_RESULT (cfun->decl))))
     {
@@ -1495,6 +1839,18 @@ m68k_ok_for_sibcall_p (tree decl, tree exp)
 	return false;
     }
 
+  /* The FASTCALL ABI has more call-clobbered registers;
+      disallow sibcalls from STD to FASTCALL.  */
+  if (cfun->machine->call_abi == STD_ABI
+      && m68k_function_type_abi (type) == FASTCALL_ABI)
+      return false;
+
+  /* FIXME: currently does not work at all for FASTCALL, because the
+     A2 register for the call will be restored in the epilogue
+     before being used */
+  if (cfun->machine->call_abi == FASTCALL_ABI || m68k_function_type_abi (type) != cfun->machine->call_abi)
+      return false;
+
   kind = m68k_get_function_kind (current_function_decl);
   if (kind == m68k_fk_normal_function)
     /* We can always sibcall from a normal function, because it's
@@ -1509,26 +1865,19 @@ m68k_ok_for_sibcall_p (tree decl, tree exp)
   return false;
 }
 
-/* On the m68k all args are always pushed.  */
-
-static rtx
-m68k_function_arg (cumulative_args_t cum ATTRIBUTE_UNUSED,
-		   machine_mode mode ATTRIBUTE_UNUSED,
-		   const_tree type ATTRIBUTE_UNUSED,
-		   bool named ATTRIBUTE_UNUSED)
-{
-  return NULL_RTX;
-}
-
 static void
-m68k_function_arg_advance (cumulative_args_t cum_v, machine_mode mode,
-			   const_tree type, bool named ATTRIBUTE_UNUSED)
+m68k_function_arg_advance (cumulative_args_t cum_v, machine_mode mode ATTRIBUTE_UNUSED,
+			   const_tree type ATTRIBUTE_UNUSED, bool named ATTRIBUTE_UNUSED)
 {
   CUMULATIVE_ARGS *cum = get_cumulative_args (cum_v);
 
-  *cum += (mode != BLKmode
-	   ? (GET_MODE_SIZE (mode) + 3) & ~3
-	   : (int_size_in_bytes (type) + 3) & ~3);
+  if (cum->last_arg_reg != -1)
+    {
+      int count;
+      for (count = 0; count < cum->last_arg_len; count++)
+	SET_HARD_REG_BIT(cum->regs_already_used, cum->last_arg_reg + count);
+      cum->last_arg_reg = -1;
+    }
 }
 
 /* Convert X to a legitimate function call memory reference and return the
@@ -5263,7 +5612,7 @@ output_call (rtx x)
   if (symbolic_operand (x, VOIDmode))
     return m68k_symbolic_call;
   else
-    return "jsr %a0";
+    return "jsr %a0"; /* note: will be replaced by STATIC_CHAIN_REGNUM in m68k_legitimize_sibcall_address */
 }
 
 /* Likewise sibling calls.  */
@@ -5274,7 +5623,7 @@ output_sibcall (rtx x)
   if (symbolic_operand (x, VOIDmode))
     return m68k_symbolic_jump;
   else
-    return "jmp %a0";
+    return "jmp %a0"; /* note: will be replaced by STATIC_CHAIN_REGNUM in m68k_legitimize_sibcall_address */
 }
 
 static void
@@ -5514,11 +5863,22 @@ m68k_libcall_value (machine_mode mode)
    NOTE: Due to differences in ABIs, don't call this function directly,
    use FUNCTION_VALUE instead.  */
 rtx
-m68k_function_value (const_tree valtype, const_tree func ATTRIBUTE_UNUSED)
+m68k_function_value (const_tree valtype, const_tree func, bool regs)
 {
-  machine_mode mode;
+  enum machine_mode mode = TYPE_MODE (valtype);
+  const_tree fn, fntype;
+  bool func_fastcall;
+  
+  fn = NULL_TREE;
+  if (func && DECL_P (func))
+    fn = func;
+  fntype = fn ? TREE_TYPE (fn) : func;
 
-  mode = TYPE_MODE (valtype);
+  func_fastcall = m68k_function_type_abi(fntype) == FASTCALL_ABI;
+
+  if (! regs && !func_fastcall)
+    return gen_rtx_REG (mode, D0_REG);
+
   switch (mode) {
   case SFmode:
   case DFmode:
@@ -5531,7 +5891,7 @@ m68k_function_value (const_tree valtype, const_tree func ATTRIBUTE_UNUSED)
   }
 
   /* If the function returns a pointer, push that into %a0.  */
-  if (func && POINTER_TYPE_P (TREE_TYPE (TREE_TYPE (func))))
+  if (regs && fntype && POINTER_TYPE_P (TREE_TYPE (fntype)) && !func_fastcall)
     /* For compatibility with the large body of existing code which
        does not always properly declare external functions returning
        pointer types, the m68k/SVR4 convention is to copy the value
@@ -6731,6 +7091,66 @@ m68k_return_pops_args (tree fundecl, tree funtype, int size)
 	  ? size : 0);
 }
 
+/* Remember the last target of m68k_set_current_function.  */
+static GTY(()) tree m68k_previous_fndecl;
+
+/* Establish appropriate back-end context for processing the function
+   FNDECL.  The argument might be NULL to indicate processing at top
+   level, outside of any function scope.  */
+static void
+m68k_set_current_function (tree fndecl)
+{
+  /* Only change the context if the function changes.  This hook is called
+     several times in the course of compiling a function, and we don't want to
+     slow things down too much or call target_reinit when it isn't safe.  */
+  if (fndecl && fndecl != m68k_previous_fndecl)
+    {
+      tree old_tree = (m68k_previous_fndecl
+		       ? DECL_FUNCTION_SPECIFIC_TARGET (m68k_previous_fndecl)
+		       : NULL_TREE);
+
+      tree new_tree = (fndecl
+		       ? DECL_FUNCTION_SPECIFIC_TARGET (fndecl)
+		       : NULL_TREE);
+
+      m68k_previous_fndecl = fndecl;
+      if (old_tree == new_tree)
+	;
+
+      else if (new_tree)
+	{
+	  cl_target_option_restore (&global_options,
+				    TREE_TARGET_OPTION (new_tree));
+	  target_reinit ();
+	}
+
+      else if (old_tree)
+	{
+	  struct cl_target_option *def
+	    = TREE_TARGET_OPTION (target_option_current_node);
+
+	  cl_target_option_restore (&global_options, def);
+	  target_reinit ();
+	}
+    }
+}
+
+void
+m68k_order_regs_for_local_alloc (void)
+{
+  int i;
+  int pos = 0;
+  for (i = 0; i < 16; i ++)
+    if (call_used_regs [i] && !fixed_regs[i])
+      reg_alloc_order[pos++] = i;
+  for (i = 0; i < 16; i ++)
+    if (!(call_used_regs [i] && !fixed_regs[i]))
+      reg_alloc_order[pos++] = i;
+  reg_alloc_order[pos++] = 24;
+  for (i = 16; i < 24; i++)
+    reg_alloc_order[pos++] = i;
+}
+
 /* Make sure everything's fine if we *don't* have a given processor.
    This assumes that putting a register in fixed_regs will keep the
    compiler's mitts completely off it.  We don't bother to zero it out
@@ -6741,6 +7161,21 @@ m68k_conditional_register_usage (void)
 {
   int i;
   HARD_REG_SET x;
+  
+  int num_of_dregs = (TARGET_FASTCALL) ? M68K_FASTCALL_USED_DATA_REGS : M68K_STD_USED_REGS;
+  int num_of_aregs = (TARGET_FASTCALL) ? M68K_FASTCALL_USED_ADDR_REGS : M68K_STD_USED_REGS;
+  for (i = 0; i < 8; i++)
+    {
+      call_used_regs[i] = (i < num_of_dregs) | fixed_regs[i];
+      call_used_regs[i + 8] = (i < num_of_aregs) | fixed_regs[i + 8];
+      call_used_regs[i + 16] = (i < num_of_dregs) | fixed_regs[i + 16];
+    }
+  if (flag_pic)
+    fixed_regs[PIC_REG] = 1;
+  for (i = 0; i < FIRST_PSEUDO_REGISTER; i++)
+    {
+       call_used_regs[i] |= fixed_regs[i];
+    }
   if (!TARGET_HARD_FLOAT)
     {
       COPY_HARD_REG_SET (x, reg_class_contents[(int)FP_REGS]);
@@ -6748,8 +7183,6 @@ m68k_conditional_register_usage (void)
         if (TEST_HARD_REG_BIT (x, i))
 	  fixed_regs[i] = call_used_regs[i] = 1;
     }
-  if (flag_pic)
-    fixed_regs[PIC_REG] = call_used_regs[PIC_REG] = 1;
 }
 
 static void
@@ -6837,5 +7270,7 @@ m68k_file_end (void)
     /* Add .note.GNU-stack.  */
     file_end_indicate_exec_stack ();
 }
+
+struct gcc_target targetm = TARGET_INITIALIZER;
 
 #include "gt-m68k.h"
