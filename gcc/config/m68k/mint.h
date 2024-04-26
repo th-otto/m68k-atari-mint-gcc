@@ -48,7 +48,7 @@ along with GCC; see the file COPYING3.  If not see
 #undef WCHAR_TYPE_SIZE
 #define WCHAR_TYPE_SIZE SHORT_TYPE_SIZE
 
-#if HAVE_INITFINI_ARRAY_SUPPORT
+#if defined(USING_ELFOS_H)
 #define GCC_HAVE_INITFINI_ARRAY_SUPPORT builtin_define ("__GCC_HAVE_INITFINI_ARRAY_SUPPORT");
 #else
 #define GCC_HAVE_INITFINI_ARRAY_SUPPORT
@@ -60,6 +60,9 @@ along with GCC; see the file COPYING3.  If not see
     {						\
       builtin_define ("__MINT__");		\
       GCC_HAVE_INITFINI_ARRAY_SUPPORT \
+      /* The GNU C++ standard library requires this.  */ \
+      if (c_dialect_cxx ()) \
+       builtin_define ("_GNU_SOURCE"); \
       builtin_define_std ("atarist");		\
       builtin_assert ("machine=atari");		\
       builtin_assert ("system=mint");		\
@@ -86,9 +89,6 @@ along with GCC; see the file COPYING3.  If not see
 #undef  LIB_SPEC
 #define LIB_SPEC	"-lc"
 #define LINKER_NAME	"collect2 %{v:-v}"
-
-/* Every structure or union's size must be a multiple of 2 bytes.  */
-#define STRUCTURE_SIZE_BOUNDARY 16
 
 /* The -g option generates stabs debug information.  */
 #define DBX_DEBUGGING_INFO 1
@@ -250,6 +250,8 @@ along with GCC; see the file COPYING3.  If not see
 
 #undef INIT_SECTION_ASM_OP
 #undef FINI_SECTION_ASM_OP
+#define INIT_ARRAY_SECTION_ASM_OP "\t.section\t.init_array"
+#define FINI_ARRAY_SECTION_ASM_OP "\t.section\t.fini_array"
 
 /* This is how to output an assembler line that says to advance the
    location counter to a multiple of 2**LOG bytes.  */
@@ -267,6 +269,20 @@ do {								\
 #undef  ENDFILE_SPEC
 #define ENDFILE_SPEC "crtend.o%s"
 
+/* In order for bitfields to work on a 68000, or with -mnobitfield, we must
+   define either PCC_BITFIELD_TYPE_MATTERS or STRUCTURE_SIZE_BOUNDARY.
+   Defining STRUCTURE_SIZE_BOUNDARY results in structure packing problems,
+   so we define PCC_BITFIELD_TYPE_MATTERS.  */
+/*
+ * However for compatibility reasons, we keep the previous setting.
+ */
+#if 0
+#define PCC_BITFIELD_TYPE_MATTERS 1
+#else
+/* Every structure or union's size must be a multiple of 2 bytes.  */
+#define STRUCTURE_SIZE_BOUNDARY 16
+#endif
+
 #else
 /* We can only do STABS.  */
 #undef PREFERRED_DEBUGGING_TYPE
@@ -281,6 +297,9 @@ do {								\
  
 #undef  ENDFILE_SPEC
 #define ENDFILE_SPEC ""
+
+/* Every structure or union's size must be a multiple of 2 bytes.  */
+#define STRUCTURE_SIZE_BOUNDARY 16
 
 #endif
 

@@ -9,7 +9,6 @@
 #define ELF_ALIAS(x) .globl _ ## x; _ ## x:
 #else
 #define ELF_ALIAS(f) typeof(f) _ ## f __attribute__((alias(#f)));
-#pragma GCC diagnostic ignored "-Wmissing-attributes"
 #endif
 #else
 #define ELF_ALIAS(f)
