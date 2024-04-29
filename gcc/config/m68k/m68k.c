@@ -1907,7 +1907,7 @@ m68k_ok_for_sibcall_p (tree decl, tree exp)
   /* FIXME: currently does not work at all for FASTCALL, because the
      A2 register for the call will be restored in the epilogue
      befor being used */
-  if (cfun->machine->call_abi == FASTCALL_ABI)
+  if (cfun->machine->call_abi == FASTCALL_ABI || m68k_function_type_abi (type) != cfun->machine->call_abi)
       return false;
 
   kind = m68k_get_function_kind (current_function_decl);
