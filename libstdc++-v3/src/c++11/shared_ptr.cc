@@ -34,7 +34,7 @@ namespace __gnu_internal _GLIBCXX_VISIBILITY(hidden)
   __gnu_cxx::__mutex&
   get_mutex(unsigned char i)
   {
-#ifdef _GLIBCXX_CAN_ALIGNAS_DESTRUCTIVE_SIZE
+#if defined(_GLIBCXX_CAN_ALIGNAS_DESTRUCTIVE_SIZE) && !defined(__mc68000__)
     // Increase alignment to put each lock on a separate cache line.
     struct alignas(__GCC_DESTRUCTIVE_SIZE) M : __gnu_cxx::__mutex { };
 #else
