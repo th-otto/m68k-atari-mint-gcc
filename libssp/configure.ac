@@ -67,10 +67,13 @@ XCFLAGS="$XCFLAGS $CET_FLAGS"
 AC_SUBST(XCFLAGS)
 
 AC_MSG_CHECKING([whether hidden visibility is supported])
+save_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
 AC_TRY_COMPILE([
 void __attribute__((visibility ("hidden"))) bar (void) {}],,
 [ssp_hidden=yes],[ssp_hidden=no])
 AC_MSG_RESULT($ssp_hidden)
+CFLAGS="$save_CFLAGS"
 if test x$ssp_hidden = xyes; then
   AC_DEFINE([HAVE_HIDDEN_VISIBILITY],[1],[__attribute__((visibility ("hidden"))) supported])
 fi
