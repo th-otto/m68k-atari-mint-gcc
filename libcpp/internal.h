@@ -26,6 +26,12 @@ along with this program; see the file COPYING3.  If not see
 #include "cpplib.h"
 #include "rich-location.h"
 
+#ifdef __MINGW32__
+/* neither the configure script here nor in gcc checks whether it needs -liconv */
+#undef HAVE_ICONV
+#define HAVE_ICONV 0
+#endif
+
 #if HAVE_ICONV
 #include <iconv.h>
 #else

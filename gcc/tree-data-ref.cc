@@ -102,6 +102,10 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree-ssa-loop-ivopts.h"
 #include "calls.h"
 
+#ifdef __mc68000__
+#pragma GCC optimize "-Os"
+#endif
+
 static struct datadep_stats
 {
   int num_dependence_tests;

@@ -1117,7 +1117,7 @@ ALL_LINKERFLAGS = $(ALL_CXXFLAGS) $(LD_PICFLAG)
 
 # Use the "pic" build of libiberty if --enable-host-shared or --enable-host-pie,
 # unless we are building for mingw.
-LIBIBERTY_PICDIR=$(if $(findstring mingw,$(target)),,pic)
+LIBIBERTY_PICDIR=
 ifneq ($(enable_host_shared)$(enable_host_pie),)
 LIBIBERTY = ../libiberty/$(LIBIBERTY_PICDIR)/libiberty.a
 else
