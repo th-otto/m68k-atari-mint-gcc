@@ -100,6 +100,10 @@ along with GCC; see the file COPYING3.  If not see
 #include "range-op.h"
 #include "vr-values.h"
 
+#ifdef __mc68000__
+#pragma GCC optimize "-Os"
+#endif
+
 static struct datadep_stats
 {
   int num_dependence_tests;
