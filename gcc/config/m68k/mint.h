@@ -59,6 +59,9 @@ along with GCC; see the file COPYING3.  If not see
     {						\
       builtin_define ("__MINT__");		\
       GCC_HAVE_INITFINI_ARRAY_SUPPORT \
+      /* The GNU C++ standard library requires this.  */ \
+      if (c_dialect_cxx ()) \
+       builtin_define ("_GNU_SOURCE"); \
       builtin_define_std ("atarist");		\
       builtin_assert ("machine=atari");		\
       builtin_assert ("system=mint");		\
@@ -83,9 +86,6 @@ along with GCC; see the file COPYING3.  If not see
 
 #undef  LIB_SPEC
 #define LIB_SPEC	"-lc"
-
-/* Every structure or union's size must be a multiple of 2 bytes.  */
-#define STRUCTURE_SIZE_BOUNDARY 16
 
 /* The -g option generates stabs debug information.  */
 #define DBX_DEBUGGING_INFO 1
@@ -265,6 +265,12 @@ do {								\
 #undef  ENDFILE_SPEC
 #define ENDFILE_SPEC "crtend.o%s"
 
+/* In order for bitfields to work on a 68000, or with -mnobitfield, we must
+   define either PCC_BITFIELD_TYPE_MATTERS or STRUCTURE_SIZE_BOUNDARY.
+   Defining STRUCTURE_SIZE_BOUNDARY results in structure packing problems,
+   so we define PCC_BITFIELD_TYPE_MATTERS.  */
+#define PCC_BITFIELD_TYPE_MATTERS 1
+
 #else
 /* We can only do STABS.  */
 #undef PREFERRED_DEBUGGING_TYPE
@@ -279,6 +285,9 @@ do {								\
  
 #undef  ENDFILE_SPEC
 #define ENDFILE_SPEC ""
+
+/* Every structure or union's size must be a multiple of 2 bytes.  */
+#define STRUCTURE_SIZE_BOUNDARY 16
 
 #endif
 
