@@ -273,15 +273,7 @@ do {								\
    define either PCC_BITFIELD_TYPE_MATTERS or STRUCTURE_SIZE_BOUNDARY.
    Defining STRUCTURE_SIZE_BOUNDARY results in structure packing problems,
    so we define PCC_BITFIELD_TYPE_MATTERS.  */
-/*
- * However for compatibility reasons, we keep the previous setting.
- */
-#if 0
 #define PCC_BITFIELD_TYPE_MATTERS 1
-#else
-/* Every structure or union's size must be a multiple of 2 bytes.  */
-#define STRUCTURE_SIZE_BOUNDARY 16
-#endif
 
 #else
 /* We can only do STABS.  */
