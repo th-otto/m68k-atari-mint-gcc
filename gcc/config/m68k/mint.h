@@ -35,6 +35,8 @@ along with GCC; see the file COPYING3.  If not see
 #undef LOCAL_LABEL_PREFIX
 #define LOCAL_LABEL_PREFIX "."
 
+/* How to start an assembler comment.  */
+
 #undef ASM_COMMENT_START
 #define ASM_COMMENT_START "|"
 
@@ -167,6 +169,9 @@ along with GCC; see the file COPYING3.  If not see
 /* If we have a definition of INCOMING_RETURN_ADDR_RTX, assume that
    the rest of the DWARF 2 frame unwind support is also provided.
    
+   All configurations that don't use elf must be explicit about not using
+   dwarf unwind information.
+
    MiNT: DWARF 2 frame unwind is not supported by a.out-mint.
 */
 #undef DWARF2_UNWIND_INFO
@@ -265,7 +270,7 @@ do {								\
 
 #undef  STARTFILE_SPEC
 #define STARTFILE_SPEC	"%{pg|p|profile:gcrt0.o%s;:crt0.o%s} crtbegin.o%s"
- 
+
 #undef  ENDFILE_SPEC
 #define ENDFILE_SPEC "crtend.o%s"
 
@@ -273,15 +278,7 @@ do {								\
    define either PCC_BITFIELD_TYPE_MATTERS or STRUCTURE_SIZE_BOUNDARY.
    Defining STRUCTURE_SIZE_BOUNDARY results in structure packing problems,
    so we define PCC_BITFIELD_TYPE_MATTERS.  */
-/*
- * However for compatibility reasons, we keep the previous setting.
- */
-#if 0
 #define PCC_BITFIELD_TYPE_MATTERS 1
-#else
-/* Every structure or union's size must be a multiple of 2 bytes.  */
-#define STRUCTURE_SIZE_BOUNDARY 16
-#endif
 
 #else
 /* We can only do STABS.  */
@@ -294,7 +291,7 @@ do {								\
 
 #undef  STARTFILE_SPEC
 #define STARTFILE_SPEC	"%{pg|p|profile:gcrt0.o%s;:crt0.o%s}"
- 
+
 #undef  ENDFILE_SPEC
 #define ENDFILE_SPEC ""
 
