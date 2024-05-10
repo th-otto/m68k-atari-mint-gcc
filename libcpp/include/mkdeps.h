@@ -52,15 +52,15 @@ extern void deps_add_target (class mkdeps *, const char *, int);
 extern void deps_add_default_target (class mkdeps *, const char *);
 
 /* Adds a module target.  The module name and cmi name are copied.  */
-extern void deps_add_module_target (struct mkdeps *, const char *module,
+extern void deps_add_module_target (class mkdeps *, const char *module,
 				    const char *cmi, bool is_header,
 				    bool is_exported);
 
 /* Adds a module dependency.  The module name is copied.  */
-extern void deps_add_module_dep (struct mkdeps *, const char *module);
+extern void deps_add_module_dep (class mkdeps *, const char *module);
 
 /* Add a structured dependency target.  */
-extern void fdeps_add_target (struct mkdeps *, const char *, bool);
+extern void fdeps_add_target (class mkdeps *, const char *, bool);
 
 /* Add a dependency (appears on the right side of the colon) to the
    deps list.  Dependencies will be printed in the order that they
@@ -73,7 +73,7 @@ extern void deps_add_dep (class mkdeps *, const char *);
 extern void deps_write (const cpp_reader *, FILE *, unsigned int);
 
 /* Write out a deps buffer to a specified file in P1689R5 format.  */
-extern void deps_write_p1689r5 (const struct mkdeps *, FILE *);
+extern void deps_write_p1689r5 (const class mkdeps *, FILE *);
 
 /* Write out a deps buffer to a file, in a form that can be read back
    with deps_restore.  Returns nonzero on error, in which case the

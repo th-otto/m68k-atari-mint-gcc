@@ -50,7 +50,7 @@ static void post_options (cpp_reader *);
 __extension__ const uchar _cpp_trigraph_map[UCHAR_MAX + 1] = {
 
 #define END };
-#define s(p, v) [p] = v,
+#define s(p, v) [(uchar)(p)] = v,
 
 #else
 
@@ -59,7 +59,7 @@ __extension__ const uchar _cpp_trigraph_map[UCHAR_MAX + 1] = {
  unsigned char *x = _cpp_trigraph_map;
 
 #define END }
-#define s(p, v) x[p] = v;
+#define s(p, v) x[(uchar)(p)] = v;
 
 #endif
 
