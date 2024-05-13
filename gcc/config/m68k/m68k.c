@@ -7260,10 +7260,17 @@ m68k_promote_function_mode (const_tree type, machine_mode mode,
 static void
 m68k_file_end (void)
 {
-#if defined(HAVE_AS_GNU_ATTRIBUTE) && 0
+#if defined(HAVE_AS_GNU_ATTRIBUTE)
+#if 0
   /* Emit .gnu_attribute directive for Tag_GNU_M68K_ABI_FP.  */
   int fp_abi = TARGET_68881 ? (FUNCTION_VALUE_REGNO_P(FP0_REG) ? 1 : 2) : 0;
-  fprintf (asm_out_file, "\t.gnu_attribute 4, %d\n", fp_abi);
+  fprintf (asm_out_file, "\t.gnu_attribute 4,%d\n", fp_abi);
+#endif
+#endif
+#ifdef USING_ELFOS_H
+  /* Emit .gnu_attribute directive for Tag_GNU_M68K_ABI.  */
+  int abi = 1 + (TARGET_SHORT ? 2 : 0) + (TARGET_FASTCALL ? 4 : 0);
+  fprintf (asm_out_file, "\t.gnu_attribute 8,%d\n", abi);
 #endif
 
   if (NEED_INDICATE_EXEC_STACK)
