@@ -444,7 +444,7 @@ extern enum calling_abi m68k_abi;
  */
 #define ARG_POINTER_REGNUM 24
 
-#define STATIC_CHAIN_REGNUM (TARGET_FASTCALL ? A2_REG : A0_REG)
+#define STATIC_CHAIN_REGNUM (M68K_STRUCT_VALUE_REGNUM == A0_REG ? A1_REG : A0_REG)
 #define M68K_STATIC_CHAIN_REG_NAME REGISTER_PREFIX "a0"
 
 /* Register in which address to store a structure value
@@ -633,7 +633,7 @@ struct m68k_args
    (though the operand list is empty).  */
 #define TRANSFER_FROM_TRAMPOLINE				\
 void								\
-__transfer_from_trampoline ()					\
+__transfer_from_trampoline (void)					\
 {								\
   register char *a0 asm (M68K_STATIC_CHAIN_REG_NAME);		\
   asm (GLOBAL_ASM_OP "___trampoline");				\

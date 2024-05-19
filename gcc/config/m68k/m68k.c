@@ -229,7 +229,7 @@ static void m68k_file_end (void);
 #undef TARGET_ASM_OUTPUT_MI_THUNK
 #define TARGET_ASM_OUTPUT_MI_THUNK m68k_output_mi_thunk
 #undef TARGET_ASM_CAN_OUTPUT_MI_THUNK
-#define TARGET_ASM_CAN_OUTPUT_MI_THUNK hook_bool_const_tree_hwi_hwi_const_tree_true
+#define TARGET_ASM_CAN_OUTPUT_MI_THUNK m68k_can_output_mi_thunk
 
 #undef TARGET_ASM_FILE_START_APP_OFF
 #define TARGET_ASM_FILE_START_APP_OFF true
@@ -352,6 +352,9 @@ static void m68k_file_end (void);
 
 #undef TARGET_PROMOTE_FUNCTION_MODE
 #define TARGET_PROMOTE_FUNCTION_MODE m68k_promote_function_mode
+
+#undef TARGET_STATIC_CHAIN
+#define TARGET_STATIC_CHAIN m68k_static_chain
 
 static const struct attribute_spec m68k_attribute_table[] =
 {
@@ -1901,8 +1904,56 @@ m68k_legitimize_sibcall_address (rtx x)
   if (sibcall_operand (XEXP (x, 0), VOIDmode))
     return x;
 
+  if (m68k_abi == FASTCALL_ABI)
+  {
+    static bool issued_error;
+    if (!issued_error)
+      {
+	issued_error = true;
+	error ("m68k_legitimize_sibcall_address not supported with -mfastcall");
+      }
+  }
   emit_move_insn (gen_rtx_REG (Pmode, STATIC_CHAIN_REGNUM), XEXP (x, 0));
   return replace_equiv_address (x, gen_rtx_REG (Pmode, STATIC_CHAIN_REGNUM));
+}
+
+/* Return an rtx for the static chain for FNDECL.  If INCOMING_P is true,
+       then it should be for the callee; otherwise for the caller.  */
+static rtx
+m68k_static_chain (const_tree fndecl_or_type, bool incoming_p)
+{
+  const_tree fntype, fndecl;
+
+  if (DECL_P (fndecl_or_type) && !DECL_STATIC_CHAIN (fndecl_or_type))
+    return NULL;
+
+  if (incoming_p)
+    {
+    }
+
+  if (TREE_CODE (fndecl_or_type) == FUNCTION_DECL)
+   {
+      fntype = TREE_TYPE (fndecl_or_type);
+      fndecl = fndecl_or_type;
+   }
+ else
+   {
+     fntype = fndecl_or_type;
+     fndecl = NULL;
+   }
+
+  if (m68k_function_type_abi(fntype) == FASTCALL_ABI)
+  {
+    static bool issued_error;
+    if (!issued_error)
+      {
+	issued_error = true;
+	error ("nested functions not supported with -mfastcall in %qD", fndecl);
+      }
+    return gen_rtx_MEM (Pmode, stack_pointer_rtx);
+  }
+  
+  return gen_rtx_REG (Pmode, STATIC_CHAIN_REGNUM);
 }
 
 /* Convert X to a legitimate address and return it if successful.  Otherwise
@@ -5626,44 +5677,113 @@ output_sibcall (rtx x)
     return "jmp %a0"; /* note: will be replaced by STATIC_CHAIN_REGNUM in m68k_legitimize_sibcall_address */
 }
 
+/* Determine whether m68k_output_mi_thunk can succeed.  */
+
+static bool
+m68k_can_output_mi_thunk (const_tree, HOST_WIDE_INT delta, HOST_WIDE_INT vcall_offset,
+			 const_tree function)
+{
+  /* without fastcall we can handle anything.  */
+  if (m68k_function_abi(function) != FASTCALL_ABI)
+    return true;
+
+  return true;
+}
+
+static void
+emit_push_reg (unsigned regno)
+{
+  rtx mem, reg;
+
+  mem = gen_rtx_PRE_DEC (Pmode, stack_pointer_rtx);
+  mem = gen_frame_mem (SImode, mem);
+  reg = gen_rtx_REG (Pmode, regno);
+
+  emit_insn (gen_movsi (mem, reg));
+}
+
+static void
+emit_pop_reg (unsigned regno)
+{
+  rtx mem, reg;
+
+  mem = gen_rtx_POST_INC (Pmode, stack_pointer_rtx);
+  mem = gen_frame_mem (Pmode, mem);
+  reg = gen_rtx_REG (SImode, regno);
+
+  emit_move_insn (reg, mem);
+}
+
+
+/* Output the assembler code for a thunk function.  THUNK_DECL is the
+   declaration for the thunk function itself, FUNCTION is the decl for
+   the target function.  DELTA is an immediate constant offset to be
+   added to THIS.  If VCALL_OFFSET is nonzero, the word at
+   *(*this + vcall_offset) should be added to THIS.  */
+
 static void
 m68k_output_mi_thunk (FILE *file, tree thunk ATTRIBUTE_UNUSED,
 		      HOST_WIDE_INT delta, HOST_WIDE_INT vcall_offset,
 		      tree function)
 {
   rtx this_slot, offset, addr, mem, tmp;
+  int tmp_regno;
+  int preserve_a2 = 0;
   rtx_insn *insn;
-
-  /* Avoid clobbering the struct value reg by using the
-     static chain reg as a temporary.  */
-  tmp = gen_rtx_REG (Pmode, STATIC_CHAIN_REGNUM);
 
   /* Pretend to be a post-reload pass while generating rtl.  */
   reload_completed = 1;
 
-  /* The "this" pointer is stored at 4(%sp).  */
-  this_slot = gen_rtx_MEM (Pmode, plus_constant (Pmode,
+  if (m68k_function_abi(function) == FASTCALL_ABI)
+    {
+      tmp_regno = A2_REG;
+      tmp = gen_rtx_REG (Pmode, tmp_regno);
+      /* The "this" pointer is stored in %a0.  */
+      this_slot = gen_rtx_REG (Pmode, A0_REG);
+    }
+  else
+    {
+      /* Avoid clobbering the M68K_STRUCT_VALUE_REGNUM by using the
+	 STATIC_CHAIN_REGNUM as a temporary.  */
+      tmp_regno = STATIC_CHAIN_REGNUM;
+      tmp = gen_rtx_REG (Pmode, tmp_regno);
+      /* The "this" pointer is stored at 4(%sp).  */
+      this_slot = gen_rtx_MEM (Pmode, plus_constant (Pmode,
 						 stack_pointer_rtx, 4));
+    }
 
   /* Add DELTA to THIS.  */
   if (delta != 0)
     {
       /* Make the offset a legitimate operand for memory addition.  */
       offset = GEN_INT (delta);
-      if ((delta < -8 || delta > 8)
-	  && (TARGET_COLDFIRE || USE_MOVQ (delta)))
+      if (m68k_function_abi(function) != FASTCALL_ABI)
 	{
-	  emit_move_insn (gen_rtx_REG (Pmode, D0_REG), offset);
-	  offset = gen_rtx_REG (Pmode, D0_REG);
-	}
-      emit_insn (gen_add3_insn (copy_rtx (this_slot),
+	  if ((delta < -8 || delta > 8)
+		  && (TARGET_COLDFIRE || USE_MOVQ (delta)))
+	    {
+	       int offset_regno = D0_REG;
+	       emit_move_insn (gen_rtx_REG (Pmode, offset_regno), offset);
+	       offset = gen_rtx_REG (Pmode, offset_regno);
+	    }
+	  emit_insn (gen_add3_insn (copy_rtx (this_slot),
 				copy_rtx (this_slot), offset));
+	}
+      else
+	{
+	  emit_insn(gen_addsi3(this_slot, this_slot, offset));
+	}
     }
 
   /* If needed, add *(*THIS + VCALL_OFFSET) to THIS.  */
   if (vcall_offset != 0)
     {
       /* Set the static chain register to *THIS.  */
+      if (tmp_regno == A2_REG)
+      {
+	emit_push_reg(A2_REG);
+	preserve_a2 = 1;
+      }
       emit_move_insn (tmp, this_slot);
       emit_move_insn (tmp, gen_rtx_MEM (Pmode, tmp));
 
@@ -5675,12 +5795,22 @@ m68k_output_mi_thunk (FILE *file, tree thunk ATTRIBUTE_UNUSED,
 	  addr = tmp;
 	}
 
-      /* Load the offset into %d0 and add it to THIS.  */
-      emit_move_insn (gen_rtx_REG (Pmode, D0_REG),
+      if (m68k_function_abi(function) != FASTCALL_ABI)
+	{
+	  /* Load the offset into %d0 and add it to THIS.  */
+	  int offset_regno = D0_REG;
+	  emit_move_insn (gen_rtx_REG (Pmode, offset_regno),
 		      gen_rtx_MEM (Pmode, addr));
-      emit_insn (gen_add3_insn (copy_rtx (this_slot),
+	  emit_insn (gen_add3_insn (copy_rtx (this_slot),
 				copy_rtx (this_slot),
-				gen_rtx_REG (Pmode, D0_REG)));
+				gen_rtx_REG (Pmode, offset_regno)));
+	}
+      else
+	{
+	  emit_insn (gen_add3_insn (copy_rtx (this_slot),
+				copy_rtx (this_slot),
+				gen_rtx_MEM (Pmode, addr)));
+	}
     }
 
   /* Jump to the target function.  Use a sibcall if direct jumps are
@@ -5695,12 +5825,14 @@ m68k_output_mi_thunk (FILE *file, tree thunk ATTRIBUTE_UNUSED,
 	  /* Use the static chain register as a temporary (call-clobbered)
 	     GOT pointer for this function.  We can use the static chain
 	     register because it isn't live on entry to the thunk.  */
-	  SET_REGNO (pic_offset_table_rtx, STATIC_CHAIN_REGNUM);
+	  SET_REGNO (pic_offset_table_rtx, M68K_STRUCT_VALUE_REGNUM == A0_REG ? A1_REG : A0_REG);
 	  emit_insn (gen_load_got (pic_offset_table_rtx));
 	}
       legitimize_pic_address (XEXP (mem, 0), Pmode, tmp);
       mem = replace_equiv_address (mem, tmp);
     }
+  if (preserve_a2)
+    emit_pop_reg(A2_REG);
   insn = emit_call_insn (gen_sibcall (mem, const0_rtx));
   SIBLING_CALL_P (insn) = 1;
 
