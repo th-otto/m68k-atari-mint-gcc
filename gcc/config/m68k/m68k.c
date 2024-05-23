@@ -1365,9 +1365,41 @@ m68k_set_frame_related (rtx_insn *insn)
       RTX_FRAME_RELATED_P (XVECEXP (body, 0, i)) = 1;
 }
 
-/* Emit RTL for the "prologue" define_expand.  */
-
 #define IS_INTERRUPT(func_kind) (func_kind != m68k_fk_normal_function)
+
+int m68k_emit_stack_check(void)
+{
+  if (flag_stack_check == FULL_BUILTIN_STACK_CHECK &&
+        !IS_INTERRUPT(m68k_get_function_kind (current_function_decl)) &&
+        !DECL_NO_LIMIT_STACK(current_function_decl))
+  {
+        rtx_code_label *lab1;
+        rtx limit_mem;
+        rtx jump;
+
+        static rtx stack_limit_symbol;
+        static rtx stack_overflow_rtx;
+
+        if (stack_limit_symbol == 0)
+                stack_limit_symbol = gen_rtx_SYMBOL_REF (Pmode, "_StkLim");
+        if (stack_overflow_rtx == 0)
+                stack_overflow_rtx = gen_rtx_SYMBOL_REF (Pmode, "_StkOver");
+        lab1 = gen_label_rtx ();
+        limit_mem = gen_rtx_MEM (Pmode, stack_limit_symbol);
+        emit_cmp_and_jump_insns (limit_mem, stack_pointer_rtx, LTU, 0,
+                           Pmode, 1, lab1);
+        JUMP_LABEL (get_last_insn ()) = lab1;
+        jump = gen_rtx_SET(pc_rtx, stack_overflow_rtx);
+        emit_insn(jump);
+        emit_barrier ();
+        emit_label(lab1);
+        return true;
+  }
+  return false;
+}
+
+
+/* Emit RTL for the "prologue" define_expand.  */
 
 void
 m68k_expand_prologue (void)
@@ -1474,34 +1506,8 @@ m68k_expand_prologue (void)
     }
 
 #ifdef STACK_CHECK_ATARI
-  if (flag_stack_check == FULL_BUILTIN_STACK_CHECK &&
-        !IS_INTERRUPT(m68k_get_function_kind (current_function_decl)) &&
-        !DECL_NO_LIMIT_STACK(current_function_decl))
+  if (m68k_emit_stack_check())
   {
-        rtx_code_label *lab1;
-        rtx limit_mem;
-        rtx jump;
-
-        static rtx stack_limit_symbol;
-        static rtx stack_overflow_rtx;
-
-        if (stack_limit_symbol == 0)
-                stack_limit_symbol = gen_rtx_SYMBOL_REF (Pmode, "_StkLim");
-        if (stack_overflow_rtx == 0)
-                stack_overflow_rtx = gen_rtx_SYMBOL_REF (Pmode, "_StkOver");
-        lab1 = gen_label_rtx ();
-        limit_mem = gen_rtx_MEM (Pmode, stack_limit_symbol);
-        emit_cmp_and_jump_insns (limit_mem, stack_pointer_rtx, LTU, 0,
-                           Pmode, 1, lab1);
-        JUMP_LABEL (get_last_insn ()) = lab1;
-#if 0
-        funmem = gen_rtx_MEM (FUNCTION_MODE, stack_overflow_rtx);
-        jump = targetm.gen_call(funmem, const0_rtx, 0, 0);
-#endif
-        jump = gen_rtx_SET(pc_rtx, stack_overflow_rtx);
-        emit_insn(jump);
-        emit_barrier ();
-        emit_label(lab1);
   } else
 #endif
   /* If the stack limit is not a symbol, check it here.

@@ -334,3 +334,4 @@ do {									\
 
 #define STACK_CHECK_ATARI
 #define STACK_CHECK_BUILTIN 1
+int m68k_emit_stack_check(void);
