@@ -325,7 +325,7 @@ extern enum calling_abi m68k_abi;
 
 #define UNITS_PER_WORD 4
 
-#define PARM_BOUNDARY ((TARGET_SHORT || (TARGET_FASTCALL && TUNE_68000_10)) ? 16 : 32)
+#define PARM_BOUNDARY (TARGET_SHORT ? 16 : 32)
 #define STACK_BOUNDARY 16
 #define FUNCTION_BOUNDARY 16
 #define EMPTY_FIELD_BOUNDARY 16
