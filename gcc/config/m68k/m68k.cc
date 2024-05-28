@@ -391,13 +391,13 @@ static const struct attribute_spec m68k_attribute_table[] =
     m68k_handle_fndecl_attribute, NULL },
 
  /* cdecl attribute specifies to pass arguments on the stack */
-  { "cdecl",             0, 0, false, true,  true,  false, m68k_handle_type_attribute, NULL },
+  { "cdecl",             0, 0, false, true,  true,  true, m68k_handle_type_attribute, NULL },
   /* Regparm attribute specifies how many integer arguments are to be
      passed in registers.  */
-  { "regparm",           0, 1, false, true,  true,  false, m68k_handle_type_attribute, NULL },
+  { "regparm",           0, 1, false, true,  true,  true, m68k_handle_type_attribute, NULL },
   /* Fastcall attribute says callee is responsible for popping arguments
    if they are not variable.  */
-  { "fastcall",          0, 0, false, true,  true,  false, m68k_handle_type_attribute, NULL },
+  { "fastcall",          0, 0, false, true,  true,  true, m68k_handle_type_attribute, NULL },
   { NULL, 0, 0, false, false, false, false, NULL, NULL }
 };
 
