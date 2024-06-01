@@ -19,6 +19,19 @@ extern "C" {
 #define SYMVER(name, ver) SYMVER1(name, ver)
 
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#include <features.h>
+
+/*
+ * avoid references to __isoc23_strtol*,
+ * which are only available in glibc >= 2.38
+ */
+#undef __GLIBC_USE_C2X_STRTOL
+#define __GLIBC_USE_C2X_STRTOL 0
+
+
 /* Symbols redirected to earlier glibc versions */
 SYMVER(__libc_start_main, GLIBC_2.2.5)
 SYMVER(__libpthread_version_placeholder, GLIBC_2.12)
