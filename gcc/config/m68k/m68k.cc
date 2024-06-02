@@ -803,6 +803,12 @@ m68k_option_override_internal (bool main_args_p)
    */
   if (PREFERRED_STACK_BOUNDARY > 16 && INT_TYPE_SIZE <= 16 && (write_symbols & DWARF2_DEBUG))
     flag_combine_stack_adjustments = 0;
+
+  /*
+   * disable -ffold-mem-offsets. This generates incorrect code.
+   * Introduced by commit 04c9cf5c786b94fbe3f6f21f06cae73a7575ff7a
+   */
+  flag_fold_mem_offsets = 0;
 }
 
 /* Implement the TARGET_OPTION_OVERRIDE hook.  */
