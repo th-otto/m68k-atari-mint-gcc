@@ -2492,12 +2492,14 @@ class ebcdic_execution_charset : public lexer_test_options
     gcc_assert (s_singleton);
     /* Avoid exgettext from picking this up, it is translated in libcpp.  */
     const char *msg = "conversion from %s to %s not supported by iconv";
+    const char *msg2 = "no iconv implementation, cannot convert from %s to %s";
 #ifdef ENABLE_NLS
     msg = dgettext ("cpplib", msg);
+    msg2 = dgettext ("cpplib", msg2);
 #endif
     /* Detect and record errors emitted by libcpp/charset.cc:init_iconv_desc
        when the local iconv build doesn't support the conversion.  */
-    if (strcmp (msgid, msg) == 0)
+    if (strcmp (msgid, msg) == 0 || strcmp (msgid, msg2) == 0)
       {
 	s_singleton->m_num_iconv_errors++;
 	return true;
