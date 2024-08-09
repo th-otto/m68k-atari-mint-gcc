@@ -2710,9 +2710,10 @@ min_vis_expr_r (tree *tp, int */*walk_subtrees*/, void *data)
       break;
 
     case TEMPLATE_DECL:
-      if (DECL_ALIAS_TEMPLATE_P (t))
+      if (DECL_ALIAS_TEMPLATE_P (t) || standard_concept_p (t))
 	/* FIXME: We don't maintain TREE_PUBLIC / DECL_VISIBILITY for
-	   alias templates so we can't trust it here (PR107906).  */
+	   alias templates so we can't trust it here (PR107906).  Ditto
+	   for concepts.  */
 	break;
       t = DECL_TEMPLATE_RESULT (t);
       /* Fall through.  */
@@ -5951,6 +5952,8 @@ mark_used (tree decl, tsubst_flags_t complain /* = tf_warning_or_error */)
      find out its type.  For OpenMP user defined reductions, we need them
      instantiated for reduction clauses which inline them by hand directly.  */
   if (undeduced_auto_decl (decl)
+      || (VAR_P (decl)
+	  && VAR_HAD_UNKNOWN_BOUND (decl))
       || (TREE_CODE (decl) == FUNCTION_DECL
 	  && DECL_OMP_DECLARE_REDUCTION_P (decl)))
     maybe_instantiate_decl (decl);

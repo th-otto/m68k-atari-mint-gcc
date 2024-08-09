@@ -214,7 +214,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     }
 
     void
-    __istream_extract(istream& __in, char* __s, streamsize __num)
+    __istream_extract(istream& ___in, char* __s, streamsize __num)
     {
       typedef basic_istream<char>       	__istream_type;
       typedef __istream_type::int_type		__int_type;
@@ -225,20 +225,20 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
       streamsize __extracted = 0;
       ios_base::iostate __err = ios_base::goodbit;
-      __istream_type::sentry __cerb(__in, false);
+      __istream_type::sentry __cerb(___in, false);
       if (__cerb)
 	{
 	  __try
 	    {
 	      // Figure out how many characters to extract.
-	      streamsize __width = __in.width();
+	      streamsize __width = ___in.width();
 	      if (0 < __width && __width < __num)
 		__num = __width;
 
-	      const __ctype_type& __ct = use_facet<__ctype_type>(__in.getloc());
+	      const __ctype_type& __ct = use_facet<__ctype_type>(___in.getloc());
 
 	      const __int_type __eof = __traits_type::eof();
-	      __streambuf_type* __sb = __in.rdbuf();
+	      __streambuf_type* __sb = ___in.rdbuf();
 	      __int_type __c = __sb->sgetc();
 
 	      while (__extracted < __num - 1
@@ -277,20 +277,20 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	      // _GLIBCXX_RESOLVE_LIB_DEFECTS
 	      // 68.  Extractors for char* should store null at end
 	      *__s = __char_type();
-	      __in.width(0);
+	      ___in.width(0);
 	    }
 	  __catch(__cxxabiv1::__forced_unwind&)
 	    {
-	      __in._M_setstate(ios_base::badbit);
+	      ___in._M_setstate(ios_base::badbit);
 	      __throw_exception_again;
 	    }
 	  __catch(...)
-	    { __in._M_setstate(ios_base::badbit); }
+	    { ___in._M_setstate(ios_base::badbit); }
 	}
       if (!__extracted)
 	__err |= ios_base::failbit;
       if (__err)
-	__in.setstate(__err);
+	___in.setstate(__err);
     }
 
 #ifdef _GLIBCXX_USE_WCHAR_T

@@ -3123,10 +3123,16 @@ cxx_eval_call_expression (const constexpr_ctx *ctx, tree t,
 	 At this point it has already been evaluated in the call
 	 to cxx_bind_parameters_in_call.  */
       new_obj = TREE_VEC_ELT (new_call.bindings, 0);
-      new_obj = cxx_fold_indirect_ref (ctx, loc, DECL_CONTEXT (fun), new_obj);
-
-      if (ctx->call && ctx->call->fundef
-	  && DECL_CONSTRUCTOR_P (ctx->call->fundef->decl))
+      bool empty_base = false;
+      new_obj = cxx_fold_indirect_ref (ctx, loc, DECL_CONTEXT (fun), new_obj,
+				       &empty_base);
+      /* If we're initializing an empty class, don't set constness, because
+	 cxx_fold_indirect_ref will return the wrong object to set constness
+	 of.  */
+      if (empty_base)
+	new_obj = NULL_TREE;
+      else if (ctx->call && ctx->call->fundef
+	       && DECL_CONSTRUCTOR_P (ctx->call->fundef->decl))
 	{
 	  tree cur_obj = TREE_VEC_ELT (ctx->call->bindings, 0);
 	  STRIP_NOPS (cur_obj);
@@ -3974,10 +3980,13 @@ cxx_eval_conditional_expression (const constexpr_ctx *ctx, tree t,
   if (TREE_CODE (t) == IF_STMT && !val)
     val = void_node;
 
-  /* P2564: a subexpression of a manifestly constant-evaluated expression
-     or conversion is an immediate function context.  */
+  /* P2564: If we aren't in immediate function context (including a manifestly
+     constant-evaluated expression), check any uses of immediate functions in
+     the arm we're discarding.  But don't do this inside a call; we already
+     checked when parsing the function.  */
   if (ctx->manifestly_const_eval != mce_true
       && !in_immediate_context ()
+      && !ctx->call
       && cp_fold_immediate (&TREE_OPERAND (t, zero_p ? 1 : 2),
 			    ctx->manifestly_const_eval))
     {
@@ -4430,7 +4439,8 @@ cxx_eval_array_reference (const constexpr_ctx *ctx, tree t,
   if (!lval
       && TREE_CODE (ary) == VIEW_CONVERT_EXPR
       && VECTOR_TYPE_P (TREE_TYPE (TREE_OPERAND (ary, 0)))
-      && TREE_TYPE (t) == TREE_TYPE (TREE_TYPE (TREE_OPERAND (ary, 0))))
+      && (TYPE_MAIN_VARIANT (TREE_TYPE (t))
+	  == TYPE_MAIN_VARIANT (TREE_TYPE (TREE_TYPE (TREE_OPERAND (ary, 0))))))
     ary = TREE_OPERAND (ary, 0);
 
   tree oldidx = TREE_OPERAND (t, 1);
@@ -8108,7 +8118,10 @@ cxx_eval_constant_expression (const constexpr_ctx *ctx, tree t,
 	tree oldop = TREE_OPERAND (t, 0);
 
 	tree op = cxx_eval_constant_expression (ctx, oldop,
-						lval,
+						VOID_TYPE_P (TREE_TYPE (t))
+						? vc_discard
+						: tcode == VIEW_CONVERT_EXPR
+						? lval : vc_prvalue,
 						non_constant_p, overflow_p);
 	if (*non_constant_p)
 	  return t;

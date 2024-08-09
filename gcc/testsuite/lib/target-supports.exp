@@ -5529,6 +5529,8 @@ foreach { armfunc armflag armdefs } {
 	v7em "-march=armv7e-m+fp -mthumb" __ARM_ARCH_7EM__
 	v7ve "-march=armv7ve+fp -marm"
 		"__ARM_ARCH_7A__ && __ARM_FEATURE_IDIV"
+	v7ve_neon "-march=armv7ve+simd -mfpu=auto -mfloat-abi=softfp"
+		  "__ARM_ARCH_7A__ && __ARM_FEATURE_IDIV && __ARM_NEON__"
 	v8a "-march=armv8-a+simd" __ARM_ARCH_8A__
 	v8a_hard "-march=armv8-a+simd -mfpu=auto -mfloat-abi=hard" __ARM_ARCH_8A__
 	v8_1a "-march=armv8.1-a+simd" __ARM_ARCH_8A__
@@ -7391,7 +7393,7 @@ proc check_effective_target_powerpc_elfv2 { } {
 # Return 1 if this is a PowerPC target supporting -mrop-protect
 
 proc check_effective_target_rop_ok { } {
-    return [check_effective_target_power10_ok] && [check_effective_target_powerpc_elfv2]
+    return [check_effective_target_has_arch_pwr8] && [check_effective_target_powerpc_elfv2]
 }
 
 # The VxWorks SPARC simulator accepts only EM_SPARC executables and
