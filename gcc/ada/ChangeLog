@@ -1,3 +1,60 @@
+2024-06-20  Release Manager
+
+	* GCC 12.4.0 released.
+
+2024-06-10  Eric Botcazou  <ebotcazou@adacore.com>
+
+	PR ada/114708
+	* exp_util.adb (Finalize_Address): Add guard for incomplete types.
+
+2024-03-07  Eric Botcazou  <ebotcazou@adacore.com>
+
+	PR ada/113979
+	* exp_ch4.adb (Expand_N_Allocator): In the subtype indication case,
+	remove call to Apply_Predicate_Check.
+
+2024-02-26  Eric Botcazou  <ebotcazou@adacore.com>
+
+	PR ada/113893
+	* exp_ch7.adb (Build_Anonymous_Master): Do not build the master
+	for a local designated type.
+	* exp_util.adb (Build_Allocate_Deallocate_Proc): Force Needs_Fin
+	to false if no finalization master is attached to an access type
+	and assert that it is anonymous in this case.
+	* sem_res.adb (Resolve_Allocator): Mention that the object might
+	not be finalized at all in the warning given when the type is an
+	anonymous access-to-controlled type.
+
+2024-01-09  Steve Baird  <baird@adacore.com>
+
+	PR ada/104354
+	* libgnat/s-rident.ads: Define a new restriction,
+	No_Task_Hierarchy_Implicit. This is like the No_Task_Hierarchy
+	restriction, but with the difference that setting this restriction
+	does not mean the H.6(6) post-compilation check is satisified.
+	* exp_ch6.adb (Add_Task_Actuals_To_Build_In_Place_Call): If it is
+	known that the function result cannot have tasks, then pass in a
+	null literal for the activation chain actual parameter. This
+	avoids generating a reference to an entity that
+	Build_Activation_Chain_Entity may have chosen not to generate a
+	declaration for.
+	* gnatbind.adb (List_Applicable_Restrictions): Do not list the
+	No_Task_Hierarchy_Implicit restriction.
+	* restrict.adb: Special treatment for the
+	No_Task_Hierarchy_Implicit restriction in functions
+	Get_Restriction_Id and Restriction_Active. The former is needed to
+	disallow the (unlikely) case that a user tries to explicitly
+	reference the No_Task_Hierarchy_Implicit restriction.
+	* sem_prag.adb (Analyze_Pragma): If a Sequential
+	Partition_Elaboration_Policy is specified (and the
+	No_Task_Hierarchy restriction is not already enabled), then enable
+	the No_Task_Hierarchy_Implicit restriction.
+
+2023-11-16  Eric Botcazou  <ebotcazou@adacore.com>
+
+	* gcc-interface/decl.cc (gnat_to_gnu_subprog_type): Also create a
+	TYPE_DECL for the return type built for the CI/CO mechanism.
+
 2023-05-08  Release Manager
 
 	* GCC 12.3.0 released.
