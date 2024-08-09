@@ -597,15 +597,9 @@ get_nsdmi (tree member, bool in_ctor, tsubst_flags_t complain)
 	  bool pushed = false;
 	  tree ctx = DECL_CONTEXT (member);
 
-	  processing_template_decl_sentinel ptds (/*reset*/false);
+	  bool push_to_top = maybe_push_to_top_level (member);
 	  if (!currently_open_class (ctx))
 	    {
-	      if (!LOCAL_CLASS_P (ctx))
-		push_to_top_level ();
-	      else
-		/* push_to_top_level would lose the necessary function context,
-		   just reset processing_template_decl.  */
-		processing_template_decl = 0;
 	      push_nested_class (ctx);
 	      push_deferring_access_checks (dk_no_deferred);
 	      pushed = true;
@@ -633,9 +627,8 @@ get_nsdmi (tree member, bool in_ctor, tsubst_flags_t complain)
 	    {
 	      pop_deferring_access_checks ();
 	      pop_nested_class ();
-	      if (!LOCAL_CLASS_P (ctx))
-		pop_from_top_level ();
 	    }
+	  maybe_pop_from_top_level (push_to_top);
 
 	  input_location = sloc;
 	}
@@ -4486,7 +4479,9 @@ build_vec_init (tree base, tree maxindex, tree init,
 	 But for non-classes, that's the same as value-initialization.  */
       if (empty_list)
 	{
-	  if (cxx_dialect >= cxx11 && AGGREGATE_TYPE_P (type))
+	  if (cxx_dialect >= cxx11
+	      && (CLASS_TYPE_P (type)
+		  || TREE_CODE (type) == ARRAY_TYPE))
 	    {
 	      init = build_constructor (init_list_type_node, NULL);
 	    }

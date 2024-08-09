@@ -1,3 +1,59 @@
+2024-07-19  Release Manager
+
+	* GCC 11.5.0 released.
+
+2024-06-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2024-02-22  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/114007
+	* c-lex.c (c_common_has_attribute): Parse 2 CPP_COLONs with
+	the first one with COLON_SCOPE flag the same as CPP_SCOPE but
+	ensure 0 is returned then.
+
+2024-06-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2024-02-12  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/113674
+	* c-lex.c (c_common_has_attribute): Call canonicalize_attr_name.
+
+2024-06-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2024-01-09  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/113262
+	* c-attribs.c (handle_copy_attribute): Don't use
+	DECL_SOURCE_LOCATION (decl) if decl is not DECL_P, use input_location
+	instead.  Formatting fixes.
+
+2024-05-08  Andrew Pinski  <quic_apinski@quicinc.com>
+
+	Backported from master:
+	2024-05-07  Andrew Pinski  <quic_apinski@quicinc.com>
+
+	PR c++/89224
+	* c-common.c (convert_vector_to_array_for_subscript): Call build_qualified_type
+	for the inner type.
+
+2024-04-23  Matt Jacobson  <mhjacobson@me.com>
+
+	Backported from master:
+	2021-08-17  Matt Jacobson  <mhjacobson@me.com>
+
+	* c-opts.c (c_common_post_options): Default to
+	flag_objc_sjlj_exceptions = 1 only when flag_objc_abi < 2.
+
+2024-01-27  Lewis Hyatt  <lhyatt@gmail.com>
+
+	PR preprocessor/105608
+	* c-pch.c (c_common_read_pch): Start a new line map before asking
+	libcpp to restore macros defined prior to reading the PCH, instead
+	of afterward.
+
 2023-05-29  Release Manager
 
 	* GCC 11.4.0 released.

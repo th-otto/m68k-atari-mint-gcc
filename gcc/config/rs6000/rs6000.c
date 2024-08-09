@@ -3820,11 +3820,10 @@ rs6000_option_override_internal (bool global_init_p)
 		 "-mmultiple");
     }
 
-  /* If little-endian, default to -mstrict-align on older processors.
-     Testing for direct_move matches power8 and later.  */
+  /* If little-endian, default to -mstrict-align on older processors.  */
   if (!BYTES_BIG_ENDIAN
       && !(processor_target_table[tune_index].target_enable
-	   & OPTION_MASK_DIRECT_MOVE))
+	   & OPTION_MASK_POWER8))
     rs6000_isa_flags |= ~rs6000_isa_flags_explicit & OPTION_MASK_STRICT_ALIGN;
 
   if (!rs6000_fold_gimple)
@@ -3870,8 +3869,7 @@ rs6000_option_override_internal (bool global_init_p)
       && (rs6000_isa_flags_explicit & (OPTION_MASK_SOFT_FLOAT
 				       | OPTION_MASK_ALTIVEC
 				       | OPTION_MASK_VSX)) != 0)
-    rs6000_isa_flags &= ~((OPTION_MASK_P8_VECTOR | OPTION_MASK_CRYPTO
-			   | OPTION_MASK_DIRECT_MOVE)
+    rs6000_isa_flags &= ~((OPTION_MASK_P8_VECTOR | OPTION_MASK_CRYPTO)
 		         & ~rs6000_isa_flags_explicit);
 
   if (TARGET_DEBUG_REG || TARGET_DEBUG_TARGET)
@@ -3915,7 +3913,7 @@ rs6000_option_override_internal (bool global_init_p)
       else
 	rs6000_isa_flags |= ISA_3_0_MASKS_SERVER;
     }
-  else if (TARGET_P8_VECTOR || TARGET_DIRECT_MOVE || TARGET_CRYPTO)
+  else if (TARGET_P8_VECTOR || TARGET_POWER8 || TARGET_CRYPTO)
     rs6000_isa_flags |= (ISA_2_7_MASKS_SERVER & ~ignore_masks);
   else if (TARGET_VSX)
     rs6000_isa_flags |= (ISA_2_6_MASKS_SERVER & ~ignore_masks);
@@ -3954,13 +3952,6 @@ rs6000_option_override_internal (bool global_init_p)
 	/* TARGET_VSX = 1 implies Power 7 and newer */
 	error ("%qs requires %qs", "-mvsx", "-mfprnd");
       rs6000_isa_flags &= ~OPTION_MASK_FPRND;
-    }
-
-  if (TARGET_DIRECT_MOVE && !TARGET_VSX)
-    {
-      if (rs6000_isa_flags_explicit & OPTION_MASK_DIRECT_MOVE)
-	error ("%qs requires %qs", "-mdirect-move", "-mvsx");
-      rs6000_isa_flags &= ~OPTION_MASK_DIRECT_MOVE;
     }
 
   if (TARGET_P8_VECTOR && !TARGET_ALTIVEC)
@@ -8077,7 +8068,8 @@ darwin_rs6000_special_round_type_align (tree type, unsigned int computed,
       type = TREE_TYPE (type);
   } while (AGGREGATE_TYPE_P (type));
 
-  if (! AGGREGATE_TYPE_P (type) && type != error_mark_node)
+  if (type != error_mark_node && ! AGGREGATE_TYPE_P (type)
+      && ! TYPE_PACKED (type) && maximum_field_alignment == 0)
     align = MAX (align, TYPE_ALIGN (type));
 
   return align;
@@ -17041,7 +17033,7 @@ output_toc (FILE *file, rtx x, int labelno, machine_mode mode)
       if (DECIMAL_FLOAT_MODE_P (GET_MODE (x)))
 	REAL_VALUE_TO_TARGET_DECIMAL128 (*CONST_DOUBLE_REAL_VALUE (x), k);
       else
-	REAL_VALUE_TO_TARGET_LONG_DOUBLE (*CONST_DOUBLE_REAL_VALUE (x), k);
+	real_to_target (k, CONST_DOUBLE_REAL_VALUE (x), GET_MODE (x));
 
       if (TARGET_64BIT)
 	{
@@ -21759,7 +21751,9 @@ rs6000_rtx_costs (rtx x, machine_mode mode, int outer_code,
 	    *total = rs6000_cost->divsi;
 	}
       /* Add in shift and subtract for MOD unless we have a mod instruction. */
-      if (!TARGET_MODULO && (code == MOD || code == UMOD))
+      if ((!TARGET_MODULO
+	   || (RS6000_DISABLE_SCALAR_MODULO && SCALAR_INT_MODE_P (mode)))
+	 && (code == MOD || code == UMOD))
 	*total += COSTS_N_INSNS (2);
       return false;
 
@@ -23770,7 +23764,7 @@ static struct rs6000_opt_mask const rs6000_opt_masks[] =
 								false, true  },
   { "cmpb",			OPTION_MASK_CMPB,		false, true  },
   { "crypto",			OPTION_MASK_CRYPTO,		false, true  },
-  { "direct-move",		OPTION_MASK_DIRECT_MOVE,	false, true  },
+  { "direct-move",		0,				false, true  },
   { "dlmzb",			OPTION_MASK_DLMZB,		false, true  },
   { "efficient-unaligned-vsx",	OPTION_MASK_EFFICIENT_UNALIGNED_VSX,
 								false, true  },

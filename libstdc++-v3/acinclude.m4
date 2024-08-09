@@ -4826,6 +4826,55 @@ dnl
   fi
   AC_MSG_RESULT($glibcxx_cv_truncate)
 dnl
+  AC_CACHE_CHECK([for fdopendir],
+    glibcxx_cv_fdopendir, [dnl
+    GCC_TRY_COMPILE_OR_LINK(
+      [#include <dirent.h>],
+      [::DIR* dir = ::fdopendir(1);],
+      [glibcxx_cv_fdopendir=yes],
+      [glibcxx_cv_fdopendir=no])
+  ])
+  if test $glibcxx_cv_fdopendir = yes; then
+    AC_DEFINE(HAVE_FDOPENDIR, 1, [Define if fdopendir is available in <dirent.h>.])
+  fi
+dnl
+  AC_CACHE_CHECK([for dirfd],
+    glibcxx_cv_dirfd, [dnl
+    GCC_TRY_COMPILE_OR_LINK(
+      [#include <dirent.h>],
+      [int fd = ::dirfd((::DIR*)0);],
+      [glibcxx_cv_dirfd=yes],
+      [glibcxx_cv_dirfd=no])
+  ])
+  if test $glibcxx_cv_dirfd = yes; then
+    AC_DEFINE(HAVE_DIRFD, 1, [Define if dirfd is available in <dirent.h>.])
+  fi
+dnl
+  AC_CACHE_CHECK([for openat],
+    glibcxx_cv_openat, [dnl
+    GCC_TRY_COMPILE_OR_LINK(
+      [#include <fcntl.h>],
+      [int fd = ::openat(AT_FDCWD, "", 0);],
+      [glibcxx_cv_openat=yes],
+      [glibcxx_cv_openat=no])
+  ])
+  if test $glibcxx_cv_openat = yes; then
+    AC_DEFINE(HAVE_OPENAT, 1, [Define if openat is available in <fcntl.h>.])
+  fi
+dnl
+  AC_CACHE_CHECK([for unlinkat],
+    glibcxx_cv_unlinkat, [dnl
+    GCC_TRY_COMPILE_OR_LINK(
+      [#include <fcntl.h>
+       #include <unistd.h>],
+      [::unlinkat(AT_FDCWD, "", AT_REMOVEDIR);],
+      [glibcxx_cv_unlinkat=yes],
+      [glibcxx_cv_unlinkat=no])
+  ])
+  if test $glibcxx_cv_unlinkat = yes; then
+    AC_DEFINE(HAVE_UNLINKAT, 1, [Define if unlinkat is available in <fcntl.h>.])
+  fi
+dnl
   CXXFLAGS="$ac_save_CXXFLAGS"
   AC_LANG_RESTORE
 ])

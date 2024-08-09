@@ -775,7 +775,11 @@ simplify_loop_decl_cond (tree *cond_p, tree body)
   *cond_p = boolean_true_node;
 
   if_stmt = begin_if_stmt ();
-  cond = cp_build_unary_op (TRUTH_NOT_EXPR, cond, false, tf_warning_or_error);
+  cond_p = &cond;
+  while (TREE_CODE (*cond_p) == ANNOTATE_EXPR)
+    cond_p = &TREE_OPERAND (*cond_p, 0);
+  *cond_p = cp_build_unary_op (TRUTH_NOT_EXPR, *cond_p, false,
+			       tf_warning_or_error);
   finish_if_stmt_cond (cond, if_stmt);
   finish_break_stmt ();
   finish_then_clause (if_stmt);
@@ -10570,6 +10574,38 @@ check_trait_type (tree type)
   return !!complete_type_or_else (strip_array_types (type), NULL_TREE);
 }
 
+/* True iff the conversion (if any) would be a direct reference
+   binding, not requiring complete types.  This is LWG2939.  */
+
+static bool
+same_type_ref_bind_p (cp_trait_kind kind, tree type1, tree type2)
+{
+  tree from, to;
+  switch (kind)
+    {
+      /* These put the target type first.  */
+    case CPTK_IS_CONSTRUCTIBLE:
+    case CPTK_IS_NOTHROW_CONSTRUCTIBLE:
+    case CPTK_IS_TRIVIALLY_CONSTRUCTIBLE:
+      to = type1;
+      from = type2;
+      break;
+
+    default:
+      gcc_unreachable ();
+    }
+
+  if (TREE_CODE (to) != REFERENCE_TYPE || !from)
+    return false;
+  if (TREE_CODE (from) == TREE_VEC && TREE_VEC_LENGTH (from) == 1)
+    from = TREE_VEC_ELT (from, 0);
+  else if (TREE_CODE (from) == TREE_LIST && !TREE_CHAIN (from))
+    from = TREE_VALUE (from);
+  return (TYPE_P (from)
+	  && (same_type_ignoring_top_level_qualifiers_p
+	      (non_reference (to), non_reference (from))));
+}
+
 /* Process a trait expression.  */
 
 tree
@@ -10619,10 +10655,15 @@ finish_trait_expr (location_t loc, cp_trait_kind kind, tree type1, tree type2)
     case CPTK_IS_CONSTRUCTIBLE:
       break;
 
-    case CPTK_IS_TRIVIALLY_ASSIGNABLE:
     case CPTK_IS_TRIVIALLY_CONSTRUCTIBLE:
-    case CPTK_IS_NOTHROW_ASSIGNABLE:
     case CPTK_IS_NOTHROW_CONSTRUCTIBLE:
+      /* Don't check completeness for direct reference binding.  */;
+      if (same_type_ref_bind_p (kind, type1, type2))
+	break;
+      gcc_fallthrough ();
+
+    case CPTK_IS_NOTHROW_ASSIGNABLE:
+    case CPTK_IS_TRIVIALLY_ASSIGNABLE:
       if (!check_trait_type (type1)
 	  || !check_trait_type (type2))
 	return error_mark_node;

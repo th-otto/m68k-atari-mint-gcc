@@ -1519,6 +1519,7 @@ next_statement (void)
   locus old_locus;
 
   gfc_enforce_clean_symbol_state ();
+  gfc_save_module_list ();
 
   gfc_new_block = NULL;
 
@@ -2673,6 +2674,9 @@ reject_statement (void)
   gfc_current_ns->equiv = gfc_current_ns->old_equiv;
 
   gfc_reject_data (gfc_current_ns);
+
+  /* Don't queue use-association of a module if we reject the use statement.  */
+  gfc_restore_old_module_list ();
 
   gfc_new_block = NULL;
   gfc_undo_symbols ();
@@ -6160,7 +6164,6 @@ parse_module (void)
 {
   gfc_statement st;
   gfc_gsymbol *s;
-  bool error;
 
   s = gfc_get_gsymbol (gfc_new_block->name, false);
   if (s->defined || (s->type != GSYM_UNKNOWN && s->type != GSYM_MODULE))
@@ -6183,7 +6186,6 @@ parse_module (void)
 
   st = parse_spec (ST_NONE);
 
-  error = false;
 loop:
   switch (st)
     {
@@ -6202,16 +6204,11 @@ loop:
     default:
       gfc_error ("Unexpected %s statement in MODULE at %C",
 		 gfc_ascii_statement (st));
-
-      error = true;
       reject_statement ();
       st = next_statement ();
       goto loop;
     }
-
-  /* Make sure not to free the namespace twice on error.  */
-  if (!error)
-    s->ns = gfc_current_ns;
+  s->ns = gfc_current_ns;
 }
 
 

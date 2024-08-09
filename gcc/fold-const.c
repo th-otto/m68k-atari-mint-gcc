@@ -83,6 +83,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree-vector-builder.h"
 #include "vec-perm-indices.h"
 #include "asan.h"
+#include "internal-fn.h"
 
 /* Nonzero if we are folding constants inside an initializer; zero
    otherwise.  */
@@ -6171,7 +6172,6 @@ static tree
 merge_truthop_with_opposite_arm (location_t loc, tree op, tree cmpop,
 				 bool rhs_only)
 {
-  tree type = TREE_TYPE (cmpop);
   enum tree_code code = TREE_CODE (cmpop);
   enum tree_code truthop_code = TREE_CODE (op);
   tree lhs = TREE_OPERAND (op, 0);
@@ -6186,6 +6186,8 @@ merge_truthop_with_opposite_arm (location_t loc, tree op, tree cmpop,
 
   if (TREE_CODE_CLASS (code) != tcc_comparison)
     return NULL_TREE;
+
+  tree type = TREE_TYPE (TREE_OPERAND (cmpop, 0));
 
   if (rhs_code == truthop_code)
     {
@@ -8401,6 +8403,8 @@ native_encode_initializer (tree init, unsigned char *ptr, int len,
 		  if (BYTES_BIG_ENDIAN != WORDS_BIG_ENDIAN)
 		    return 0;
 
+		  if (TREE_CODE (val) == NON_LVALUE_EXPR)
+		    val = TREE_OPERAND (val, 0);
 		  if (TREE_CODE (val) != INTEGER_CST)
 		    return 0;
 
@@ -14185,7 +14189,7 @@ multiple_of_p (tree type, const_tree top, const_tree bottom)
 	      && TREE_CODE (op2) == INTEGER_CST
 	      && integer_pow2p (bottom)
 	      && wi::multiple_of_p (wi::to_widest (op2),
-				    wi::to_widest (bottom), UNSIGNED))
+				    wi::to_widest (bottom), SIGNED))
 	    return 1;
 
 	  op1 = gimple_assign_rhs1 (stmt);
@@ -14732,7 +14736,6 @@ tree_call_nonnegative_warnv_p (tree type, combined_fn fn, tree arg0, tree arg1,
     CASE_CFN_FFS:
     CASE_CFN_PARITY:
     CASE_CFN_POPCOUNT:
-    CASE_CFN_CLZ:
     CASE_CFN_CLRSB:
     case CFN_BUILT_IN_BSWAP16:
     case CFN_BUILT_IN_BSWAP32:
@@ -14740,6 +14743,22 @@ tree_call_nonnegative_warnv_p (tree type, combined_fn fn, tree arg0, tree arg1,
     case CFN_BUILT_IN_BSWAP128:
       /* Always true.  */
       return true;
+
+    CASE_CFN_CLZ:
+      if (fn != CFN_CLZ)
+	return true;
+      else if (INTEGRAL_TYPE_P (TREE_TYPE (arg0)))
+	{
+	  tree atype = TREE_TYPE (arg0);
+	  int val = 0;
+	  if (direct_internal_fn_supported_p (IFN_CLZ, atype,
+					      OPTIMIZE_FOR_BOTH)
+	      && CLZ_DEFINED_VALUE_AT_ZERO (SCALAR_INT_TYPE_MODE (atype),
+					    val) == 2
+	      && val >= 0)
+	    return true;
+	}
+      break;
 
     CASE_CFN_SQRT:
     CASE_CFN_SQRT_FN:

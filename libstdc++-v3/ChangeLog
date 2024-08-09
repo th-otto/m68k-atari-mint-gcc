@@ -1,3 +1,750 @@
+2024-07-19  Release Manager
+
+	* GCC 11.5.0 released.
+
+2024-07-12  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2022-04-29  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/105417
+	* config/abi/post/powerpc64-linux-gnu/baseline_symbols.txt:
+	Regenerate.
+	* src/c++11/compatibility-ldbl-alt128.cc [_GLIBCXX_USE_DUAL_ABI]:
+	Define __gnu_ieee128::num_get<C>::_M_extract_int[abi:cxx11]<I>
+	symbols as aliases for corresponding symbols without abi-tag.
+
+2024-07-11  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2024-04-03  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/104606
+	* include/std/optional (operator<=>(const optional<T>&, const U&)):
+	Reverse order of three_way_comparable_with template arguments.
+	* testsuite/20_util/optional/relops/104606.cc: New test.
+
+2024-07-10  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2024-03-22  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/114401
+	* include/bits/hashtable.h (_Hashtable::_M_reinsert_node): Call
+	release() on node handle instead of just zeroing its pointer.
+	(_Hashtable::_M_reinsert_node_multi): Likewise.
+	(_Hashtable::_M_merge_unique): Likewise.
+	* include/bits/node_handle.h (_Node_handle_common::release()):
+	New member function.
+	(_Node_handle_common::_Optional_alloc::_M_empty): Remove
+	unnecessary union member.
+	(_Node_handle_common): Declare _Hashtable as a friend.
+	* include/bits/stl_tree.h (_Rb_tree::_M_reinsert_node_unique):
+	Call release() on node handle instead of just zeroing its
+	pointer.
+	(_Rb_tree::_M_reinsert_node_equal): Likewise.
+	(_Rb_tree::_M_reinsert_node_hint_unique): Likewise.
+	(_Rb_tree::_M_reinsert_node_hint_equal): Likewise.
+	* testsuite/23_containers/multiset/modifiers/114401.cc: New test.
+	* testsuite/23_containers/set/modifiers/114401.cc: New test.
+	* testsuite/23_containers/unordered_multiset/modifiers/114401.cc: New test.
+	* testsuite/23_containers/unordered_set/modifiers/114401.cc: New test.
+
+2024-06-27  Martin Liska  <mliska@suse.cz>
+
+	Backported from master:
+	2022-01-27  Martin Liska  <mliska@suse.cz>
+
+	PR libstdc++/104259
+	* acinclude.m4: Fix typo.
+	* configure: Regenerate.
+
+2024-06-25  Jonathan Wakely  <jwakely@redhat.com>
+
+	* doc/xml/manual/status_cxx2023.xml: Change reference from
+	mainline GCC to the release branch.
+	* doc/html/manual/status.html: Regenerate.
+
+2024-06-21  Matthias Kretz  <m.kretz@gsi.de>
+
+	Backported from master:
+	2024-06-21  Matthias Kretz  <m.kretz@gsi.de>
+
+	PR libstdc++/115575
+	* testsuite/experimental/simd/pr115454_find_last_set.cc: Require
+	avx512f_runtime. Don't memcpy fixed_size masks.
+
+2024-06-20  Matthias Kretz  <m.kretz@gsi.de>
+
+	Backported from master:
+	2024-06-20  Matthias Kretz  <m.kretz@gsi.de>
+
+	PR libstdc++/115454
+	* include/experimental/bits/simd_x86.h (_S_not_equal_to): Use
+	neq comparison instead of bitwise negation after eq.
+	(_S_find_last_set): Clear unused high bits before computing
+	bit_width.
+	* testsuite/experimental/simd/pr115454_find_last_set.cc: New
+	test.
+
+2024-06-01  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2024-06-01  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/115269
+	* doc/xml/manual/using.xml: Replace link to gcc-4.3.2 docs.
+	Replace list of -std=... options with a single entry for -std.
+	* doc/html/manual/using.html: Regenerate.
+
+2024-05-10  Matthias Kretz  <m.kretz@gsi.de>
+
+	Backported from master:
+	2024-04-22  Matthias Kretz  <m.kretz@gsi.de>
+
+	PR libstdc++/114803
+	* include/experimental/bits/simd_builtin.h
+	(_SimdBase2::operator __vector_type_t): There is no __builtin()
+	function in _SimdWrapper, instead use its conversion operator.
+	* testsuite/experimental/simd/pr114803_vecbuiltin_cvt.cc: New
+	test.
+
+2024-05-10  Matthias Kretz  <m.kretz@gsi.de>
+
+	Backported from master:
+	2024-04-22  Matthias Kretz  <m.kretz@gsi.de>
+
+	* include/experimental/bits/simd.h: Ignore -Wnarrowing for
+	arm_neon.h.
+	(__int_for_sizeof): Replace tautological compare with checking
+	for invalid template parameter value.
+	* include/experimental/bits/simd_builtin.h (__extract_part):
+	Remove tautological compare by combining two static_assert.
+
+2024-05-10  Matthias Kretz  <m.kretz@gsi.de>
+
+	Backported from master:
+	2024-04-17  Matthias Kretz  <m.kretz@gsi.de>
+
+	* include/experimental/bits/numeric_traits.h: Add include guard.
+
+2024-05-10  Matthias Kretz  <m.kretz@gsi.de>
+
+	Backported from master:
+	2024-04-17  Matthias Kretz  <m.kretz@gsi.de>
+
+	PR libstdc++/114750
+	* include/experimental/bits/simd_builtin.h
+	(_SimdImplBuiltin::_S_load, _S_store): Fall back to copying
+	scalars if the memory type cannot be vectorized for the target.
+
+2024-05-10  Matthias Kretz  <m.kretz@gsi.de>
+
+	Backported from master:
+	2024-03-27  Matthias Kretz  <m.kretz@gsi.de>
+
+	* include/experimental/bits/simd_x86.h (_S_masked_unary):
+	Cast inputs < 16 bytes to 16 byte vectors before calling the
+	right subtraction builtin. Before returning, truncate to the
+	return vector type.
+
+2024-05-10  Matthias Kretz  <m.kretz@gsi.de>
+
+	Backported from master:
+	2024-03-27  Matthias Kretz  <m.kretz@gsi.de>
+
+	* include/experimental/bits/simd_x86.h (_S_masked_unary): Call
+	the 4- and 8-byte variants of __builtin_ia32_subp[ds] without
+	rounding direction argument.
+
+2024-05-10  Matthias Kretz  <m.kretz@gsi.de>
+
+	Backported from master:
+	2023-06-06  Matthias Kretz  <m.kretz@gsi.de>
+
+	PR libstdc++/109822
+	* include/experimental/bits/simd_builtin.h (_S_store): Rewrite
+	to avoid casts to other vector types. Implement store as
+	succession of power-of-2 sized memcpy to avoid PR90424.
+
+2024-05-10  Matthias Kretz  <m.kretz@gsi.de>
+
+	Backported from master:
+	2023-06-06  Matthias Kretz  <m.kretz@gsi.de>
+
+	PR libstdc++/110054
+	* include/experimental/bits/simd_builtin.h (_S_masked_store):
+	Call into deduced ABI's SimdImpl after conversion.
+	* include/experimental/bits/simd_x86.h (_S_masked_store_nocvt):
+	Don't use _mm_maskmoveu_si128. Use the generic fall-back
+	implementation. Also fix masked stores without SSE2, which
+	were not doing anything before.
+
+2024-05-10  Matthias Kretz  <m.kretz@gsi.de>
+
+	Backported from master:
+	2023-06-06  Matthias Kretz  <m.kretz@gsi.de>
+
+	* include/experimental/bits/simd.h (__bit_cast): Use
+	__gnu__::__vector_size__ instead of gnu::vector_size.
+
+2024-05-02  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2024-03-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/114147
+	* include/std/tuple (tuple::tuple(allocator_arg_t, const Alloc&)):
+	Add missing overload of allocator-extended default constructor.
+	(tuple<T1,T2>::tuple(allocator_arg_t, const Alloc&)): Likewise.
+	* testsuite/20_util/tuple/cons/114147.cc: New test.
+
+2024-04-29  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2024-02-19  Iain Sandoe  <iain@sandoe.co.uk>
+		    Jonathan Wakely  <jwakely@redhat.com>
+
+	PR target/112397
+	* configure: Regenerate.
+	* configure.ac: Detect if we are building for Darwin.
+	* libsupc++/Makefile.am: If we are building for Darwin, then
+	suppress hot/cold partitioning for the array allocators.
+	* libsupc++/Makefile.in: Regenerated.
+
+2024-04-29  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2024-03-19  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* testsuite/lib/dg-options.exp (atomic_link_flags): Emit a -B
+	option for the path to the uninstalled libatomic.
+
+2024-04-29  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2024-03-19  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* testsuite/lib/libstdc++.exp (v3_target_compile): Instead of
+	/dev/null, use a temporary file for test executables on Darwin.
+
+2024-04-24  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2022-12-04  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* config/os/bsd/darwin/os_defines.h
+	(_GTHREAD_USE_RECURSIVE_MUTEX_INIT_FUNC): Limit use of this macro
+	to OS versions that need it.
+
+2024-04-22  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2023-07-03  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* testsuite/lib/libstdc++.exp: Remove additional flag handled
+	by Darwin specs.
+
+2024-01-11  Ken Matsui  <kmatsui@gcc.gnu.org>
+
+	Backported from master:
+	2024-01-11  Ken Matsui  <kmatsui@gcc.gnu.org>
+
+	PR libstdc++/113250
+	* src/c++17/fs_ops.cc (fs::equivalent): Use || instead of &&.
+	* src/filesystem/ops.cc (fs::equivalent): Likewise.
+	* testsuite/27_io/filesystem/operations/equivalent.cc: Handle
+	error codes.
+	* testsuite/experimental/filesystem/operations/equivalent.cc:
+	Likewise.
+
+2024-01-03  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2024-01-03  Patrick Palka  <ppalka@redhat.com>
+
+	PR testsuite/113175
+	* testsuite/std/ranges/iota/max_size_type.cc (test02): Reduce
+	'limit' to 100 from 1000 and adjust 'log2_limit' accordingly.
+	(test03): Likewise.
+
+2023-12-17  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-10-13  Jakub Jelinek  <jakub@redhat.com>
+
+	* testsuite/tr1/8_c_compatibility/cstdio/functions.cc (test01):
+	Initialize stream to va_arg(ap, FILE*) rather than 0.
+	* testsuite/tr1/8_c_compatibility/cwchar/functions.cc (test01):
+	Likewise.
+
+2023-12-06  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2021-11-01  Jonathan Wakely  <jwakely@redhat.com>
+
+	* include/debug/stl_iterator.h (__valid_range): Add constexpr
+	for C++20. Qualify call to avoid ADL.
+	(__get_distance, __can_advance, __unsafe, __base): Likewise.
+	* testsuite/25_algorithms/move/constexpr.cc: Also check with
+	std::reverse_iterator arguments.
+
+2023-12-06  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2023-11-02  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/112314
+	* include/std/string_view (string_view::remove_suffix): Add
+	debug assertion.
+	* testsuite/21_strings/basic_string_view/modifiers/remove_prefix/debug.cc:
+	New test.
+	* testsuite/21_strings/basic_string_view/modifiers/remove_suffix/debug.cc:
+	New test.
+
+2023-12-06  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2023-11-17  Jonathan Wakely  <jwakely@redhat.com>
+
+	* include/std/utility (in_range): Rename _Up parameter to _Res.
+
+2023-11-15  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2023-11-15  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/112491
+	* python/libstdcxx/v6/xmethods.py (DequeWorkerBase.index):
+	Correctly handle unused capacity at the start of the first node.
+	* testsuite/libstdc++-xmethods/deque.cc: Check index operator
+	when elements have been removed from the front.
+
+2023-11-14  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2023-11-14  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/112491
+	* python/libstdcxx/v6/xmethods.py (DequeWorkerBase.size): Fix
+	calculation to use _M_start._M_cur.
+	* testsuite/libstdc++-xmethods/deque.cc: Check failing cases.
+
+2023-11-13  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2023-09-28  Jonathan Wakely  <jwakely@redhat.com>
+
+	* python/libstdcxx/v6/printers.py: Break long lines. Use raw
+	strings for regular expressions. Add whitespace around
+	operators.
+	(is_member_of_namespace): Use isinstance to check type.
+	(is_specialization_of): Likewise. Adjust template_name
+	for versioned namespace instead of duplicating the re.match
+	call.
+	(StdExpAnyPrinter._string_types): New static method.
+	(StdExpAnyPrinter.to_string): Use _string_types.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	* testsuite/20_util/integer_comparisons/greater_equal_neg.cc:
+	Add -O2 to dg-options.
+	* testsuite/20_util/integer_comparisons/greater_neg.cc:
+	Likewise.
+	* testsuite/20_util/integer_comparisons/less_equal_neg.cc:
+	Likewise.
+	* testsuite/lib/prune.exp: Prune 'in constexpr expansion'.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2022-02-01  Jonathan Wakely  <jwakely@redhat.com>
+
+	* testsuite/27_io/filesystem/iterators/97731.cc: New test.
+	* testsuite/27_io/filesystem/iterators/recursive_directory_iterator.cc:
+	Check follow_directory_symlink option.
+	* testsuite/experimental/filesystem/iterators/recursive_directory_iterator.cc:
+	Likewise.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2023-06-06  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/108178
+	* src/filesystem/ops-common.h (do_copy_file): Check for empty
+	files by trying to read a character.
+	* testsuite/27_io/filesystem/operations/copy_file_108178.cc:
+	New test.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2023-06-06  Jonathan Wakely  <jwakely@redhat.com>
+
+	* src/filesystem/ops-common.h (do_copy_file) [O_CLOEXEC]: Set
+	close-on-exec flag on file descriptors.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2023-03-20  Jonathan Wakely  <jwakely@redhat.com>
+
+	* src/filesystem/ops-common.h (get_temp_directory_from_env): Fix
+	formatting.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2023-02-02  Jonathan Wakely  <jwakely@redhat.com>
+
+	* src/filesystem/ops-common.h [AVR] (__unsupported): Always use
+	errc::function_not_supported instead of errc::not_supported.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2022-06-28  Jonathan Wakely  <jwakely@redhat.com>
+
+	* src/c++17/fs_dir.cc (_Dir::_Dir) [!_GLIBCXX_HAVE_OPENAT]:
+	Always store pathname if we don't have openat or unlinkat,
+	because the full path is needed to open sub-directories and
+	remove entries.
+
+2023-10-04  Alexandre Oliva  <oliva@adacore.com>
+
+	Backported from master:
+	2022-06-27  Alexandre Oliva  <oliva@adacore.com>
+
+	* src/c++17/fs_dir.cc (dir_and_pathname): Use dirfd if
+	_GLIBCXX_HAVE_OPENAT.
+
+2023-10-04  Alexandre Oliva  <oliva@adacore.com>
+
+	Backported from master:
+	2022-06-24  Alexandre Oliva  <oliva@adacore.com>
+
+	* acinclude.m4 (GLIBCXX_CHECK_FILESYSTEM_DEPS): Check for
+	openat.
+	* configure, config.h.in: Rebuilt.
+	* src/filesystem/dir-common.h (openat): Use ::openat if
+	_GLIBCXX_HAVE_OPENAT.
+	* src/filesystem/dir.cc (dir_and_pathname): Use dirfd if
+	_GLIBCXX_HAVE_OPENAT.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2022-02-10  Jonathan Wakely  <jwakely@redhat.com>
+
+	* src/filesystem/dir-common.h (_GLIBCXX_HAVE_DIRFD): Undefine
+	when <dirent.h> is not available.
+	(_GLIBCXX_HAVE_UNLINKAT):  Likewise.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2022-02-08  Jonathan Wakely  <jwakely@redhat.com>
+
+	* src/c++17/fs_dir.cc (_Dir(DIR*, const path&)): Change first
+	parameter to _Dir_base&&.
+	* src/filesystem/dir-common.h (_Dir_base(DIR*)): Remove.
+	* src/filesystem/dir.cc (_Dir(DIR*, const path&)): Change first
+	parameter to _Dir_base&&.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2022-02-08  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/104161
+	* src/c++17/fs_dir.cc (fs::recursive_directory_iterator::__erase):
+	[i_GLIBCXX_FILESYSTEM_IS_WINDOWS]: Refresh entry._M_type member,
+	instead of checking for errno values indicating a directory.
+	* src/c++17/fs_ops.cc (fs::remove_all(const path&)): Use similar
+	logic to non-throwing overload.
+	(fs::remove_all(const path&, error_code&)): Add comments.
+	* src/filesystem/ops-common.h: Likewise.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2022-02-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	* src/filesystem/dir-common.h (_Dir_base::openat): Change return
+	type to use portable posix::DIR alias.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2022-02-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/104161
+	* acinclude.m4 (GLIBCXX_CHECK_FILESYSTEM_DEPS): Check for dirfd
+	and unlinkat.
+	* config.h.in: Regenerate.
+	* configure: Regenerate.
+	* include/bits/fs_dir.h (recursive_directory_iterator): Declare
+	remove_all overloads as friends.
+	(recursive_directory_iterator::__erase): Declare new member
+	function.
+	* include/bits/fs_fwd.h (remove, remove_all): Declare.
+	* src/c++17/fs_dir.cc (_Dir): Add filename_only parameter to
+	constructor. Pass file descriptor argument to base constructor.
+	(_Dir::dir_and_pathname, _Dir::open_subdir, _Dir::do_unlink)
+	(_Dir::unlink, _Dir::rmdir): Define new member functions.
+	(directory_iterator): Pass filename_only argument to _Dir
+	constructor.
+	(recursive_directory_iterator::_Dir_stack): Adjust constructor
+	parameters to take a _Dir rvalue instead of creating one.
+	(_Dir_stack::orig): Add data member for storing original path.
+	(_Dir_stack::report_error): Define new member function.
+	(__directory_iterator_nofollow): Move here from dir-common.h and
+	fix value to be a power of two.
+	(__directory_iterator_filename_only): Define new constant.
+	(recursive_directory_iterator): Construct _Dir object and move
+	into _M_dirs stack. Pass skip_permission_denied argument to first
+	advance call.
+	(recursive_directory_iterator::increment): Use _Dir::open_subdir.
+	(recursive_directory_iterator::__erase): Define new member
+	function.
+	* src/c++17/fs_ops.cc (ErrorReporter, do_remove_all): Remove.
+	(fs::remove_all): Use new recursive_directory_iterator::__erase
+	member function.
+	* src/filesystem/dir-common.h (_Dir_base): Add int parameter to
+	constructor and use openat to implement nofollow semantics.
+	(_Dir_base::fdcwd, _Dir_base::set_close_on_exec, _Dir_base::openat):
+	Define new member functions.
+	(__directory_iterator_nofollow): Move to fs_dir.cc.
+	* src/filesystem/dir.cc (_Dir): Pass file descriptor argument to
+	base constructor.
+	(_Dir::dir_and_pathname, _Dir::open_subdir): Define new member
+	functions.
+	(recursive_directory_iterator::_Dir_stack): Adjust constructor
+	parameters to take a _Dir rvalue instead of creating one.
+	(recursive_directory_iterator): Check for new nofollow option.
+	Construct _Dir object and move into _M_dirs stack. Pass
+	skip_permission_denied argument to first advance call.
+	(recursive_directory_iterator::increment): Use _Dir::open_subdir.
+	* src/filesystem/ops.cc (fs::remove_all): Use C++17 remove_all.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2022-01-25  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/104161
+	* acinclude.m4 (GLIBCXX_CHECK_FILESYSTEM_DEPS): Check for
+	fdopendir.
+	* config.h.in: Regenerate.
+	* configure: Regenerate.
+	* src/c++17/fs_dir.cc (_Dir): Add nofollow flag to constructor
+	and pass it to base class constructor.
+	(directory_iterator): Pass nofollow flag to _Dir constructor.
+	(fs::recursive_directory_iterator::increment): Likewise.
+	* src/c++17/fs_ops.cc (do_remove_all): Use nofollow option for
+	directory_iterator constructor. Move error check outside loop.
+	* src/filesystem/dir-common.h (_Dir_base): Add nofollow flag to
+	constructor and when it's set use ::open with O_NOFOLLOW and
+	O_DIRECTORY.
+	* src/filesystem/dir.cc (_Dir): Add nofollow flag to constructor
+	and pass it to base class constructor.
+	(directory_iterator): Pass nofollow flag to _Dir constructor.
+	(fs::recursive_directory_iterator::increment): Likewise.
+	* src/filesystem/ops.cc (remove_all): Use nofollow option for
+	directory_iterator constructor. Move error check outside loop.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2021-10-02  Jonathan Wakely  <jwakely@redhat.com>
+
+	* src/c++17/fs_ops.cc (create_directory): Fix typo in enum name.
+	* src/filesystem/ops-common.h (__last_system_error): Add
+	explicit cast to avoid narrowing conversion.
+	(do_space): Fix type in function name.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2021-10-01  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/99327
+	* src/filesystem/ops-common.h (__unsupported): New function to
+	return a suitable error code for missing functionality.
+	(posix::off_t): New typedef.
+	(posix::*): Set errno to ENOSYS instead of ENOTSUP for no-op
+	fallback implementations.
+	(do_copy_file): Replace uses of errc::not_supported.
+	* src/c++17/fs_ops.cc (fs::copy, fs::copy_file, create_dir)
+	(fs::create_directory, fs::create_directory_symlink)
+	(fs::create_hard_link, fs::create_symlink, fs::current_path)
+	(fs::equivalent, do_stat, fs::file_size, fs::hard_link_count)
+	(fs::last_write_time, fs::permissions, fs::read_symlink):
+	Replace uses of errc::not_supported.
+	(fs::resize_file): Qualify off_t.
+	* src/filesystem/ops.cc (fs::copy, fs::copy_file, create_dir)
+	(fs::create_directory, fs::create_directory_symlink)
+	(fs::create_hard_link, fs::create_symlink, fs::current_path)
+	(fs::equivalent, do_stat, fs::file_size, fs::last_write_time)
+	(fs::permissions, fs::read_symlink, fs::system_complete):
+	Replace uses of errc::not_supported.
+	(fs::resize_file): Qualify off_t and enable unconditionally.
+	* testsuite/19_diagnostics/system_error/cons-1.cc: Likewise.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2021-10-01  Jonathan Wakely  <jwakely@redhat.com>
+
+	* src/filesystem/ops-common.h (last_error): New helper function.
+	(filesystem::do_space): Use last_error().
+	* src/c++17/fs_ops.cc (fs::absolute, fs::create_hard_link)
+	(fs::equivalent, fs::remove, fs::temp_directory_path): Use
+	last_error().
+	* src/filesystem/ops.cc (fs::create_hard_link)
+	(fs::remove, fs::temp_directory_path): Likewise.
+
+2023-10-04  Jonathan Wakely  <jwakely@redhat.com>
+
+	Revert:
+	2023-03-16  Jonathan Wakely  <jwakely@redhat.com>
+
+	* src/c++17/fs_ops.cc [AVR] (not_supported): Define as a macro
+	for function_not_supported.
+	* src/filesystem/ops-common.h [AVR] (ENOTSUP): Define as a macro
+	for ENOSYS.
+
+2023-10-02  Tim Song  <t.canens.cpp@gmail.com>
+
+	Backported from master:
+	2023-09-28  Tim Song  <t.canens.cpp@gmail.com>
+
+	PR libstdc++/111050
+	* include/bits/hashtable_policy.h
+	(_Hash_node_value_base<>::_M_valptr(), _Hash_node_value_base<>::_M_v())
+	Add [[__gnu__::__always_inline__]].
+
+2023-09-27  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2023-08-09  Jonathan Wakely  <jwakely@redhat.com>
+
+	* include/experimental/bits/fs_path.h (path::string): Use
+	_GLIBCXX17_CONSTEXPR not _GLIBCXX_CONSTEXPR for 'if constexpr'.
+	* include/std/charconv (__to_chars_8): Initialize variable for
+	C++17 constexpr rules.
+
+2023-09-26  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2023-09-25  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/111511
+	PR c++/111512
+	* include/std/array (to_array): Qualify calls to __to_array.
+	* testsuite/23_containers/array/creation/111512.cc: New test.
+
+2023-09-14  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2023-09-14  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR c++/111357
+	* include/std/utility (make_integer_sequence): Add cast.
+	* testsuite/20_util/integer_sequence/pr111357.cc: New test.
+
+2023-07-12  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2023-07-12  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/95048
+	* testsuite/27_io/filesystem/path/construct/95048.cc: Check
+	conversions to wide strings.
+	* testsuite/experimental/filesystem/path/construct/95048.cc:
+	Likewise.
+
+2023-07-10  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2022-11-11  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/95048
+	* include/bits/fs_path.h (path::_Codecvt): New class template
+	that selects the kind of code conversion done.
+	(path::_Codecvt<wchar_t>): Select based on sizeof(wchar_t).
+	(_GLIBCXX_CONV_FROM_UTF8): New macro to allow the same code to
+	be used for Windows and POSIX.
+	(path::_S_convert(const EcharT*, const EcharT*)): Simplify by
+	using _Codecvt and _GLIBCXX_CONV_FROM_UTF8 abstractions.
+	(path::_S_str_convert(basic_string_view<value_type>, const A&)):
+	Simplify nested conditions.
+	* include/experimental/bits/fs_path.h (path::_Cvt): Define
+	nested typedef controlling type of code conversion done.
+	(path::_Cvt::_S_wconvert): Use new typedef.
+	(path::string(const A&)): Likewise.
+	* testsuite/27_io/filesystem/path/construct/95048.cc: New test.
+	* testsuite/experimental/filesystem/path/construct/95048.cc: New
+	test.
+
+2023-06-23  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2023-06-01  Jonathan Wakely  <jwakely@redhat.com>
+
+	* doc/xml/manual/evolution.xml: Document removal of implicit
+	allocator rebinding extensions in strict mode and for C++20.
+	* doc/html/*: Regenerate.
+
+2023-06-23  Jonathan Wakely  <jwakely@redhat.com>
+
+	Backported from master:
+	2022-03-18  Jonathan Wakely  <jwakely@redhat.com>
+
+	PR libstdc++/104242
+	* include/std/any (any(T&&)): Revert change to constraints.
+	* testsuite/20_util/any/cons/104242.cc: New test.
+
+2023-05-30  Matthias Kretz  <m.kretz@gsi.de>
+
+	Backported from master:
+	2023-05-30  Matthias Kretz  <m.kretz@gsi.de>
+
+	PR libstdc++/109822
+	* include/experimental/bits/simd.h (to_native): Use int NTTP
+	as specified in PTS2.
+	(to_compatible): Likewise. Add missing tag to call mask
+	generator ctor.
+	* testsuite/experimental/simd/pr109822_cast_functions.cc: New
+	test.
+
+2023-05-30  Matthias Kretz  <m.kretz@gsi.de>
+
+	Backported from master:
+	2023-05-30  Matthias Kretz  <m.kretz@gsi.de>
+
+	* testsuite/experimental/simd/tests/integer_operators.cc:
+	Compute expected value differently to avoid getting turned into
+	a vector shift.
+
+2023-05-30  Matthias Kretz  <m.kretz@gsi.de>
+
+	Backported from master:
+	2023-05-30  Matthias Kretz  <m.kretz@gsi.de>
+
+	* testsuite/experimental/simd/tests/operator_cvt.cc: Make long
+	double <-> (u)long conversion tests conditional on sizeof(long
+	double) and sizeof(long).
+
+2023-05-30  Matthias Kretz  <m.kretz@gsi.de>
+
+	Backported from master:
+	2023-05-26  Matthias Kretz  <m.kretz@gsi.de>
+
+	* include/experimental/bits/simd_ppc.h (_S_bit_shift_left):
+	Negative __y is UB, so prefer signed compare.
+
 2023-05-29  Release Manager
 
 	* GCC 11.4.0 released.

@@ -780,7 +780,7 @@
 (define_predicate "vsx_quad_dform_memory_operand"
   (match_code "mem")
 {
-  if (!TARGET_P9_VECTOR || !MEM_P (op) || GET_MODE_SIZE (mode) != 16)
+  if (!TARGET_P9_VECTOR)
     return false;
 
   return quad_address_p (XEXP (op, 0), mode, false);
@@ -990,20 +990,6 @@
   if (!CONST_INT_P (offset))
     return true;
   return INTVAL (offset) % 4 == 0;
-})
-
-;; Return 1 if the operand is a memory operand that has a valid address for
-;; a DS-form instruction. I.e. the address has to be either just a register,
-;; or register + const where the two low order bits of const are zero.
-(define_predicate "ds_form_mem_operand"
-  (match_code "subreg,mem")
-{
-  if (!any_memory_operand (op, mode))
-    return false;
-
-  rtx addr = XEXP (op, 0);
-
-  return address_to_insn_form (addr, mode, NON_PREFIXED_DS) == INSN_FORM_DS;
 })
 
 ;; Return 1 if the operand, used inside a MEM, is a SYMBOL_REF.

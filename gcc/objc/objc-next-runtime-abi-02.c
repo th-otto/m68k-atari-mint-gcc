@@ -70,6 +70,7 @@ along with GCC; see the file COPYING3.  If not see
 #define TAG_MSGSENDSUPER_STRET	"objc_msgSendSuper2_stret"
 
 #define USE_FIXUP_BEFORE	100600
+#define WEAK_PROTOCOLS_AFTER	100700
 #define TAG_FIXUP		"_fixup"
 
 
@@ -245,7 +246,7 @@ objc_next_runtime_abi_02_init (objc_runtime_hooks *rthooks)
 {
   extern_names = ggc_cleared_vec_alloc<hash> (SIZEHASHTABLE);
 
-  if (flag_objc_exceptions && flag_objc_sjlj_exceptions)
+  if (flag_objc_sjlj_exceptions)
     {
       inform (UNKNOWN_LOCATION,
 	      "%<-fobjc-sjlj-exceptions%> is ignored for "
@@ -253,6 +254,10 @@ objc_next_runtime_abi_02_init (objc_runtime_hooks *rthooks)
 	      "greater than 1");
       flag_objc_sjlj_exceptions = 0;
     }
+
+  /* NeXT ABI 2 is intended to default to checking for nil receivers.  */
+  if (! global_options_set.x_flag_objc_nilcheck)
+    flag_objc_nilcheck = 1;
 
   rthooks->initialize = next_runtime_02_initialize;
   rthooks->default_constant_string_class_name = DEF_CONSTANT_STRING_CLASS_NAME;
@@ -507,7 +512,7 @@ static void next_runtime_02_initialize (void)
   objc_getPropertyStruct_decl = NULL_TREE;
   objc_setPropertyStruct_decl = NULL_TREE;
 
-  gcc_assert (!flag_objc_sjlj_exceptions);
+  gcc_checking_assert (!flag_objc_sjlj_exceptions);
 
   /* Although we warn that fobjc-exceptions is required for exceptions
      code, we carry on and create it anyway.  */
@@ -1027,7 +1032,7 @@ next_runtime_abi_02_protocol_decl (tree p)
   /* static struct _objc_protocol _OBJC_Protocol_<mumble>; */
   snprintf (buf, BUFSIZE, "_OBJC_Protocol_%s",
 	    IDENTIFIER_POINTER (PROTOCOL_NAME (p)));
-  if (flag_next_runtime >= USE_FIXUP_BEFORE)
+  if (flag_next_runtime >= WEAK_PROTOCOLS_AFTER)
     {
       decl = create_hidden_decl (objc_v2_protocol_template, buf);
       DECL_WEAK (decl) = true;
@@ -1035,6 +1040,7 @@ next_runtime_abi_02_protocol_decl (tree p)
   else
     decl = start_var_decl (objc_v2_protocol_template, buf);
   OBJCMETA (decl, objc_meta, meta_protocol);
+  DECL_PRESERVE_P (decl) = 1;
   return decl;
 }
 
@@ -1658,6 +1664,8 @@ build_v2_objc_method_fixup_call (int super_flag, tree method_prototype,
   rcv_p = (super_flag ? objc_super_type : objc_object_type);
 
   lookup_object = build_c_cast (input_location, rcv_p, lookup_object);
+  if (sender == error_mark_node || lookup_object == error_mark_node)
+    return error_mark_node;
 
   /* Use SAVE_EXPR to avoid evaluating the receiver twice.  */
   lookup_object = save_expr (lookup_object);
@@ -1675,13 +1683,8 @@ build_v2_objc_method_fixup_call (int super_flag, tree method_prototype,
 
       if (TREE_CODE (ret_type) == RECORD_TYPE
 	  || TREE_CODE (ret_type) == UNION_TYPE)
-	{
-	  vec<constructor_elt, va_gc> *rtt = NULL;
-	  /* ??? CHECKME. hmmm..... think we need something more
-	     here.  */
-	  CONSTRUCTOR_APPEND_ELT (rtt, NULL_TREE, NULL_TREE);
-	  ftree = objc_build_constructor (ret_type, rtt);
-	}
+	/* An empty constructor is zero-filled by the middle end.  */
+	ftree = objc_build_constructor (ret_type, NULL);
       else
 	ftree = fold_convert (ret_type, integer_zero_node);
 
@@ -1694,11 +1697,11 @@ build_v2_objc_method_fixup_call (int super_flag, tree method_prototype,
 					ifexp, ret_val, ftree,
 					tf_warning_or_error);
 #else
-     /* ??? CHECKME.   */
       ret_val = build_conditional_expr (input_location,
-					ifexp, 1,
+					ifexp, 0,
 					ret_val, NULL_TREE, input_location,
 					ftree, NULL_TREE, input_location);
+      ret_val = fold_convert (ret_type, ret_val);
 #endif
     }
   return ret_val;
@@ -1740,15 +1743,16 @@ build_v2_build_objc_method_call (int super, tree method_prototype,
   /* Param list + 2 slots for object and selector.  */
   vec_alloc (parms, nparm + 2);
 
-  /* If we are returning a struct in memory, and the address
-     of that memory location is passed as a hidden first
-     argument, then change which messenger entry point this
-     expr will call.  NB: Note that sender_cast remains
-     unchanged (it already has a struct return type).  */
-  if (!targetm.calls.struct_value_rtx (0, 0)
-      && (TREE_CODE (ret_type) == RECORD_TYPE
-	  || TREE_CODE (ret_type) == UNION_TYPE)
-      && targetm.calls.return_in_memory (ret_type, 0))
+  /* If we are returning an item that must be returned in memory, and the
+     target ABI does this by an invisible pointer provided as the first arg,
+     we need to adjust the message signature to include this.  The second
+     part of this excludes targets that provide some alternate scheme for
+     structure returns.  */
+  if (ret_type && !VOID_TYPE_P (ret_type)
+      && targetm.calls.return_in_memory (ret_type, 0)
+      && !(targetm.calls.struct_value_rtx (0, 0)
+	   && (TREE_CODE (ret_type) == RECORD_TYPE
+	       || TREE_CODE (ret_type) == UNION_TYPE)))
     {
       if (super)
 	sender = umsg_id_super2_stret_fixup_decl;
@@ -1790,11 +1794,8 @@ build_v2_build_objc_method_call (int super, tree method_prototype,
       if (TREE_CODE (ret_type) == RECORD_TYPE
 	  || TREE_CODE (ret_type) == UNION_TYPE)
 	{
-	  vec<constructor_elt, va_gc> *rtt = NULL;
-	  /* ??? CHECKME. hmmm..... think we need something more
-	     here.  */
-	  CONSTRUCTOR_APPEND_ELT (rtt, NULL_TREE, NULL_TREE);
-	  ftree = objc_build_constructor (ret_type, rtt);
+	/* An empty constructor is zero-filled by the middle end.  */
+	  ftree = objc_build_constructor (ret_type, NULL);
 	}
       else
 	ftree = fold_convert (ret_type, integer_zero_node);
@@ -1807,10 +1808,10 @@ build_v2_build_objc_method_call (int super, tree method_prototype,
       ret_val = build_conditional_expr (loc, ifexp, ret_val, ftree,
 					tf_warning_or_error);
 #else
-     /* ??? CHECKME.   */
       ret_val = build_conditional_expr (loc, ifexp, 1,
 					ret_val, NULL_TREE, loc,
 					ftree, NULL_TREE, loc);
+      ret_val = fold_convert (ret_type, ret_val);
 #endif
     }
   return ret_val;
@@ -1853,10 +1854,12 @@ next_runtime_abi_02_build_objc_method_call (location_t loc,
 	     ? TREE_VALUE (TREE_TYPE (method_prototype))
 	     : objc_object_type;
 
-  if (!targetm.calls.struct_value_rtx (0, 0)
-      && (TREE_CODE (ret_type) == RECORD_TYPE
-	  || TREE_CODE (ret_type) == UNION_TYPE)
-      && targetm.calls.return_in_memory (ret_type, 0))
+  /* See comment for the fixup version above.  */
+  if (ret_type && !VOID_TYPE_P (ret_type)
+      && targetm.calls.return_in_memory (ret_type, 0)
+      && !(targetm.calls.struct_value_rtx (0, 0)
+	   && (TREE_CODE (ret_type) == RECORD_TYPE
+	       || TREE_CODE (ret_type) == UNION_TYPE)))
     {
       if (super)
 	message_func_decl = umsg_id_super2_stret_fixup_decl;
@@ -2121,8 +2124,8 @@ build_v2_classrefs_table (void)
 	  expr = convert (objc_class_type, build_fold_addr_expr (expr));
 	}
       /* The runtime wants this, even if it appears unused, so we must force the
-	 output.
-      DECL_PRESERVE_P (decl) = 1; */
+	 output.  */
+      DECL_PRESERVE_P (decl) = 1;
       finish_var_decl (decl, expr);
     }
 }
@@ -2249,6 +2252,7 @@ build_v2_address_table (vec<tree, va_gc> *src, const char *nam, tree attr)
   DECL_PRESERVE_P (decl) = 1;
   expr = objc_build_constructor (type, initlist);
   OBJCMETA (decl, objc_meta, attr);
+  DECL_USER_ALIGN (decl) = 1;
   finish_var_decl (decl, expr);
 }
 
@@ -2314,7 +2318,7 @@ build_v2_protocol_list_address_table (void)
       gcc_assert (ref->id && TREE_CODE (ref->id) == PROTOCOL_INTERFACE_TYPE);
       snprintf (buf, BUFSIZE, "_OBJC_LabelProtocol_%s",
 		IDENTIFIER_POINTER (PROTOCOL_NAME (ref->id)));
-      if (flag_next_runtime >= USE_FIXUP_BEFORE)
+      if (flag_next_runtime >= WEAK_PROTOCOLS_AFTER)
 	{
 	  decl = create_hidden_decl (objc_protocol_type, buf, /*is def=*/true);
 	  DECL_WEAK (decl) = true;
@@ -2323,6 +2327,8 @@ build_v2_protocol_list_address_table (void)
 	decl = create_global_decl (objc_protocol_type, buf, /*is def=*/true);
       expr = convert (objc_protocol_type, build_fold_addr_expr (ref->refdecl));
       OBJCMETA (decl, objc_meta, meta_label_protocollist);
+      DECL_PRESERVE_P (decl) = 1;
+      DECL_USER_ALIGN (decl) = 1;
       finish_var_decl (decl, expr);
     }
 
@@ -2401,6 +2407,7 @@ generate_v2_protocol_list (tree i_or_p, tree klass_ctxt)
   /* ObjC2 puts all these in the base section.  */
   OBJCMETA (refs_decl, objc_meta, meta_base);
   DECL_PRESERVE_P (refs_decl) = 1;
+  DECL_USER_ALIGN (refs_decl) = 1;
   finish_var_decl (refs_decl,
 		   objc_build_constructor (TREE_TYPE (refs_decl),initlist));
   return refs_decl;
@@ -2509,6 +2516,7 @@ generate_v2_meth_descriptor_table (tree chain, tree protocol,
   CONSTRUCTOR_APPEND_ELT (v, NULL_TREE, initlist);
   /* Get into the right section.  */
   OBJCMETA (decl, objc_meta, attr);
+  DECL_USER_ALIGN (decl) = 1;
   finish_var_decl (decl, objc_build_constructor (method_list_template, v));
   return decl;
 }
@@ -2527,13 +2535,14 @@ generate_v2_meth_type_list (vec<tree>& all_meths, tree protocol,
 	    IDENTIFIER_POINTER (PROTOCOL_NAME (protocol)));
   tree decl = start_var_decl (list_type, nam);
   free (nam);
-  OBJCMETA (decl, objc_meta, meta_base);
   vec<constructor_elt, va_gc> *v = NULL;
 
   for (unsigned i = 0; i < size; ++i)
     CONSTRUCTOR_APPEND_ELT (v, NULL_TREE,
 			    add_objc_string (METHOD_ENCODING (all_meths[i]),
 					     meth_var_types));
+  OBJCMETA (decl, objc_meta, meta_base);
+  DECL_USER_ALIGN (decl) = 1;
   finish_var_decl (decl, objc_build_constructor (list_type, v));
   return decl;
 }
@@ -2656,6 +2665,7 @@ generate_v2_property_table (tree context, tree klass_ctxt)
   CONSTRUCTOR_APPEND_ELT (inits, NULL_TREE, initlist);
 
   OBJCMETA (decl, objc_meta, meta_base);
+  DECL_USER_ALIGN (decl) = 1;
   finish_var_decl (decl, objc_build_constructor (TREE_TYPE (decl), inits));
   return decl;
 }
@@ -2867,6 +2877,7 @@ generate_v2_dispatch_table (tree chain, const char *name, tree attr)
   CONSTRUCTOR_APPEND_ELT (v, NULL_TREE, initlist);
 
   OBJCMETA (decl, objc_meta, attr);
+  DECL_USER_ALIGN (decl) = 1;
   finish_var_decl (decl,
 		   objc_build_constructor (TREE_TYPE (decl), v));
   return decl;
@@ -3164,6 +3175,7 @@ generate_v2_ivars_list (tree chain, const char *name, tree attr, tree templ)
 			  build_int_cst (integer_type_node, size));
   CONSTRUCTOR_APPEND_ELT (inits, NULL_TREE, initlist);
   OBJCMETA (decl, objc_meta, attr);
+  DECL_USER_ALIGN (decl) = 1;
   finish_var_decl (decl, objc_build_constructor (TREE_TYPE (decl), inits));
   generating_instance_variables = 0;
   return decl;
@@ -3431,7 +3443,6 @@ generate_v2_class_structs (struct imp_entry *impent)
   decl = start_var_decl (objc_v2_class_ro_template,
 			 newabi_append_ro (IDENTIFIER_POINTER
 						(DECL_NAME (metaclass_decl))));
-
   /* TODO: ivarLayout needs t be built.  */
   initlist =
 	build_v2_class_ro_t_initializer (TREE_TYPE (decl), name_expr,
@@ -3441,6 +3452,7 @@ generate_v2_class_structs (struct imp_entry *impent)
 					class_ivars, NULL_TREE);
   /* The ROs sit in the default const section.  */
   OBJCMETA (decl, objc_meta, meta_base);
+  DECL_USER_ALIGN (decl) = 1;
   finish_var_decl (decl, initlist);
 
   /* static struct class_t _OBJC_METACLASS_Foo = { ... }; */
@@ -3452,6 +3464,7 @@ generate_v2_class_structs (struct imp_entry *impent)
 				      build_fold_addr_expr (UOBJC_V2_CACHE_decl),
 				      build_fold_addr_expr (UOBJC_V2_VTABLE_decl));
   /* The class section attributes are set when they are created.  */
+  DECL_USER_ALIGN (metaclass_decl) = 1;
   finish_var_decl (metaclass_decl, initlist);
   impent->meta_decl = metaclass_decl;
 
@@ -3531,6 +3544,7 @@ generate_v2_class_structs (struct imp_entry *impent)
 					 inst_ivars, props);
   /* The ROs sit in the default const section.  */
   OBJCMETA (decl, objc_meta, meta_base);
+  DECL_USER_ALIGN (decl) = 1;
   finish_var_decl (decl, initlist);
 
   /* static struct class_t _OBJC_CLASS_Foo = { ... }; */
@@ -3542,6 +3556,7 @@ generate_v2_class_structs (struct imp_entry *impent)
 					build_fold_addr_expr (UOBJC_V2_VTABLE_decl));
 
   /* The class section attributes are set when they are created.  */
+  DECL_USER_ALIGN (class_decl) = 1;
   finish_var_decl (class_decl, initlist);
   impent->class_decl = class_decl;
 
@@ -3716,6 +3731,7 @@ build_ehtype (tree name, const char *eh_name, bool weak)
     DECL_WEAK (ehtype_decl) = 1;
   inits = objc2_build_ehtype_initializer (name_expr, class_name_expr);
   OBJCMETA (ehtype_decl, objc_meta, meta_ehtype);
+  DECL_USER_ALIGN (ehtype_decl) = 1;
   finish_var_decl (ehtype_decl, inits);
   return ehtype_decl;
 }

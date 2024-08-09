@@ -1,3 +1,105 @@
+2024-07-19  Release Manager
+
+	* GCC 11.5.0 released.
+
+2024-05-10  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2024-05-02  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* objc-next-runtime-abi-02.c (WEAK_PROTOCOLS_AFTER): New.
+	(next_runtime_abi_02_protocol_decl): Use WEAK_PROTOCOLS_AFTER
+	to determine this ABI change.
+	(build_v2_protocol_list_address_table): Likewise.
+
+2024-04-28  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2024-01-28  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* objc-next-runtime-abi-02.c (build_v2_address_table): Prevent
+	over-alignment of Objective-C metadata by setting DECL_USER_ALIGN
+	on relevant variables.
+	(build_v2_protocol_list_address_table): Likewise.
+	(generate_v2_protocol_list): Likewise.
+	(generate_v2_meth_descriptor_table): Likewise.
+	(generate_v2_meth_type_list): Likewise.
+	(generate_v2_property_table): Likewise.
+	(generate_v2_dispatch_table): Likewise.
+	(generate_v2_ivars_list): Likewise.
+	(generate_v2_class_structs): Likewise.
+	(build_ehtype): Likewise.
+	* objc-runtime-shared-support.c (generate_strings): Likewise.
+
+2024-04-28  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2024-01-18  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* objc-act.c (objc_init): Initialize interface and class
+	name hash maps before the preprocessor uses them.
+
+2024-04-27  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2024-01-12  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* objc-next-runtime-abi-02.c
+	(build_v2_objc_method_fixup_call): Early exit for cases
+	where the sender or receiver are known to be in error.
+
+2024-04-23  Matt Jacobson  <mhjacobson@me.com>
+
+	Backported from master:
+	2021-08-17  Matt Jacobson  <mhjacobson@me.com>
+
+	* objc-next-runtime-abi-02.c
+	(objc_next_runtime_abi_02_init): Warn about and reset
+	flag_objc_sjlj_exceptions regardless of flag_objc_exceptions.
+	(next_runtime_02_initialize): Use a checking assert that
+	flag_objc_sjlj_exceptions is off.
+
+2024-04-23  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2021-08-19  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* objc-next-runtime-abi-02.c (objc_next_runtime_abi_02_init):
+	Default receiver nilchecks on.
+
+2024-04-23  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2021-08-18  Iain Sandoe  <iain@sandoe.co.uk>
+		    Matt Jacobson   <mhjacobson@me.com>
+
+	PR objc/101666
+	* objc-act.c (objc_build_constructor): Handle empty constructor
+	lists.
+	* objc-next-runtime-abi-02.c (build_v2_objc_method_fixup_call):
+	Handle nil receivers.
+	(build_v2_build_objc_method_call): Likewise.
+
+2024-04-22  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2022-05-03  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* objc-next-runtime-abi-02.c (next_runtime_abi_02_protocol_decl): Do
+	not dead-strip the runtime meta-data symbols.
+	(build_v2_classrefs_table): Likewise.
+	(build_v2_protocol_list_address_table): Likewise.
+
+2024-03-31  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2021-09-01  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR objc/101718
+	* objc-next-runtime-abi-02.c (build_v2_build_objc_method_call):
+	Revise for cases where scalar objects use an sret parameter.
+	(next_runtime_abi_02_build_objc_method_call): Likwise.
+
 2023-05-29  Release Manager
 
 	* GCC 11.4.0 released.

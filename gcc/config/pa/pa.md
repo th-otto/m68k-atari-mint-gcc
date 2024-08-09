@@ -5494,24 +5494,6 @@
    (set_attr "length" "4")])
 
 (define_insn ""
-  [(set (match_operand:DI 0 "register_operand" "=f")
-	(mult:DI (zero_extend:DI (match_operand:SI 1 "register_operand" "f"))
-		 (match_operand:DI 2 "uint32_operand" "f")))]
-  "TARGET_PA_11 && ! TARGET_SOFT_FLOAT && ! TARGET_SOFT_MULT && !TARGET_64BIT"
-  "xmpyu %1,%R2,%0"
-  [(set_attr "type" "fpmuldbl")
-   (set_attr "length" "4")])
-
-(define_insn ""
-  [(set (match_operand:DI 0 "register_operand" "=f")
-	(mult:DI (zero_extend:DI (match_operand:SI 1 "register_operand" "f"))
-		 (match_operand:DI 2 "uint32_operand" "f")))]
-  "TARGET_PA_11 && ! TARGET_SOFT_FLOAT && ! TARGET_SOFT_MULT && TARGET_64BIT"
-  "xmpyu %1,%2R,%0"
-  [(set_attr "type" "fpmuldbl")
-   (set_attr "length" "4")])
-
-(define_insn ""
   [(set (reg:SI 29) (mult:SI (reg:SI 26) (reg:SI 25)))
    (clobber (match_operand:SI 0 "register_operand" "=a"))
    (clobber (reg:SI 26))
@@ -10488,13 +10470,13 @@ add,l %2,%3,%3\;bv,n %%r0(%3)"
 (define_insn "atomic_storedi_1"
   [(set (mem:DI (match_operand:SI 0 "register_operand" "r,r"))
         (match_operand:DI 1 "reg_or_0_operand" "M,r"))
-   (clobber (match_scratch:DI 2 "=X,f"))]
+   (clobber (match_scratch:DI 2 "=f,f"))]
   "!TARGET_64BIT && !TARGET_SOFT_FLOAT"
   "@
-   {fstds|fstd} %%fr0,0(%0)
+   fcpy,dbl %%fr0,%2\n\t{fstds|fstd} %2,0(%0)
    {stws|stw} %1,-16(%%sp)\n\t{stws|stw} %R1,-12(%%sp)\n\t{fldds|fldd} -16(%%sp),%2\n\t{fstds|fstd} %2,0(%0)"
   [(set_attr "type" "move,move")
-   (set_attr "length" "4,16")])
+   (set_attr "length" "8,16")])
 
 ;; PA 2.0 hardware supports out-of-order execution of loads and stores, so
 ;; we need memory barriers to enforce program order for memory references

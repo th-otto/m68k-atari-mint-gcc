@@ -1,3 +1,213 @@
+2024-07-19  Release Manager
+
+	* GCC 11.5.0 released.
+
+2024-06-27  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2022-04-28  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/104051
+	* coroutines.cc (coro_diagnose_throwing_final_aw_expr): Handle
+	non-target expression inputs.
+
+2024-06-27  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2021-10-03  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/101765
+	* coroutines.cc (register_local_var_uses): Emit a sorry if
+	we encounter a VLA in the coroutine local variables.
+
+2024-06-27  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2021-12-17  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/100772
+	* coroutines.cc (morph_fn_to_coro): Convert function parms
+	from reference before constructing any operator-new args
+	list.
+
+2024-06-27  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2021-10-03  Iain Sandoe  <iain@sandoe.co.uk>
+
+	PR c++/99710
+	* coroutines.cc (await_statement_walker): Report an error if
+	an await expression is found in a handler body.
+
+2024-06-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2024-04-12  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/114691
+	* semantics.c (simplify_loop_decl_cond): Use cp_build_unary_op with
+	TRUTH_NOT_EXPR on ANNOTATE_EXPR argument (if any) rather than
+	ANNOTATE_EXPR itself.
+
+2024-06-20  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2024-04-05  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/114572
+	* cp-gimplify.c (cxx_omp_clause_apply_fn): Call build_cplus_new
+	on build_call_a result if it has class type.
+
+2024-05-24  Jason Merrill  <jason@redhat.com>
+
+	Backported from master:
+	2024-01-25  Jason Merrill  <jason@redhat.com>
+
+	PR c++/113598
+	* init.c (build_vec_init): Don't use {} for PMF.
+
+2024-05-24  Jason Merrill  <jason@redhat.com>
+
+	Backported from master:
+	2023-09-22  Jason Merrill  <jason@redhat.com>
+
+	PR c++/111529
+	* parser.c (cp_parser_lambda_declarator_opt): Don't suggest
+	-std=c++14 for lambda templates.
+	* pt.c (tsubst_expr): Move ANNOTATE_EXPR handling...
+	(tsubst_copy_and_build): ...here.
+
+2024-05-24  Jason Merrill  <jason@redhat.com>
+
+	Backported from master:
+	2024-03-28  Jason Merrill  <jason@redhat.com>
+
+	PR c++/100667
+	* semantics.c (same_type_ref_bind_p): New.
+	(finish_trait_expr): Use it.
+
+2024-05-24  Jason Merrill  <jason@redhat.com>
+
+	Backported from master:
+	2024-04-02  Jason Merrill  <jason@redhat.com>
+
+	PR c++/114561
+	PR c++/114562
+	* call.c (convert_like_internal): Avoid adding qualification
+	conversion in direct reference binding.
+
+2024-05-08  Andrew Pinski  <quic_apinski@quicinc.com>
+
+	Backported from master:
+	2024-05-07  Andrew Pinski  <quic_apinski@quicinc.com>
+
+	PR c++/89224
+	* constexpr.c (cxx_eval_array_reference): Compare main variants
+	for the vector/array types instead of the types directly.
+
+2024-04-22  Iain Sandoe  <iain@sandoe.co.uk>
+
+	Backported from master:
+	2022-12-23  Iain Sandoe  <iain@sandoe.co.uk>
+
+	* g++spec.c (lang_specific_driver): Preserve -static-libstdc++ in
+	the driver command line for targets without -Bstatic/dynamic support
+	in their static linker.
+
+2024-01-24  Jason Merrill  <jason@redhat.com>
+
+	Backported from master:
+	2023-12-20  Jason Merrill  <jason@redhat.com>
+
+	PR c++/103185
+	* typeck.c (cp_build_array_ref): Handle swapped operands.
+
+2023-12-24  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2023-09-22  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/111485
+	* pt.c (is_compatible_template_arg): New parameter 'args'.
+	Add the outer template arguments 'args' to 'new_args'.
+	(convert_template_argument): Pass 'args' to
+	is_compatible_template_arg.
+
+2023-12-20  Jason Merrill  <jason@redhat.com>
+
+	Backported from master:
+	2021-04-27  Jason Merrill  <jason@redhat.com>
+
+	PR c++/92145
+	* class.c (classtype_has_depr_implicit_copy): Check DECL_CONTEXT
+	of operator=.
+
+2023-12-20  Jason Merrill  <jason@redhat.com>
+
+	Backported from master:
+	2023-08-31  Jason Merrill  <jason@redhat.com>
+
+	PR c++/92407
+	* cp-tree.h (struct language_function): Add backward_goto.
+	* decl.c (check_goto): Set it.
+	* typeck.c (check_return_expr): Prevent NRV if set.
+
+2023-12-20  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2023-04-25  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/108975
+	* pt.c (value_dependent_expression_p) <case VAR_DECL>:
+	Suppress conservative early exit for reference variables
+	when DECL_HAS_VALUE_EXPR_P.
+
+2023-12-17  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-12-08  Jakub Jelinek  <jakub@redhat.com>
+
+	PR sanitizer/112727
+	* cp-gimplify.c (cp_fold): If SAVE_EXPR has been previously
+	folded, unshare_expr what is returned.
+
+2023-12-17  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2023-12-04  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c++/112795
+	* parser.c (cp_parser_pragma_unroll): Use fold_non_dependent_expr
+	instead of maybe_constant_value.
+
+2023-09-11  Jason Merrill  <jason@redhat.com>
+
+	PR c++/106310
+	* parser.c (cp_parser_template_name): Skip non-member
+	lookup after the template keyword.
+	(cp_parser_lookup_name): Pass down template_keyword_p.
+
+2023-09-11  Jason Merrill  <jason@redhat.com>
+
+	PR c++/106890
+	PR c++/109666
+	* name-lookup.c (maybe_push_to_top_level)
+	(maybe_pop_from_top_level): Split out...
+	* pt.c (instantiate_body): ...from here.
+	* init.c (maybe_instantiate_nsdmi_init): Use them.
+	* name-lookup.h: Declare them..
+
+2023-08-09  Patrick Palka  <ppalka@redhat.com>
+
+	Backported from master:
+	2023-05-09  Patrick Palka  <ppalka@redhat.com>
+
+	PR c++/109761
+	* parser.c (cp_parser_class_specifier): Don't pass a class
+	context to noexcept_override_late_checks.
+	(noexcept_override_late_checks): Remove 'type' parameter
+	and use DECL_CONTEXT of 'fndecl' instead.
+
 2023-05-29  Release Manager
 
 	* GCC 11.4.0 released.

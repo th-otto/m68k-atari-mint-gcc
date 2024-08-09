@@ -8284,7 +8284,7 @@ canonicalize_expr_argument (tree arg, tsubst_flags_t complain)
    constrained than the parameter.  */
 
 static bool
-is_compatible_template_arg (tree parm, tree arg)
+is_compatible_template_arg (tree parm, tree arg, tree args)
 {
   tree parm_cons = get_constraints (parm);
 
@@ -8305,6 +8305,7 @@ is_compatible_template_arg (tree parm, tree arg)
     {
       tree aparms = DECL_INNERMOST_TEMPLATE_PARMS (arg);
       new_args = template_parms_level_to_args (aparms);
+      new_args = add_to_template_args (args, new_args);
       ++processing_template_decl;
       parm_cons = tsubst_constraint_info (parm_cons, new_args,
 					  tf_none, NULL_TREE);
@@ -8563,7 +8564,7 @@ convert_template_argument (tree parm,
               // Check that the constraints are compatible before allowing the
               // substitution.
               if (val != error_mark_node)
-                if (!is_compatible_template_arg (parm, arg))
+		if (!is_compatible_template_arg (parm, arg, args))
                   {
 		    if (in_decl && (complain & tf_error))
                       {
@@ -19366,13 +19367,6 @@ tsubst_expr (tree t, tree args, tsubst_flags_t complain, tree in_decl,
 				    RECUR (TREE_OPERAND (t, 1)),
 				    complain));
 
-    case ANNOTATE_EXPR:
-      tmp = RECUR (TREE_OPERAND (t, 0));
-      RETURN (build3_loc (EXPR_LOCATION (t), ANNOTATE_EXPR,
-			  TREE_TYPE (tmp), tmp,
-			  RECUR (TREE_OPERAND (t, 1)),
-			  RECUR (TREE_OPERAND (t, 2))));
-
     case PREDICT_EXPR:
       RETURN (add_stmt (copy_node (t)));
 
@@ -21121,6 +21115,13 @@ tsubst_copy_and_build (tree t,
       /* No need to substitute further, a RANGE_EXPR will always be built
 	 with constant operands.  */
       RETURN (t);
+
+    case ANNOTATE_EXPR:
+      op1 = RECUR (TREE_OPERAND (t, 0));
+      RETURN (build3_loc (EXPR_LOCATION (t), ANNOTATE_EXPR,
+			  TREE_TYPE (op1), op1,
+			  RECUR (TREE_OPERAND (t, 1)),
+			  RECUR (TREE_OPERAND (t, 2))));
 
     case NON_LVALUE_EXPR:
     case VIEW_CONVERT_EXPR:
@@ -26006,20 +26007,7 @@ instantiate_body (tree pattern, tree args, tree d, bool nested_p)
   if (current_function_decl)
     save_omp_privatization_clauses (omp_privatization_save);
 
-  bool push_to_top
-    = !(current_function_decl
-	&& !LAMBDA_FUNCTION_P (d)
-	&& decl_function_context (d) == current_function_decl);
-
-  if (push_to_top)
-    push_to_top_level ();
-  else
-    {
-      gcc_assert (!processing_template_decl);
-      push_function_context ();
-      cp_unevaluated_operand = 0;
-      c_inhibit_evaluation_warnings = 0;
-    }
+  bool push_to_top = maybe_push_to_top_level (d);
 
   if (VAR_P (d))
     {
@@ -26132,10 +26120,7 @@ instantiate_body (tree pattern, tree args, tree d, bool nested_p)
   if (!nested_p)
     TI_PENDING_TEMPLATE_FLAG (DECL_TEMPLATE_INFO (d)) = 0;
 
-  if (push_to_top)
-    pop_from_top_level ();
-  else
-    pop_function_context ();
+  maybe_pop_from_top_level (push_to_top);
 
   if (current_function_decl)
     restore_omp_privatization_clauses (omp_privatization_save);
@@ -27130,9 +27115,7 @@ value_dependent_expression_p (tree expression)
     case VAR_DECL:
        /* A constant with literal type and is initialized
 	  with an expression that is value-dependent.  */
-      if (DECL_DEPENDENT_INIT_P (expression)
-	  /* FIXME cp_finish_decl doesn't fold reference initializers.  */
-	  || TYPE_REF_P (TREE_TYPE (expression)))
+      if (DECL_DEPENDENT_INIT_P (expression))
 	return true;
       if (DECL_HAS_VALUE_EXPR_P (expression))
 	{
@@ -27147,6 +27130,9 @@ value_dependent_expression_p (tree expression)
 		  && value_expr == error_mark_node))
 	    return true;
 	}
+      else if (TYPE_REF_P (TREE_TYPE (expression)))
+	/* FIXME cp_finish_decl doesn't fold reference initializers.  */
+	return true;
       return false;
 
     case DYNAMIC_CAST_EXPR:

@@ -877,13 +877,14 @@ coro_diagnose_throwing_fn (tree fndecl)
 static bool
 coro_diagnose_throwing_final_aw_expr (tree expr)
 {
-  tree t = TARGET_EXPR_INITIAL (expr);
+  if (TREE_CODE (expr) == TARGET_EXPR)
+    expr = TARGET_EXPR_INITIAL (expr);
   tree fn = NULL_TREE;
-  if (TREE_CODE (t) == CALL_EXPR)
-    fn = CALL_EXPR_FN(t);
-  else if (TREE_CODE (t) == AGGR_INIT_EXPR)
-    fn = AGGR_INIT_EXPR_FN (t);
-  else if (TREE_CODE (t) == CONSTRUCTOR)
+  if (TREE_CODE (expr) == CALL_EXPR)
+    fn = CALL_EXPR_FN (expr);
+  else if (TREE_CODE (expr) == AGGR_INIT_EXPR)
+    fn = AGGR_INIT_EXPR_FN (expr);
+  else if (TREE_CODE (expr) == CONSTRUCTOR)
     return false;
   else
     {
@@ -3713,7 +3714,22 @@ await_statement_walker (tree *stmt, int *do_subtree, void *d)
 	      }
 	    return NULL_TREE; /* Done.  */
 	  }
-	break;
+	  break;
+	case HANDLER:
+	  {
+	    /* [expr.await] An await-expression shall appear only in a
+	       potentially-evaluated expression within the compound-statement
+	       of a function-body outside of a handler.  */
+	    tree *await_ptr;
+	    hash_set<tree> visited;
+	    if (!(cp_walk_tree (&HANDLER_BODY (expr), find_any_await,
+		  &await_ptr, &visited)))
+	      return NULL_TREE; /* All OK.  */
+	    location_t loc = EXPR_LOCATION (*await_ptr);
+	    error_at (loc, "await expressions are not permitted in handlers");
+	    return NULL_TREE; /* This is going to fail later anyway.  */
+	  }
+	  break;
       }
   else if (EXPR_P (expr))
     {
@@ -3925,6 +3941,16 @@ register_local_var_uses (tree *stmt, int *do_subtree, void *d)
 	  local_var.is_static = TREE_STATIC (lvar);
 	  if (local_var.is_static)
 	    continue;
+
+	  poly_uint64 size;
+	  if (TREE_CODE (lvtype) == ARRAY_TYPE
+	      && !poly_int_tree_p (DECL_SIZE_UNIT (lvar), &size))
+	    {
+	      sorry_at (local_var.def_loc, "variable length arrays are not"
+			" yet supported in coroutines");
+	      /* Ignore it, this is broken anyway.  */
+	      continue;
+	    }
 
 	  lvd->local_var_seen = true;
 	  /* If this var is a lambda capture proxy, we want to leave it alone,
@@ -4598,8 +4624,8 @@ morph_fn_to_coro (tree orig, tree *resumer, tree *destroyer)
 	If the lookup finds an allocation function in the scope of the promise
 	type, overload resolution is performed on a function call created by
 	assembling an argument list.  The first argument is the amount of space
-	requested, and has type std::size_t.  The succeeding arguments are
-	those of the original function.  */
+	requested, and has type std::size_t.  The lvalues p1...pn are the
+	succeeding arguments..  */
       vec<tree, va_gc> *args = make_tree_vector ();
       vec_safe_push (args, resizeable); /* Space needed.  */
 
@@ -4617,10 +4643,10 @@ morph_fn_to_coro (tree orig, tree *resumer, tree *destroyer)
 	      this_ref = convert_to_reference (tt, this_ref, CONV_STATIC,
 					       LOOKUP_NORMAL , NULL_TREE,
 					       tf_warning_or_error);
-	      vec_safe_push (args, this_ref);
+	      vec_safe_push (args, convert_from_reference (this_ref));
 	    }
 	  else
-	    vec_safe_push (args, arg);
+	    vec_safe_push (args, convert_from_reference (arg));
 	}
 
       /* Note the function selected; we test to see if it's NOTHROW.  */

@@ -3746,31 +3746,54 @@ gcc_gxx_libcxx_include_dir=
 if test "${with_gxx_libcxx_include_dir+set}" = set; then :
   withval=$with_gxx_libcxx_include_dir; case "${withval}" in
 yes)	as_fn_error $? "bad value ${withval} given for libc++ include directory" "$LINENO" 5 ;;
-no)	;;
 *)	gcc_gxx_libcxx_include_dir=$with_gxx_libcxx_include_dir ;;
 esac
 fi
 
 
+# --with-gxx-libcxx-include-dir controls the enabling of the -stdlib option.
+# if --with-gxx-libcxx-include-dir is 'no' we disable the stdlib option.
+# if --with-gxx-libcxx-include-dir is unset we enable the stdlib option
+# based on the platform (to be available on platform versions where it is the
+# default for the system tools). We also use a default path within the compiler
+# install tree.
+# Otherwise, we use the path provided and enable the stdlib option.
 # If both --with-sysroot and --with-gxx-libcxx-include-dir are passed, we
 # check to see if the latter starts with the former and, upon success, compute
 # gcc_gxx_libcxx_include_dir as relative to the sysroot.
 gcc_gxx_libcxx_include_dir_add_sysroot=0
-
+gcc_enable_stdlib_opt=0
 if test x${gcc_gxx_libcxx_include_dir} != x; then
-
-$as_echo "#define ENABLE_STDLIB_OPTION 1" >>confdefs.h
-
-else
-  $as_echo "#define ENABLE_STDLIB_OPTION 0" >>confdefs.h
-
-fi
-# ??? This logic must match libstdc++-v3/acinclude.m4:GLIBCXX_EXPORT_INSTALL_INFO.
-if test x${gcc_gxx_libcxx_include_dir} = x; then
-  if test x${enable_version_specific_runtime_libs} = xyes; then
-    gcc_gxx_libcxx_include_dir='${libsubdir}/libc++_include/c++/v1'
+  if test x${gcc_gxx_libcxx_include_dir} = xno; then
+    # set defaults for the dir, but the option is disabled anyway.
+    gcc_gxx_libcxx_include_dir=
   else
-    libcxx_incdir='libc++_include/c++/$(version)/v1'
+    gcc_enable_stdlib_opt=1
+  fi
+else
+  case $target in
+    *-darwin1[1-9]* | *-darwin2*)
+       # Default this on for Darwin versions which default to libcxx,
+       # and embed the path in the compiler install so that we get a
+       # self-contained toolchain.
+       gcc_enable_stdlib_opt=1
+       ;;
+    *) ;;
+  esac
+fi
+
+cat >>confdefs.h <<_ACEOF
+#define ENABLE_STDLIB_OPTION $gcc_enable_stdlib_opt
+_ACEOF
+
+
+# Sysroot behaviour as for gxx-include-dir
+if test x${gcc_gxx_libcxx_include_dir} = x; then
+  # default path,embedded in the compiler tree.
+  libcxx_incdir='include/c++/v1'
+  if test x${enable_version_specific_runtime_libs} = xyes; then
+    gcc_gxx_libcxx_include_dir='${libsubdir}/$libcxx_incdir'
+  else
     if test x$host != x$target; then
        libcxx_incdir="$target_alias/$libcxx_incdir"
     fi
@@ -19427,7 +19450,7 @@ else
   lt_dlunknown=0; lt_dlno_uscore=1; lt_dlneed_uscore=2
   lt_status=$lt_dlunknown
   cat > conftest.$ac_ext <<_LT_EOF
-#line 19426 "configure"
+#line 19449 "configure"
 #include "confdefs.h"
 
 #if HAVE_DLFCN_H
@@ -19533,7 +19556,7 @@ else
   lt_dlunknown=0; lt_dlno_uscore=1; lt_dlneed_uscore=2
   lt_status=$lt_dlunknown
   cat > conftest.$ac_ext <<_LT_EOF
-#line 19532 "configure"
+#line 19555 "configure"
 #include "confdefs.h"
 
 #if HAVE_DLFCN_H
@@ -25991,16 +26014,22 @@ if ${gcc_cv_as_mmacosx_version_min+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   gcc_cv_as_mmacosx_version_min=no
-  if test x$gcc_cv_as != x; then
-    $as_echo '.text' > conftest.s
-    if { ac_try='$gcc_cv_as $gcc_cv_as_flags -mmacosx-version-min=10.1 -o conftest.o conftest.s >&5'
+    if test $in_tree_gas = yes; then
+    if test $gcc_cv_gas_vers -ge `expr \( \( -mmacosx-version-min=10.1 \* 1000 \) + gcc_cv_as_mmacosx_version_min=yes \) \* 1000 + `
+  then :
+fi
+  elif test x$gcc_cv_as != x; then
+    $as_echo '' > conftest.s
+    if { ac_try='$gcc_cv_as $gcc_cv_as_flags .text -o conftest.o conftest.s >&5'
   { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
   (eval $ac_try) 2>&5
   ac_status=$?
   $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
   test $ac_status = 0; }; }
     then
-	gcc_cv_as_mmacosx_version_min=yes
+
+$as_echo "#define HAVE_AS_MMACOSX_VERSION_MIN_OPTION 1" >>confdefs.h
+
     else
       echo "configure: failed program was" >&5
       cat conftest.s >&5
@@ -26010,12 +26039,43 @@ else
 fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $gcc_cv_as_mmacosx_version_min" >&5
 $as_echo "$gcc_cv_as_mmacosx_version_min" >&6; }
-if test $gcc_cv_as_mmacosx_version_min = yes; then
 
-$as_echo "#define HAVE_AS_MMACOSX_VERSION_MIN_OPTION 1" >>confdefs.h
 
+    if test x$gcc_cv_as_mmacosx_version_min = "xyes"; then
+       { $as_echo "$as_me:${as_lineno-$LINENO}: checking assembler for .build_version" >&5
+$as_echo_n "checking assembler for .build_version... " >&6; }
+if ${gcc_cv_as_darwin_build_version+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  gcc_cv_as_darwin_build_version=no
+    if test $in_tree_gas = yes; then
+    if test $gcc_cv_gas_vers -ge `expr \( \( -mmacosx-version-min=10.14 \* 1000 \) + gcc_cv_as_darwin_build_version=yes \) \* 1000 + `
+  then :
 fi
+  elif test x$gcc_cv_as != x; then
+    $as_echo '' > conftest.s
+    if { ac_try='$gcc_cv_as $gcc_cv_as_flags  .build_version macos, 10, 14 sdk_version 10, 14 -o conftest.o conftest.s >&5'
+  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
+  test $ac_status = 0; }; }
+    then
 
+$as_echo "#define HAVE_AS_MACOS_BUILD_VERSION 1" >>confdefs.h
+
+    else
+      echo "configure: failed program was" >&5
+      cat conftest.s >&5
+    fi
+    rm -f conftest.o conftest.s
+  fi
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $gcc_cv_as_darwin_build_version" >&5
+$as_echo "$gcc_cv_as_darwin_build_version" >&6; }
+
+
+    fi
     ;;
 esac
 
@@ -30717,6 +30777,7 @@ if test x"$ld64_flag" = x"yes"; then
 
   # Set defaults for possibly untestable items.
   gcc_cv_ld64_export_dynamic=0
+  gcc_cv_ld64_platform_version=0
 
   if test "$build" = "$host"; then
     darwin_try_test=1
@@ -30740,15 +30801,19 @@ $as_echo_n "checking ld64 specified version... " >&6; }
     gcc_cv_ld64_major=`echo "$gcc_cv_ld64_version" | sed -e 's/\..*//'`
     { $as_echo "$as_me:${as_lineno-$LINENO}: result: $gcc_cv_ld64_major" >&5
 $as_echo "$gcc_cv_ld64_major" >&6; }
-   if test "$gcc_cv_ld64_major" -ge 236; then
+    if test "$gcc_cv_ld64_major" -ge 236; then
       gcc_cv_ld64_export_dynamic=1
+    fi
+    if test "$gcc_cv_ld64_major" -ge 512; then
+      gcc_cv_ld64_platform_version=1
     fi
   elif test -x "$gcc_cv_ld" -a "$darwin_try_test" -eq 1; then
     # If the version was not specified, try to find it.
     { $as_echo "$as_me:${as_lineno-$LINENO}: checking linker version" >&5
 $as_echo_n "checking linker version... " >&6; }
     if test x"${gcc_cv_ld64_version}" = x; then
-      gcc_cv_ld64_version=`$gcc_cv_ld -v 2>&1 | grep ld64 | sed s/.*ld64-// | awk '{print $1}'`
+      gcc_cv_ld64_version=`$gcc_cv_ld -v 2>&1 | $EGREP 'ld64|dyld' \
+      | sed -e 's/.*ld64-//' -e 's/.*dyld-//'| awk '{print $1}'`
     fi
     { $as_echo "$as_me:${as_lineno-$LINENO}: result: $gcc_cv_ld64_version" >&5
 $as_echo "$gcc_cv_ld64_version" >&6; }
@@ -30761,6 +30826,15 @@ $as_echo_n "checking linker for -export_dynamic support... " >&6; }
     fi
     { $as_echo "$as_me:${as_lineno-$LINENO}: result: $gcc_cv_ld64_export_dynamic" >&5
 $as_echo "$gcc_cv_ld64_export_dynamic" >&6; }
+
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking linker for -platform_version support" >&5
+$as_echo_n "checking linker for -platform_version support... " >&6; }
+    gcc_cv_ld64_platform_version=1
+    if $gcc_cv_ld -platform_version macos 10.5 0.0 < /dev/null 2>&1 | grep 'unknown option' > /dev/null; then
+      gcc_cv_ld64_platform_version=0
+    fi
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: $gcc_cv_ld64_platform_version" >&5
+$as_echo "$gcc_cv_ld64_platform_version" >&6; }
   fi
 
   if test x"${gcc_cv_ld64_version}" != x; then
@@ -30774,6 +30848,12 @@ _ACEOF
 
 cat >>confdefs.h <<_ACEOF
 #define LD64_HAS_EXPORT_DYNAMIC $gcc_cv_ld64_export_dynamic
+_ACEOF
+
+
+
+cat >>confdefs.h <<_ACEOF
+#define LD64_HAS_PLATFORM_VERSION $gcc_cv_ld64_platform_version
 _ACEOF
 
 fi
@@ -30803,7 +30883,7 @@ $as_echo_n "checking dsymutil version \"$dsymutil_temp\"... " >&6; }
       dsymutil_kind=LLVM
       dsymutil_vers=`echo $dsymutil_temp | sed 's/.*LLVM\ version\ \([0-9\.]*\).*/\1/'`
     else
-      dsymutil_kind=UNKNOWN
+      dsymutil_kind=DET_UNKNOWN
       dsymutil_vers="0.0"
     fi
     dsymutil_major=`expr "$dsymutil_vers" : '\([0-9]*\)'`

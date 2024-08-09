@@ -2663,6 +2663,18 @@ gfc_variable_attr (gfc_expr *expr, gfc_typespec *ts)
   if (ts != NULL && expr->ts.type == BT_UNKNOWN)
     *ts = sym->ts;
 
+  /* Catch left-overs from match_actual_arg, where an actual argument of a
+     procedure is given a temporary ts.type == BT_PROCEDURE.  The fixup is
+     needed for structure constructors in DATA statements, where a pointer
+     is associated with a data target, and the argument has not been fully
+     resolved yet.  Components references are dealt with further below.  */
+  if (ts != NULL
+      && expr->ts.type == BT_PROCEDURE
+      && expr->ref == NULL
+      && attr.flavor != FL_PROCEDURE
+      && attr.target)
+    *ts = sym->ts;
+
   has_inquiry_part = false;
   for (ref = expr->ref; ref; ref = ref->next)
     if (ref->type == REF_INQUIRY)
@@ -3188,10 +3200,11 @@ gfc_convert_to_structure_constructor (gfc_expr *e, gfc_symbol *sym, gfc_expr **c
 	goto cleanup;
 
       /* For a constant string constructor, make sure the length is
-	 correct; truncate of fill with blanks if needed.  */
+	 correct; truncate or fill with blanks if needed.  */
       if (this_comp->ts.type == BT_CHARACTER && !this_comp->attr.allocatable
 	  && this_comp->ts.u.cl && this_comp->ts.u.cl->length
 	  && this_comp->ts.u.cl->length->expr_type == EXPR_CONSTANT
+	  && this_comp->ts.u.cl->length->ts.type == BT_INTEGER
 	  && actual->expr->ts.type == BT_CHARACTER
 	  && actual->expr->expr_type == EXPR_CONSTANT)
 	{

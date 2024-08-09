@@ -347,6 +347,11 @@ bool
 objc_init (void)
 {
   bool ok;
+
+  /* Set up stuff used by the preprocessor as well as FE parser.  */
+  interface_hash_init ();
+  hash_init ();
+
 #ifdef OBJCPLUS
   if (cxx_init () == false)
 #else
@@ -376,8 +381,6 @@ objc_init (void)
 
   /* Set up stuff used by FE parser and all runtimes.  */
   errbuf = XNEWVEC (char, 1024 * 10);
-  interface_hash_init ();
-  hash_init ();
   objc_encoding_init ();
   /* ... and then check flags and set-up for the selected runtime ... */
   if (flag_next_runtime && flag_objc_abi >= 2)
@@ -3376,8 +3379,10 @@ objc_build_string_object (tree string)
   return addr;
 }
 
-/* Build a static constant CONSTRUCTOR
-   with type TYPE and elements ELTS.  */
+/* Build a static constant CONSTRUCTOR with type TYPE and elements ELTS.
+   We might be presented with a NULL for ELTS, which means 'empty ctor'
+   which will subsequently be converted into a zero initializer in the
+   middle end.  */
 
 tree
 objc_build_constructor (tree type, vec<constructor_elt, va_gc> *elts)
@@ -3389,12 +3394,10 @@ objc_build_constructor (tree type, vec<constructor_elt, va_gc> *elts)
   TREE_READONLY (constructor) = 1;
 
 #ifdef OBJCPLUS
-  /* Adjust for impedance mismatch.  We should figure out how to build
-     CONSTRUCTORs that consistently please both the C and C++ gods.  */
-  if (!(*elts)[0].index)
+  /* If we know the initializer, then set the type to what C++ expects.  */
+  if (elts && !(*elts)[0].index)
     TREE_TYPE (constructor) = init_list_type_node;
 #endif
-
   return constructor;
 }
 
@@ -9663,7 +9666,9 @@ objc_gimplify_property_ref (tree *expr_p)
       call_exp = TREE_OPERAND (getter, 1);
     }
 #endif
-  gcc_assert (TREE_CODE (call_exp) == CALL_EXPR);
+  gcc_checking_assert ((flag_objc_nilcheck
+			&& TREE_CODE (call_exp) == COND_EXPR)
+		       || TREE_CODE (call_exp) == CALL_EXPR);
 
   *expr_p = call_exp;
 }

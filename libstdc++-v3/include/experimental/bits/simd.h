@@ -42,7 +42,12 @@
 #if _GLIBCXX_SIMD_X86INTRIN
 #include <x86intrin.h>
 #elif _GLIBCXX_SIMD_HAVE_NEON
+#pragma GCC diagnostic push
+// narrowing conversion of '__a' from 'uint64_t' {aka 'long long unsigned int'} to
+//   'int64x1_t' {aka 'long long int'} [-Wnarrowing]
+#pragma GCC diagnostic ignored "-Wnarrowing"
 #include <arm_neon.h>
+#pragma GCC diagnostic pop
 #endif
 
 /** @ingroup ts_simd
@@ -385,6 +390,7 @@ template <size_t _Bytes>
   constexpr auto
   __int_for_sizeof()
   {
+    static_assert(_Bytes > 0);
     if constexpr (_Bytes == sizeof(int))
       return int();
   #ifdef __clang__
@@ -450,7 +456,7 @@ template <size_t _Bytes>
 	return _Ip{};
       }
     else
-      static_assert(_Bytes != _Bytes, "this should be unreachable");
+      static_assert(_Bytes == 0, "this should be unreachable");
   }
 #pragma GCC diagnostic pop
 
@@ -1615,18 +1621,18 @@ template <typename _To, typename _From>
       return reinterpret_cast<_To>(__x);
     else if constexpr (__is_vector_type_v<_To> && __from_is_vectorizable)
       {
-	using _FV [[gnu::vector_size(sizeof(_From))]] = _From;
+	using _FV [[__gnu__::__vector_size__(sizeof(_From))]] = _From;
 	return reinterpret_cast<_To>(_FV{__x});
       }
     else if constexpr (__to_is_vectorizable && __from_is_vectorizable)
       {
-	using _TV [[gnu::vector_size(sizeof(_To))]] = _To;
-	using _FV [[gnu::vector_size(sizeof(_From))]] = _From;
+	using _TV [[__gnu__::__vector_size__(sizeof(_To))]] = _To;
+	using _FV [[__gnu__::__vector_size__(sizeof(_From))]] = _From;
 	return reinterpret_cast<_TV>(_FV{__x})[0];
       }
     else if constexpr (__to_is_vectorizable && __is_vector_type_v<_From>)
       {
-	using _TV [[gnu::vector_size(sizeof(_To))]] = _To;
+	using _TV [[__gnu__::__vector_size__(sizeof(_To))]] = _To;
 	return reinterpret_cast<_TV>(__x)[0];
       }
     else
@@ -3123,7 +3129,7 @@ template <typename _Tp, int _Np>
     return {__mem, vector_aligned};
   }
 
-template <typename _Tp, size_t _Np>
+template <typename _Tp, int _Np>
   _GLIBCXX_SIMD_INTRINSIC
   enable_if_t<(_Np == native_simd_mask<_Tp>::size()), native_simd_mask<_Tp>>
   to_native(const fixed_size_simd_mask<_Tp, _Np>& __x)
@@ -3134,7 +3140,7 @@ template <typename _Tp, size_t _Np>
   }
 
 // to_compatible {{{2
-template <typename _Tp, size_t _Np>
+template <typename _Tp, int _Np>
   _GLIBCXX_SIMD_INTRINSIC enable_if_t<(_Np == simd<_Tp>::size()), simd<_Tp>>
   to_compatible(const simd<_Tp, simd_abi::fixed_size<_Np>>& __x)
   {
@@ -3143,12 +3149,13 @@ template <typename _Tp, size_t _Np>
     return {__mem, vector_aligned};
   }
 
-template <typename _Tp, size_t _Np>
+template <typename _Tp, int _Np>
   _GLIBCXX_SIMD_INTRINSIC
   enable_if_t<(_Np == simd_mask<_Tp>::size()), simd_mask<_Tp>>
   to_compatible(const simd_mask<_Tp, simd_abi::fixed_size<_Np>>& __x)
   {
     return simd_mask<_Tp>(
+	     __private_init,
 	     [&](auto __i) constexpr _GLIBCXX_SIMD_ALWAYS_INLINE_LAMBDA { return __x[__i]; });
   }
 

@@ -3231,7 +3231,8 @@ handle_builtin_memcpy (enum built_in_function bcode, gimple_stmt_iterator *gsi,
       && !integer_zerop (len))
     {
       maybe_warn_overflow (stmt, len, ptr_qry, olddsi, false, true);
-      adjust_last_stmt (olddsi, stmt, false, ptr_qry);
+      if (tree_fits_uhwi_p (len))
+	adjust_last_stmt (olddsi, stmt, false, ptr_qry);
     }
 
   int idx = get_stridx (src);
@@ -4801,6 +4802,9 @@ handle_store (gimple_stmt_iterator *gsi, bool *zero_write,
 
   if (si != NULL)
     {
+      /* The count_nonzero_bytes call above might have unshared si.
+	 Fetch it again from the vector.  */
+      si = get_strinfo (idx);
       /* The corresponding element is set to 1 if the first and last
 	 element, respectively, of the sequence of characters being
 	 written over the string described by SI ends before
