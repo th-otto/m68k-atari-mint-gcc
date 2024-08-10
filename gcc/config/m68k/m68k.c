@@ -7208,6 +7208,9 @@ m68k_file_end (void)
 #endif
 #ifdef USING_ELFOS_H
   /* Emit .gnu_attribute directive for Tag_GNU_M68K_ABI.  */
+#ifndef TARGET_FASTCALL
+#define TARGET_FASTCALL 0
+#endif
   int abi = 1 + (TARGET_SHORT ? 2 : 0) + (TARGET_FASTCALL ? 4 : 0);
   fprintf (asm_out_file, "\t.gnu_attribute 8,%d\n", abi);
 #endif
