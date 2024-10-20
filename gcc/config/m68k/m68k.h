@@ -565,7 +565,7 @@ extern enum reg_class regno_reg_class[];
 
 /* Call clobbered regs. */
 #define M68K_STD_USED_REGS 2
-#define M68K_FASTCALL_USED_DATA_REGS 2
+#define M68K_FASTCALL_USED_DATA_REGS 3
 #define M68K_FASTCALL_USED_ADDR_REGS 2
 
 /* On the m68k, this is a structure:
