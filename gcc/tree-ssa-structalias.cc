@@ -2915,7 +2915,8 @@ static void
 insert_vi_for_tree (tree t, varinfo_t vi)
 {
   gcc_assert (vi);
-  gcc_assert (!vi_for_tree->put (t, vi));
+  bool existed = vi_for_tree->put (t, vi);
+  gcc_assert (!existed);
 }
 
 /* Find the variable info for tree T in VI_FOR_TREE.  If T does not
@@ -4116,7 +4117,6 @@ handle_call_arg (gcall *stmt, tree arg, vec<ce_s> *results, int flags,
     {
       make_transitive_closure_constraints (tem);
       callarg_transitive = true;
-      gcc_checking_assert (!(flags & EAF_NO_DIRECT_READ));
     }
 
   /* If necessary, produce varinfo for indirect accesses to ARG.  */

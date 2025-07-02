@@ -410,6 +410,7 @@ static const struct aarch64_flag_desc aarch64_tuning_flags[] =
 #include "tuning_models/neoversen2.h"
 #include "tuning_models/neoversev2.h"
 #include "tuning_models/a64fx.h"
+#include "tuning_models/fujitsu_monaka.h"
 
 /* Support for fine-grained override of the tuning structures.  */
 struct aarch64_tuning_override_function
@@ -2505,10 +2506,11 @@ aarch64_hard_regno_caller_save_mode (unsigned regno, unsigned,
      unnecessarily significant.  */
   if (PR_REGNUM_P (regno))
     return mode;
-  if (known_ge (GET_MODE_SIZE (mode), 4))
-    return mode;
-  else
+  if (known_lt (GET_MODE_SIZE (mode), 4)
+      && REG_CAN_CHANGE_MODE_P (regno, mode, SImode)
+      && REG_CAN_CHANGE_MODE_P (regno, SImode, mode))
     return SImode;
+  return mode;
 }
 
 /* Return true if I's bits are consecutive ones from the MSB.  */
@@ -9124,13 +9126,16 @@ aarch64_emit_stack_tie (rtx reg)
 }
 
 /* Allocate POLY_SIZE bytes of stack space using TEMP1 and TEMP2 as scratch
-   registers.  If POLY_SIZE is not large enough to require a probe this function
-   will only adjust the stack.  When allocating the stack space
-   FRAME_RELATED_P is then used to indicate if the allocation is frame related.
-   FINAL_ADJUSTMENT_P indicates whether we are allocating the area below
-   the saved registers.  If we are then we ensure that any allocation
-   larger than the ABI defined buffer needs a probe so that the
-   invariant of having a 1KB buffer is maintained.
+   registers, given that the stack pointer is currently BYTES_BELOW_SP bytes
+   above the bottom of the static frame.
+
+   If POLY_SIZE is not large enough to require a probe this function will only
+   adjust the stack.  When allocating the stack space FRAME_RELATED_P is then
+   used to indicate if the allocation is frame related.  FINAL_ADJUSTMENT_P
+   indicates whether we are allocating the area below the saved registers.
+   If we are then we ensure that any allocation larger than the ABI defined
+   buffer needs a probe so that the invariant of having a 1KB buffer is
+   maintained.
 
    We emit barriers after each stack adjustment to prevent optimizations from
    breaking the invariant that we never drop the stack more than a page.  This
@@ -9147,6 +9152,7 @@ aarch64_emit_stack_tie (rtx reg)
 static void
 aarch64_allocate_and_probe_stack_space (rtx temp1, rtx temp2,
 					poly_int64 poly_size,
+					poly_int64 bytes_below_sp,
 					aarch64_feature_flags force_isa_mode,
 					bool frame_related_p,
 					bool final_adjustment_p)
@@ -9210,8 +9216,8 @@ aarch64_allocate_and_probe_stack_space (rtx temp1, rtx temp2,
 			  poly_size, temp1, temp2, force_isa_mode,
 			  false, true);
 
-      rtx_insn *insn = get_last_insn ();
-
+      auto initial_cfa_offset = frame.frame_size - bytes_below_sp;
+      auto final_cfa_offset = initial_cfa_offset + poly_size;
       if (frame_related_p)
 	{
 	  /* This is done to provide unwinding information for the stack
@@ -9221,28 +9227,31 @@ aarch64_allocate_and_probe_stack_space (rtx temp1, rtx temp2,
 	     The tie will expand to nothing but the optimizers will not touch
 	     the instruction.  */
 	  rtx stack_ptr_copy = gen_rtx_REG (Pmode, STACK_CLASH_SVE_CFA_REGNUM);
-	  emit_move_insn (stack_ptr_copy, stack_pointer_rtx);
+	  auto *insn = emit_move_insn (stack_ptr_copy, stack_pointer_rtx);
 	  aarch64_emit_stack_tie (stack_ptr_copy);
 
 	  /* We want the CFA independent of the stack pointer for the
 	     duration of the loop.  */
-	  add_reg_note (insn, REG_CFA_DEF_CFA, stack_ptr_copy);
+	  add_reg_note (insn, REG_CFA_DEF_CFA,
+			plus_constant (Pmode, stack_ptr_copy,
+				       initial_cfa_offset));
 	  RTX_FRAME_RELATED_P (insn) = 1;
 	}
 
       rtx probe_const = gen_int_mode (min_probe_threshold, Pmode);
       rtx guard_const = gen_int_mode (guard_size, Pmode);
 
-      insn = emit_insn (gen_probe_sve_stack_clash (Pmode, stack_pointer_rtx,
-						   stack_pointer_rtx, temp1,
-						   probe_const, guard_const));
+      auto *insn
+	= emit_insn (gen_probe_sve_stack_clash (Pmode, stack_pointer_rtx,
+						stack_pointer_rtx, temp1,
+						probe_const, guard_const));
 
       /* Now reset the CFA register if needed.  */
       if (frame_related_p)
 	{
 	  add_reg_note (insn, REG_CFA_DEF_CFA,
-			gen_rtx_PLUS (Pmode, stack_pointer_rtx,
-				      gen_int_mode (poly_size, Pmode)));
+			plus_constant (Pmode, stack_pointer_rtx,
+				       final_cfa_offset));
 	  RTX_FRAME_RELATED_P (insn) = 1;
 	}
 
@@ -9288,12 +9297,13 @@ aarch64_allocate_and_probe_stack_space (rtx temp1, rtx temp2,
 	 We can determine which allocation we are doing by looking at
 	 the value of FRAME_RELATED_P since the final allocations are not
 	 frame related.  */
+      auto cfa_offset = frame.frame_size - (bytes_below_sp - rounded_size);
       if (frame_related_p)
 	{
 	  /* We want the CFA independent of the stack pointer for the
 	     duration of the loop.  */
 	  add_reg_note (insn, REG_CFA_DEF_CFA,
-			plus_constant (Pmode, temp1, rounded_size));
+			plus_constant (Pmode, temp1, cfa_offset));
 	  RTX_FRAME_RELATED_P (insn) = 1;
 	}
 
@@ -9315,7 +9325,7 @@ aarch64_allocate_and_probe_stack_space (rtx temp1, rtx temp2,
       if (frame_related_p)
 	{
 	  add_reg_note (insn, REG_CFA_DEF_CFA,
-			plus_constant (Pmode, stack_pointer_rtx, rounded_size));
+			plus_constant (Pmode, stack_pointer_rtx, cfa_offset));
 	  RTX_FRAME_RELATED_P (insn) = 1;
 	}
 
@@ -9623,17 +9633,22 @@ aarch64_expand_prologue (void)
      code below does not handle it for -fstack-clash-protection.  */
   gcc_assert (known_eq (initial_adjust, 0) || callee_adjust == 0);
 
+  /* The offset of the current SP from the bottom of the static frame.  */
+  poly_int64 bytes_below_sp = frame_size;
+
   /* Will only probe if the initial adjustment is larger than the guard
      less the amount of the guard reserved for use by the caller's
      outgoing args.  */
   aarch64_allocate_and_probe_stack_space (tmp0_rtx, tmp1_rtx, initial_adjust,
-					  force_isa_mode, true, false);
+					  bytes_below_sp, force_isa_mode,
+					  true, false);
+  bytes_below_sp -= initial_adjust;
 
   if (callee_adjust != 0)
-    aarch64_push_regs (reg1, reg2, callee_adjust);
-
-  /* The offset of the current SP from the bottom of the static frame.  */
-  poly_int64 bytes_below_sp = frame_size - initial_adjust - callee_adjust;
+    {
+      aarch64_push_regs (reg1, reg2, callee_adjust);
+      bytes_below_sp -= callee_adjust;
+    }
 
   if (emit_frame_chain)
     {
@@ -9701,7 +9716,7 @@ aarch64_expand_prologue (void)
 		  || known_eq (frame.reg_offset[VG_REGNUM], bytes_below_sp));
       aarch64_allocate_and_probe_stack_space (tmp1_rtx, tmp0_rtx,
 					      sve_callee_adjust,
-					      force_isa_mode,
+					      bytes_below_sp, force_isa_mode,
 					      !frame_pointer_needed, false);
       bytes_below_sp -= sve_callee_adjust;
     }
@@ -9712,10 +9727,11 @@ aarch64_expand_prologue (void)
 
   /* We may need to probe the final adjustment if it is larger than the guard
      that is assumed by the called.  */
-  gcc_assert (known_eq (bytes_below_sp, final_adjust));
   aarch64_allocate_and_probe_stack_space (tmp1_rtx, tmp0_rtx, final_adjust,
-					  force_isa_mode,
+					  bytes_below_sp, force_isa_mode,
 					  !frame_pointer_needed, true);
+  bytes_below_sp -= final_adjust;
+  gcc_assert (known_eq (bytes_below_sp, 0));
   if (emit_frame_chain && maybe_ne (final_adjust, 0))
     aarch64_emit_stack_tie (hard_frame_pointer_rtx);
 
@@ -9993,12 +10009,12 @@ aarch64_expand_epilogue (rtx_call_insn *sibcall)
 	1) Sibcalls don't return in a normal way, so if we're about to call one
 	   we must authenticate.
 
-	2) The RETAA instruction is not available before ARMv8.3-A, so if we are
-	   generating code for !TARGET_ARMV8_3 we can't use it and must
+	2) The RETAA instruction is not available without FEAT_PAuth, so if we
+	   are generating code for !TARGET_PAUTH we can't use it and must
 	   explicitly authenticate.
     */
   if (aarch64_return_address_signing_enabled ()
-      && (sibcall || !TARGET_ARMV8_3))
+      && (sibcall || !TARGET_PAUTH))
     {
       switch (aarch64_ra_sign_key)
 	{
@@ -20282,6 +20298,10 @@ dispatch_function_versions (tree dispatch_decl,
   tree init_fn_id = get_identifier ("__init_cpu_features_resolver");
   tree init_fn_decl = build_decl (UNKNOWN_LOCATION, FUNCTION_DECL,
 				  init_fn_id, init_fn_type);
+  DECL_EXTERNAL (init_fn_decl) = 1;
+  TREE_PUBLIC (init_fn_decl) = 1;
+  DECL_VISIBILITY (init_fn_decl) = VISIBILITY_HIDDEN;
+  DECL_VISIBILITY_SPECIFIED (init_fn_decl) = 1;
   tree arg1 = DECL_ARGUMENTS (dispatch_decl);
   tree arg2 = TREE_CHAIN (arg1);
   ifunc_cpu_init_stmt = gimple_build_call (init_fn_decl, 2, arg1, arg2);
@@ -20301,6 +20321,9 @@ dispatch_function_versions (tree dispatch_decl,
 				get_identifier ("__aarch64_cpu_features"),
 				global_type);
   DECL_EXTERNAL (global_var) = 1;
+  TREE_PUBLIC (global_var) = 1;
+  DECL_VISIBILITY (global_var) = VISIBILITY_HIDDEN;
+  DECL_VISIBILITY_SPECIFIED (global_var) = 1;
   tree mask_var = create_tmp_var (long_long_unsigned_type_node);
 
   tree component_expr = build3 (COMPONENT_REF, long_long_unsigned_type_node,
@@ -25324,26 +25347,25 @@ aarch64_output_sve_ptrues (rtx const_unspec)
 void
 aarch64_split_combinev16qi (rtx operands[3])
 {
-  unsigned int dest = REGNO (operands[0]);
-  unsigned int src1 = REGNO (operands[1]);
-  unsigned int src2 = REGNO (operands[2]);
   machine_mode halfmode = GET_MODE (operands[1]);
-  unsigned int halfregs = REG_NREGS (operands[1]);
-  rtx destlo, desthi;
 
   gcc_assert (halfmode == V16QImode);
 
-  if (src1 == dest && src2 == dest + halfregs)
+  rtx destlo = simplify_gen_subreg (halfmode, operands[0],
+				    GET_MODE (operands[0]), 0);
+  rtx desthi = simplify_gen_subreg (halfmode, operands[0],
+				    GET_MODE (operands[0]),
+				    GET_MODE_SIZE (halfmode));
+
+  bool skiplo = rtx_equal_p (destlo, operands[1]);
+  bool skiphi = rtx_equal_p (desthi, operands[2]);
+
+  if (skiplo && skiphi)
     {
       /* No-op move.  Can't split to nothing; emit something.  */
       emit_note (NOTE_INSN_DELETED);
       return;
     }
-
-  /* Preserve register attributes for variable tracking.  */
-  destlo = gen_rtx_REG_offset (operands[0], halfmode, dest, 0);
-  desthi = gen_rtx_REG_offset (operands[0], halfmode, dest + halfregs,
-			       GET_MODE_SIZE (halfmode));
 
   /* Special case of reversed high/low parts.  */
   if (reg_overlap_mentioned_p (operands[2], destlo)
@@ -25357,16 +25379,16 @@ aarch64_split_combinev16qi (rtx operands[3])
     {
       /* Try to avoid unnecessary moves if part of the result
 	 is in the right place already.  */
-      if (src1 != dest)
+      if (!skiplo)
 	emit_move_insn (destlo, operands[1]);
-      if (src2 != dest + halfregs)
+      if (!skiphi)
 	emit_move_insn (desthi, operands[2]);
     }
   else
     {
-      if (src2 != dest + halfregs)
+      if (!skiphi)
 	emit_move_insn (desthi, operands[2]);
-      if (src1 != dest)
+      if (!skiplo)
 	emit_move_insn (destlo, operands[1]);
     }
 }
@@ -26170,8 +26192,8 @@ aarch64_vectorize_vec_perm_const (machine_mode vmode, machine_mode op_mode,
   d.op_vec_flags = aarch64_classify_vector_mode (d.op_mode);
   d.target = target;
   d.op0 = op0 ? force_reg (op_mode, op0) : NULL_RTX;
-  if (op0 == op1)
-    d.op1 = d.op0;
+  if (op0 && d.one_vector_p)
+    d.op1 = copy_rtx (d.op0);
   else
     d.op1 = op1 ? force_reg (op_mode, op1) : NULL_RTX;
   d.testing_p = !target;
@@ -30336,8 +30358,6 @@ aarch64_valid_sysreg_name_p (const char *regname)
   const sysreg_t *sysreg = aarch64_lookup_sysreg_map (regname);
   if (sysreg == NULL)
     return aarch64_is_implem_def_reg (regname);
-  if (sysreg->arch_reqs)
-    return (aarch64_isa_flags & sysreg->arch_reqs);
   return true;
 }
 
@@ -30360,8 +30380,6 @@ aarch64_retrieve_sysreg (const char *regname, bool write_p, bool is128op)
     return NULL;
   if ((write_p && (sysreg->properties & F_REG_READ))
       || (!write_p && (sysreg->properties & F_REG_WRITE)))
-    return NULL;
-  if ((~aarch64_isa_flags & sysreg->arch_reqs) != 0)
     return NULL;
   return sysreg->encoding;
 }
@@ -30535,6 +30553,16 @@ aarch64_test_sysreg_encoding_clashes (void)
     }
 }
 
+/* Test SVE arithmetic folding.  */
+
+static void
+aarch64_test_sve_folding ()
+{
+  tree res = fold_unary (BIT_NOT_EXPR, ssizetype,
+			 ssize_int (poly_int64 (1, 1)));
+  ASSERT_TRUE (operand_equal_p (res, ssize_int (poly_int64 (-2, -1))));
+}
+
 /* Run all target-specific selftests.  */
 
 static void
@@ -30543,6 +30571,7 @@ aarch64_run_selftests (void)
   aarch64_test_loading_full_dump ();
   aarch64_test_fractional_cost ();
   aarch64_test_sysreg_encoding_clashes ();
+  aarch64_test_sve_folding ();
 }
 
 } // namespace selftest

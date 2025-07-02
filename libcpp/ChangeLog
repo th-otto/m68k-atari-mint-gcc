@@ -1,3 +1,49 @@
+2025-05-23  Release Manager
+
+	* GCC 14.3.0 released.
+
+2025-05-08  Jakub Jelinek  <jakub@redhat.com>
+
+	PR preprocessor/108900
+	PR preprocessor/116047
+	PR preprocessor/120061
+	* files.cc (_cpp_stack_file): Revert 2025-03-28 change.
+	* line-map.cc (linemap_add): Use
+	SOURCE_LINE (from, linemap_included_from (map - 1)) + 1; instead of
+	SOURCE_LINE (from, from[1].start_location); to compute to_line
+	for LC_LEAVE if from[1].reason is LC_RENAME.  For LC_ENTER
+	included_from computation, look at map[-2] or even lower if map[-1]
+	has the same start_location as map[0].
+
+2025-04-23  Jeremy Bettis  <jbettis@google.com>
+
+	Backported from master:
+	2025-03-28  Jeremy Bettis  <jbettis@google.com>
+
+	PR preprocessor/108900
+	* files.cc (_cpp_stack_file): Do not decrement highest_location
+	across distinct maps.
+
+2025-03-27  Roland McGrath  <mcgrathr@google.com>
+
+	* configure.ac: Check for setlocale.
+	* configure, config.in: Regenerated.
+
+2024-11-25  Lewis Hyatt  <lhyatt@gmail.com>
+
+	PR preprocessor/117118
+	* lex.cc (lex_raw_string): Treat an unterminated raw string the same
+	way for a deferred pragma as is done for other directives.
+
+2024-11-20  David Malcolm  <dmalcolm@redhat.com>
+
+	Backported from master:
+	2024-06-21  David Malcolm  <dmalcolm@redhat.com>
+
+	PR testsuite/109360
+	* include/rich-location.h (rich_location::get_column_override):
+	New accessor.
+
 2024-08-01  Release Manager
 
 	* GCC 14.2.0 released.

@@ -484,9 +484,9 @@ enum insn_type : unsigned int
 
   /* For vcompress.vm */
   COMPRESS_OP = __NORMAL_OP_TA2 | BINARY_OP_P,
-  /* has merge operand but use ta.  */
+  /* has merge operand but use tu.  */
   COMPRESS_OP_MERGE
-  = HAS_DEST_P | HAS_MERGE_P | TDEFAULT_POLICY_P | BINARY_OP_P,
+  = HAS_DEST_P | HAS_MERGE_P | TU_POLICY_P | BINARY_OP_P,
 
   /* For vslideup.up has merge operand but use ta.  */
   SLIDEUP_OP_MERGE = HAS_DEST_P | HAS_MASK_P | USE_ALL_TRUES_MASK_P
@@ -613,7 +613,7 @@ void expand_vec_cmp (rtx, rtx_code, rtx, rtx, rtx = nullptr, rtx = nullptr);
 bool expand_vec_cmp_float (rtx, rtx_code, rtx, rtx, bool);
 void expand_cond_len_unop (unsigned, rtx *);
 void expand_cond_len_binop (unsigned, rtx *);
-void expand_reduction (unsigned, unsigned, rtx *, rtx);
+void expand_reduction (unsigned, unsigned, unsigned, rtx *, rtx);
 void expand_vec_ceil (rtx, rtx, machine_mode, machine_mode);
 void expand_vec_floor (rtx, rtx, machine_mode, machine_mode);
 void expand_vec_nearbyint (rtx, rtx, machine_mode, machine_mode);

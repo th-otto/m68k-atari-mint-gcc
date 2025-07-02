@@ -361,9 +361,8 @@ m2statement_BuildIndirectProcedureCallTree (location_t location,
 /* BuildBuiltinCallTree calls the builtin procedure.  */
 
 tree
-m2statement_BuildBuiltinCallTree (location_t location, tree func)
+m2statement_BuildBuiltinCallTree (tree func)
 {
-  (void)location;
   TREE_USED (func) = true;
   TREE_SIDE_EFFECTS (func) = true;
   param_list

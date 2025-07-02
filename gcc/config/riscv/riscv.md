@@ -56,6 +56,8 @@
   UNSPEC_FLT_QUIET
   UNSPEC_FLE_QUIET
   UNSPEC_COPYSIGN
+  UNSPEC_FMV_X_W
+  UNSPEC_FMVH_X_D
   UNSPEC_RINT
   UNSPEC_ROUND
   UNSPEC_FLOOR
@@ -2043,17 +2045,16 @@
 
 (define_insn "@tlsdesc<mode>"
   [(set (reg:P A0_REGNUM)
-	    (unspec:P
-			[(match_operand:P 0 "symbolic_operand" "")
-			 (match_operand:P 1 "const_int_operand")]
-			UNSPEC_TLSDESC))
+	(unspec:P
+	    [(match_operand:P 0 "symbolic_operand" "")]
+	    UNSPEC_TLSDESC))
    (clobber (reg:P T0_REGNUM))]
   "TARGET_TLSDESC"
   {
-    return ".LT%1: auipc\ta0,%%tlsdesc_hi(%0)\;"
-           "<load>\tt0,%%tlsdesc_load_lo(.LT%1)(a0)\;"
-           "addi\ta0,a0,%%tlsdesc_add_lo(.LT%1)\;"
-           "jalr\tt0,t0,%%tlsdesc_call(.LT%1)";
+    return ".LT%=: auipc\ta0,%%tlsdesc_hi(%0)\;"
+           "<load>\tt0,%%tlsdesc_load_lo(.LT%=)(a0)\;"
+           "addi\ta0,a0,%%tlsdesc_add_lo(.LT%=)\;"
+           "jalr\tt0,t0,%%tlsdesc_call(.LT%=)";
   }
   [(set_attr "type" "multi")
    (set_attr "length" "16")
@@ -2343,8 +2344,9 @@
 
 (define_insn "movsidf2_low_rv32"
   [(set (match_operand:SI      0 "register_operand" "=  r")
-	(truncate:SI
-	    (match_operand:DF 1 "register_operand"  "zmvf")))]
+	(unspec:SI
+	    [(match_operand:DF 1 "register_operand" "zmvf")]
+	UNSPEC_FMV_X_W))]
   "TARGET_HARD_FLOAT && !TARGET_64BIT && TARGET_ZFA"
   "fmv.x.w\t%0,%1"
   [(set_attr "move_type" "fmove")
@@ -2353,11 +2355,10 @@
 
 
 (define_insn "movsidf2_high_rv32"
-  [(set (match_operand:SI      0 "register_operand"    "=  r")
-	(truncate:SI
-            (lshiftrt:DF
-                (match_operand:DF 1 "register_operand" "zmvf")
-                (const_int 32))))]
+  [(set (match_operand:SI      0 "register_operand" "=  r")
+	(unspec:SI
+	    [(match_operand:DF 1 "register_operand" "zmvf")]
+	UNSPEC_FMVH_X_D))]
   "TARGET_HARD_FLOAT && !TARGET_64BIT && TARGET_ZFA"
   "fmvh.x.d\t%0,%1"
   [(set_attr "move_type" "fmove")
