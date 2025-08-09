@@ -127,9 +127,9 @@ static void (*coroutineProc) (void *);
 static void (*exceptionProc) (void *);
 
 #ifdef __MINT__
+#ifndef SA_SIGINFO
 #define NO_SIGINFO
 typedef struct _siginfo_t siginfo_t;
-#ifndef SA_SIGINFO
 #define SA_SIGINFO 0
 #endif
 #endif
