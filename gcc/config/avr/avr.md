@@ -718,6 +718,8 @@
   "&& reload_completed"
   [(parallel [(set (reg:MOVMODE REG_22)
                    (match_dup 0))
+              (clobber (reg:QI REG_21))
+              (clobber (reg:HI REG_Z))
               (clobber (reg:CC REG_CC))])]
   {
     operands[0] = SET_SRC (single_set (curr_insn));
@@ -727,6 +729,8 @@
   [(set (reg:MOVMODE REG_22)
         (mem:MOVMODE (lo_sum:PSI (reg:QI REG_21)
                                  (reg:HI REG_Z))))
+   (clobber (reg:QI REG_21))
+   (clobber (reg:HI REG_Z))
    (clobber (reg:CC REG_CC))]
   "reload_completed
    && (avr_load_libgcc_insn_p (insn, ADDR_SPACE_MEMX, true)
@@ -5268,6 +5272,41 @@
 
 ;;<< << << << << << << << << << << << << << << << << << << << << << << << << <<
 ;; arithmetic shift left
+
+;; Work around PR120423: Transform left shift of a paradoxical subreg
+;; into left shift of the zero-extended entity.
+(define_split ; PR120423
+  [(set (match_operand:HISI 0 "register_operand")
+        (ashift:HISI (subreg:HISI (match_operand:QIPSI 1 "nonimmediate_operand")
+                                  0)
+                     (match_operand:QI 2 "const_int_operand")))]
+  "!reload_completed
+   && !avropt_lra_p
+   && <HISI:SIZE> > <QIPSI:SIZE>"
+  [(set (match_dup 4)
+        (zero_extend:HISI (match_dup 5)))
+   (set (match_dup 0)
+        (ashift:HISI (match_dup 4)
+                     (match_dup 2)))]
+  {
+    operands[4] = gen_reg_rtx (<HISI:MODE>mode);
+    operands[5] = force_reg (<QIPSI:MODE>mode, operands[1]);
+  })
+
+;; Similar happens for PR116389.
+(define_split ; PR116389
+  [(set (match_operand:HISI 0 "register_operand")
+        (subreg:HISI (match_operand:QIPSI 1 "nonimmediate_operand")
+                     0))]
+  "!reload_completed
+   && !avropt_lra_p
+   && <HISI:SIZE> > <QIPSI:SIZE>"
+  [(set (match_dup 0)
+        (zero_extend:HISI (match_dup 2)))]
+  {
+    operands[2] = force_reg (<QIPSI:MODE>mode, operands[1]);
+  })
+
 
 ;; "ashlqi3"
 ;; "ashlqq3"  "ashluqq3"

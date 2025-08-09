@@ -751,7 +751,7 @@
 #undef __glibcxx_want_parallel_algorithm
 
 #if !defined(__cpp_lib_scoped_lock)
-# if (__cplusplus >= 201703L) && defined(_GLIBCXX_HAS_GTHREADS) && _GLIBCXX_HOSTED
+# if (__cplusplus >= 201703L)
 #  define __glibcxx_scoped_lock 201703L
 #  if defined(__glibcxx_want_all) || defined(__glibcxx_want_scoped_lock)
 #   define __cpp_lib_scoped_lock 201703L
@@ -1562,8 +1562,9 @@
 
 #if !defined(__cpp_lib_format_ranges)
 # if (__cplusplus >= 202100L) && _GLIBCXX_HOSTED
-#  define __glibcxx_format_ranges 1L
+#  define __glibcxx_format_ranges 202207L
 #  if defined(__glibcxx_want_all) || defined(__glibcxx_want_format_ranges)
+#   define __cpp_lib_format_ranges 202207L
 #  endif
 # endif
 #endif /* !defined(__cpp_lib_format_ranges) && defined(__glibcxx_want_format_ranges) */

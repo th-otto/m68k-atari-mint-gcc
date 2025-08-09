@@ -2889,7 +2889,7 @@ static size_t cp_parser_skip_std_attribute_spec_seq
 static size_t cp_parser_skip_attributes_opt
   (cp_parser *, size_t);
 static bool cp_parser_extension_opt
-  (cp_parser *, int *);
+  (cp_parser *, int *, int *);
 static void cp_parser_label_declaration
   (cp_parser *);
 
@@ -3059,8 +3059,8 @@ static cp_token *cp_parser_require_keyword
   (cp_parser *, enum rid, required_token);
 static bool cp_parser_token_starts_function_definition_p
   (cp_token *);
-static bool cp_parser_next_token_starts_class_definition_p
-  (cp_parser *);
+static bool cp_parser_nth_token_starts_class_definition_p
+  (cp_parser *, size_t);
 static bool cp_parser_next_token_ends_template_argument_p
   (cp_parser *);
 static bool cp_parser_nth_token_starts_template_argument_list_p
@@ -9447,11 +9447,12 @@ cp_parser_unary_expression (cp_parser *parser, cp_id_kind * pidk,
 	case RID_EXTENSION:
 	  {
 	    /* The saved value of the PEDANTIC flag.  */
-	    int saved_pedantic;
+	    int saved_pedantic, saved_long_long;
 	    tree expr;
 
 	    /* Save away the PEDANTIC flag.  */
-	    cp_parser_extension_opt (parser, &saved_pedantic);
+	    cp_parser_extension_opt (parser, &saved_pedantic,
+				     &saved_long_long);
 	    /* Also suppress -Wconditionally-supported.  */
 	    diagnostic_push_diagnostics (global_dc, input_location);
 	    diagnostic_classify_diagnostic
@@ -9462,6 +9463,7 @@ cp_parser_unary_expression (cp_parser *parser, cp_id_kind * pidk,
 	    /* Restore the PEDANTIC flag.  */
 	    diagnostic_pop_diagnostics (global_dc, input_location);
 	    pedantic = saved_pedantic;
+	    warn_long_long = saved_long_long;
 
 	    return expr;
 	  }
@@ -15972,15 +15974,16 @@ cp_parser_declaration_seq_opt (cp_parser* parser)
 static void
 cp_parser_declaration (cp_parser* parser, tree prefix_attrs)
 {
-  int saved_pedantic;
+  int saved_pedantic, saved_long_long;
 
   /* Check for the `__extension__' keyword.  */
-  if (cp_parser_extension_opt (parser, &saved_pedantic))
+  if (cp_parser_extension_opt (parser, &saved_pedantic, &saved_long_long))
     {
       /* Parse the qualified declaration.  */
       cp_parser_declaration (parser, prefix_attrs);
       /* Restore the PEDANTIC flag.  */
       pedantic = saved_pedantic;
+      warn_long_long = saved_long_long;
 
       return;
     }
@@ -16248,15 +16251,16 @@ static void
 cp_parser_block_declaration (cp_parser *parser,
 			     bool      statement_p)
 {
-  int saved_pedantic;
+  int saved_pedantic, saved_long_long;
 
   /* Check for the `__extension__' keyword.  */
-  if (cp_parser_extension_opt (parser, &saved_pedantic))
+  if (cp_parser_extension_opt (parser, &saved_pedantic, &saved_long_long))
     {
       /* Parse the qualified declaration.  */
       cp_parser_block_declaration (parser, statement_p);
       /* Restore the PEDANTIC flag.  */
       pedantic = saved_pedantic;
+      warn_long_long = saved_long_long;
 
       return;
     }
@@ -21938,7 +21942,7 @@ cp_parser_elaborated_type_specifier (cp_parser* parser,
 
 	  bool template_p =
 	    (template_parm_lists_apply
-	     && (cp_parser_next_token_starts_class_definition_p (parser)
+	     && (cp_parser_nth_token_starts_class_definition_p (parser, 1)
 		 || cp_lexer_next_token_is (parser->lexer, CPP_SEMICOLON)));
 	  /* An unqualified name was used to reference this type, so
 	     there were no qualifying templates.  */
@@ -27956,6 +27960,64 @@ cp_parser_class_specifier (cp_parser* parser)
   return type;
 }
 
+/* Parse an (optional) class-property-specifier-seq.
+
+   class-property-specifier-seq:
+     class-property-specifier class-property-specifier-seq [opt]
+
+   class-property-specifier:
+     final
+
+   Returns a bitmask representing the class-property-specifiers.  */
+
+static cp_virt_specifiers
+cp_parser_class_property_specifier_seq_opt (cp_parser *parser)
+{
+  cp_virt_specifiers virt_specifiers = VIRT_SPEC_UNSPECIFIED;
+
+  while (true)
+    {
+      cp_token *token;
+      cp_virt_specifiers virt_specifier;
+
+      /* Peek at the next token.  */
+      token = cp_lexer_peek_token (parser->lexer);
+      /* See if it's a class-property-specifier.  */
+      if (token->type != CPP_NAME)
+	break;
+      if (id_equal (token->u.value, "final"))
+	{
+	  /* For C++98, quietly ignore final in e.g.
+	     struct S final = 24;  */
+	  if (cxx_dialect == cxx98
+	      && virt_specifiers == VIRT_SPEC_UNSPECIFIED
+	      && !cp_parser_nth_token_starts_class_definition_p (parser, 2)
+	      && !cp_lexer_nth_token_is (parser->lexer, 2, CPP_NAME))
+	    break;
+	  maybe_warn_cpp0x (CPP0X_OVERRIDE_CONTROLS);
+	  virt_specifier = VIRT_SPEC_FINAL;
+	}
+      else if (id_equal (token->u.value, "__final"))
+	virt_specifier = VIRT_SPEC_FINAL;
+      else
+	break;
+
+      if (virt_specifiers & virt_specifier)
+	{
+	  gcc_rich_location richloc (token->location);
+	  richloc.add_fixit_remove ();
+	  error_at (&richloc, "duplicate virt-specifier");
+	  cp_lexer_purge_token (parser->lexer);
+	}
+      else
+	{
+	  cp_lexer_consume_token (parser->lexer);
+	  virt_specifiers |= virt_specifier;
+	}
+    }
+  return virt_specifiers;
+}
+
 /* Parse a class-head.
 
    class-head:
@@ -28146,18 +28208,16 @@ cp_parser_class_head (cp_parser* parser,
   pop_deferring_access_checks ();
 
   if (id)
-    {
-      cp_parser_check_for_invalid_template_id (parser, id,
-					       class_key,
-                                               type_start_token->location);
-    }
-  virt_specifiers = cp_parser_virt_specifier_seq_opt (parser);
+    cp_parser_check_for_invalid_template_id (parser, id,
+					     class_key,
+					     type_start_token->location);
+  virt_specifiers = cp_parser_class_property_specifier_seq_opt (parser);
 
   /* If it's not a `:' or a `{' then we can't really be looking at a
      class-head, since a class-head only appears as part of a
      class-specifier.  We have to detect this situation before calling
      xref_tag, since that has irreversible side-effects.  */
-  if (!cp_parser_next_token_starts_class_definition_p (parser))
+  if (!cp_parser_nth_token_starts_class_definition_p (parser, 1))
     {
       cp_parser_error (parser, "expected %<{%> or %<:%>");
       type = error_mark_node;
@@ -28167,13 +28227,6 @@ cp_parser_class_head (cp_parser* parser,
   /* At this point, we're going ahead with the class-specifier, even
      if some other problem occurs.  */
   cp_parser_commit_to_tentative_parse (parser);
-  if (virt_specifiers & VIRT_SPEC_OVERRIDE)
-    {
-      cp_parser_error (parser,
-                       "cannot specify %<override%> for a class");
-      type = error_mark_node;
-      goto out;
-    }
   /* Issue the error about the overly-qualified name now.  */
   if (qualified_p)
     {
@@ -28661,16 +28714,17 @@ cp_parser_member_declaration (cp_parser* parser)
   cp_token *token = NULL;
   cp_token *decl_spec_token_start = NULL;
   cp_token *initializer_token_start = NULL;
-  int saved_pedantic;
+  int saved_pedantic, saved_long_long;
   bool saved_colon_corrects_to_scope_p = parser->colon_corrects_to_scope_p;
 
   /* Check for the `__extension__' keyword.  */
-  if (cp_parser_extension_opt (parser, &saved_pedantic))
+  if (cp_parser_extension_opt (parser, &saved_pedantic, &saved_long_long))
     {
       /* Recurse.  */
       cp_parser_member_declaration (parser);
       /* Restore the old value of the PEDANTIC flag.  */
       pedantic = saved_pedantic;
+      warn_long_long = saved_long_long;
 
       return;
     }
@@ -31809,13 +31863,16 @@ cp_parser_skip_attributes_opt (cp_parser *parser, size_t n)
    present, and FALSE otherwise.  *SAVED_PEDANTIC is set to the
    current value of the PEDANTIC flag, regardless of whether or not
    the `__extension__' keyword is present.  The caller is responsible
-   for restoring the value of the PEDANTIC flag.  */
+   for restoring the value of the PEDANTIC flag.  Similarly *SAVED_LONG_LONG
+   for warn_long_long flag.  */
 
 static bool
-cp_parser_extension_opt (cp_parser* parser, int* saved_pedantic)
+cp_parser_extension_opt (cp_parser *parser, int *saved_pedantic,
+			 int *saved_long_long)
 {
   /* Save the old value of the PEDANTIC flag.  */
   *saved_pedantic = pedantic;
+  *saved_long_long = warn_long_long;
 
   if (cp_lexer_next_token_is_keyword (parser->lexer, RID_EXTENSION))
     {
@@ -31824,6 +31881,8 @@ cp_parser_extension_opt (cp_parser* parser, int* saved_pedantic)
       /* We're not being pedantic while the `__extension__' keyword is
 	 in effect.  */
       pedantic = 0;
+      /* And we don't want -Wlong-long warning.  */
+      warn_long_long = 0;
 
       return true;
     }
@@ -35539,15 +35598,15 @@ cp_parser_token_starts_function_definition_p (cp_token* token)
 	  || token->keyword == RID_RETURN);
 }
 
-/* Returns TRUE iff the next token is the ":" or "{" beginning a class
+/* Returns TRUE iff the Nth token is the ":" or "{" beginning a class
    definition.  */
 
 static bool
-cp_parser_next_token_starts_class_definition_p (cp_parser *parser)
+cp_parser_nth_token_starts_class_definition_p (cp_parser *parser, size_t n)
 {
   cp_token *token;
 
-  token = cp_lexer_peek_token (parser->lexer);
+  token = cp_lexer_peek_nth_token (parser->lexer, n);
   return (token->type == CPP_OPEN_BRACE
 	  || (token->type == CPP_COLON
 	      && !parser->colon_doesnt_start_class_def_p));
@@ -36601,7 +36660,7 @@ static void
 cp_parser_abort_tentative_parse (cp_parser* parser)
 {
   gcc_assert (parser->context->status != CP_PARSER_STATUS_KIND_COMMITTED
-	      || errorcount > 0);
+	      || seen_error ());
   cp_parser_simulate_error (parser);
   /* Now, pretend that we want to see if the construct was
      successfully parsed.  */
@@ -51409,7 +51468,6 @@ cp_parser_omp_metadirective (cp_parser *parser, cp_token *pragma_tok,
 	    {
 	      error_at (match_loc, "too many %<otherwise%> or %<default%> "
 			"clauses in %<metadirective%>");
-	      cp_parser_skip_to_end_of_block_or_statement (parser, true);
 	      goto fail;
 	    }
 	  else
@@ -51419,14 +51477,12 @@ cp_parser_omp_metadirective (cp_parser *parser, cp_token *pragma_tok,
 	{
 	  error_at (match_loc, "%<otherwise%> or %<default%> clause "
 		    "must appear last in %<metadirective%>");
-	  cp_parser_skip_to_end_of_block_or_statement (parser, true);
 	  goto fail;
 	}
       if (!default_p && strcmp (p, "when") != 0)
 	{
 	  error_at (match_loc, "%qs is not valid for %qs",
 		    p, "metadirective");
-	  cp_parser_skip_to_end_of_block_or_statement (parser, true);
 	  goto fail;
 	}
 
@@ -51495,7 +51551,6 @@ cp_parser_omp_metadirective (cp_parser *parser, cp_token *pragma_tok,
       if (i == 0)
 	{
 	  error_at (loc, "expected directive name");
-	  cp_parser_skip_to_end_of_block_or_statement (parser, true);
 	  goto fail;
 	}
 
@@ -51568,7 +51623,10 @@ cp_parser_omp_metadirective (cp_parser *parser, cp_token *pragma_tok,
 	      goto add;
 	    case CPP_CLOSE_PAREN:
 	      if (nesting_depth-- == 0)
-		break;
+		{
+		  cp_lexer_consume_token (parser->lexer);
+		  break;
+		}
 	      goto add;
 	    default:
 	    add:
@@ -51579,8 +51637,6 @@ cp_parser_omp_metadirective (cp_parser *parser, cp_token *pragma_tok,
 	    }
 	  break;
 	}
-
-      cp_lexer_consume_token (parser->lexer);
 
       if (!skip)
 	{
@@ -51713,11 +51769,8 @@ cp_parser_omp_metadirective (cp_parser *parser, cp_token *pragma_tok,
   return;
 
 fail:
-  /* Skip the metadirective pragma.  */
+  /* Skip the metadirective pragma.  Do not skip the metadirective body.  */
   cp_parser_skip_to_pragma_eol (parser, pragma_tok);
-
-  /* Skip the metadirective body.  */
-  cp_parser_skip_to_end_of_block_or_statement (parser, true);
 }
 
 

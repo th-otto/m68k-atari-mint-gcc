@@ -424,6 +424,7 @@ static const struct aarch64_flag_desc aarch64_tuning_flags[] =
 #include "tuning_models/neoversev2.h"
 #include "tuning_models/neoversev3.h"
 #include "tuning_models/neoversev3ae.h"
+#include "tuning_models/olympus.h"
 #include "tuning_models/a64fx.h"
 #include "tuning_models/fujitsu_monaka.h"
 
@@ -9417,13 +9418,16 @@ aarch64_emit_stack_tie (rtx reg)
 }
 
 /* Allocate POLY_SIZE bytes of stack space using TEMP1 and TEMP2 as scratch
-   registers.  If POLY_SIZE is not large enough to require a probe this function
-   will only adjust the stack.  When allocating the stack space
-   FRAME_RELATED_P is then used to indicate if the allocation is frame related.
-   FINAL_ADJUSTMENT_P indicates whether we are allocating the area below
-   the saved registers.  If we are then we ensure that any allocation
-   larger than the ABI defined buffer needs a probe so that the
-   invariant of having a 1KB buffer is maintained.
+   registers, given that the stack pointer is currently BYTES_BELOW_SP bytes
+   above the bottom of the static frame.
+
+   If POLY_SIZE is not large enough to require a probe this function will only
+   adjust the stack.  When allocating the stack space FRAME_RELATED_P is then
+   used to indicate if the allocation is frame related.  FINAL_ADJUSTMENT_P
+   indicates whether we are allocating the area below the saved registers.
+   If we are then we ensure that any allocation larger than the ABI defined
+   buffer needs a probe so that the invariant of having a 1KB buffer is
+   maintained.
 
    We emit barriers after each stack adjustment to prevent optimizations from
    breaking the invariant that we never drop the stack more than a page.  This
@@ -9440,6 +9444,7 @@ aarch64_emit_stack_tie (rtx reg)
 static void
 aarch64_allocate_and_probe_stack_space (rtx temp1, rtx temp2,
 					poly_int64 poly_size,
+					poly_int64 bytes_below_sp,
 					aarch64_isa_mode force_isa_mode,
 					bool frame_related_p,
 					bool final_adjustment_p)
@@ -9503,8 +9508,8 @@ aarch64_allocate_and_probe_stack_space (rtx temp1, rtx temp2,
 			  poly_size, temp1, temp2, force_isa_mode,
 			  false, true);
 
-      rtx_insn *insn = get_last_insn ();
-
+      auto initial_cfa_offset = frame.frame_size - bytes_below_sp;
+      auto final_cfa_offset = initial_cfa_offset + poly_size;
       if (frame_related_p)
 	{
 	  /* This is done to provide unwinding information for the stack
@@ -9514,28 +9519,31 @@ aarch64_allocate_and_probe_stack_space (rtx temp1, rtx temp2,
 	     The tie will expand to nothing but the optimizers will not touch
 	     the instruction.  */
 	  rtx stack_ptr_copy = gen_rtx_REG (Pmode, STACK_CLASH_SVE_CFA_REGNUM);
-	  emit_move_insn (stack_ptr_copy, stack_pointer_rtx);
+	  auto *insn = emit_move_insn (stack_ptr_copy, stack_pointer_rtx);
 	  aarch64_emit_stack_tie (stack_ptr_copy);
 
 	  /* We want the CFA independent of the stack pointer for the
 	     duration of the loop.  */
-	  add_reg_note (insn, REG_CFA_DEF_CFA, stack_ptr_copy);
+	  add_reg_note (insn, REG_CFA_DEF_CFA,
+			plus_constant (Pmode, stack_ptr_copy,
+				       initial_cfa_offset));
 	  RTX_FRAME_RELATED_P (insn) = 1;
 	}
 
       rtx probe_const = gen_int_mode (min_probe_threshold, Pmode);
       rtx guard_const = gen_int_mode (guard_size, Pmode);
 
-      insn = emit_insn (gen_probe_sve_stack_clash (Pmode, stack_pointer_rtx,
-						   stack_pointer_rtx, temp1,
-						   probe_const, guard_const));
+      auto *insn
+	= emit_insn (gen_probe_sve_stack_clash (Pmode, stack_pointer_rtx,
+						stack_pointer_rtx, temp1,
+						probe_const, guard_const));
 
       /* Now reset the CFA register if needed.  */
       if (frame_related_p)
 	{
 	  add_reg_note (insn, REG_CFA_DEF_CFA,
-			gen_rtx_PLUS (Pmode, stack_pointer_rtx,
-				      gen_int_mode (poly_size, Pmode)));
+			plus_constant (Pmode, stack_pointer_rtx,
+				       final_cfa_offset));
 	  RTX_FRAME_RELATED_P (insn) = 1;
 	}
 
@@ -9581,12 +9589,13 @@ aarch64_allocate_and_probe_stack_space (rtx temp1, rtx temp2,
 	 We can determine which allocation we are doing by looking at
 	 the value of FRAME_RELATED_P since the final allocations are not
 	 frame related.  */
+      auto cfa_offset = frame.frame_size - (bytes_below_sp - rounded_size);
       if (frame_related_p)
 	{
 	  /* We want the CFA independent of the stack pointer for the
 	     duration of the loop.  */
 	  add_reg_note (insn, REG_CFA_DEF_CFA,
-			plus_constant (Pmode, temp1, rounded_size));
+			plus_constant (Pmode, temp1, cfa_offset));
 	  RTX_FRAME_RELATED_P (insn) = 1;
 	}
 
@@ -9608,7 +9617,7 @@ aarch64_allocate_and_probe_stack_space (rtx temp1, rtx temp2,
       if (frame_related_p)
 	{
 	  add_reg_note (insn, REG_CFA_DEF_CFA,
-			plus_constant (Pmode, stack_pointer_rtx, rounded_size));
+			plus_constant (Pmode, stack_pointer_rtx, cfa_offset));
 	  RTX_FRAME_RELATED_P (insn) = 1;
 	}
 
@@ -9916,17 +9925,22 @@ aarch64_expand_prologue (void)
      code below does not handle it for -fstack-clash-protection.  */
   gcc_assert (known_eq (initial_adjust, 0) || callee_adjust == 0);
 
+  /* The offset of the current SP from the bottom of the static frame.  */
+  poly_int64 bytes_below_sp = frame_size;
+
   /* Will only probe if the initial adjustment is larger than the guard
      less the amount of the guard reserved for use by the caller's
      outgoing args.  */
   aarch64_allocate_and_probe_stack_space (tmp0_rtx, tmp1_rtx, initial_adjust,
-					  force_isa_mode, true, false);
+					  bytes_below_sp, force_isa_mode,
+					  true, false);
+  bytes_below_sp -= initial_adjust;
 
   if (callee_adjust != 0)
-    aarch64_push_regs (reg1, reg2, callee_adjust);
-
-  /* The offset of the current SP from the bottom of the static frame.  */
-  poly_int64 bytes_below_sp = frame_size - initial_adjust - callee_adjust;
+    {
+      aarch64_push_regs (reg1, reg2, callee_adjust);
+      bytes_below_sp -= callee_adjust;
+    }
 
   if (emit_frame_chain)
     {
@@ -9994,7 +10008,7 @@ aarch64_expand_prologue (void)
 		  || known_eq (frame.reg_offset[VG_REGNUM], bytes_below_sp));
       aarch64_allocate_and_probe_stack_space (tmp1_rtx, tmp0_rtx,
 					      sve_callee_adjust,
-					      force_isa_mode,
+					      bytes_below_sp, force_isa_mode,
 					      !frame_pointer_needed, false);
       bytes_below_sp -= sve_callee_adjust;
     }
@@ -10005,10 +10019,11 @@ aarch64_expand_prologue (void)
 
   /* We may need to probe the final adjustment if it is larger than the guard
      that is assumed by the called.  */
-  gcc_assert (known_eq (bytes_below_sp, final_adjust));
   aarch64_allocate_and_probe_stack_space (tmp1_rtx, tmp0_rtx, final_adjust,
-					  force_isa_mode,
+					  bytes_below_sp, force_isa_mode,
 					  !frame_pointer_needed, true);
+  bytes_below_sp -= final_adjust;
+  gcc_assert (known_eq (bytes_below_sp, 0));
   if (emit_frame_chain && maybe_ne (final_adjust, 0))
     aarch64_emit_stack_tie (hard_frame_pointer_rtx);
 
@@ -22904,6 +22919,58 @@ aarch64_sve_index_immediate_p (rtx base_or_step)
 	  && IN_RANGE (INTVAL (base_or_step), -16, 15));
 }
 
+/* Return true if SERIES is a constant vector that can be loaded using
+   an immediate SVE INDEX, considering both SVE and Advanced SIMD modes.
+   When returning true, store the base in *BASE_OUT and the step
+   in *STEP_OUT.  */
+
+static bool
+aarch64_sve_index_series_p (rtx series, rtx *base_out, rtx *step_out)
+{
+  rtx base, step;
+  if (!const_vec_series_p (series, &base, &step)
+      || !CONST_INT_P (base)
+      || !CONST_INT_P (step))
+    return false;
+
+  auto mode = GET_MODE (series);
+  auto elt_mode = as_a<scalar_int_mode> (GET_MODE_INNER (mode));
+  unsigned int vec_flags = aarch64_classify_vector_mode (mode);
+  if (BYTES_BIG_ENDIAN && (vec_flags & VEC_ADVSIMD))
+    {
+      /* On big-endian targets, architectural lane 0 holds the last element
+	 for Advanced SIMD and the first element for SVE; see the comment at
+	 the head of aarch64-sve.md for details.  This means that, from an SVE
+	 point of view, an Advanced SIMD series goes from the last element to
+	 the first.  */
+      auto i = GET_MODE_NUNITS (mode).to_constant () - 1;
+      base = gen_int_mode (UINTVAL (base) + i * UINTVAL (step), elt_mode);
+      step = gen_int_mode (-UINTVAL (step), elt_mode);
+    }
+
+  if (!aarch64_sve_index_immediate_p (base)
+      || !aarch64_sve_index_immediate_p (step))
+    return false;
+
+  /* If the mode spans multiple registers, check that each subseries is
+     in range.  */
+  unsigned int nvectors = aarch64_ldn_stn_vectors (mode);
+  if (nvectors != 1)
+    {
+      unsigned int nunits;
+      if (!GET_MODE_NUNITS (mode).is_constant (&nunits))
+	return false;
+      nunits /= nvectors;
+      for (unsigned int i = 1; i < nvectors; ++i)
+	if (!IN_RANGE (INTVAL (base) + i * nunits * INTVAL (step), -16, 15))
+	  return false;
+    }
+
+  *base_out = base;
+  *step_out = step;
+  return true;
+}
+
 /* Return true if X is a valid immediate for the SVE ADD and SUB instructions
    when applied to mode MODE.  Negate X first if NEGATE_P is true.  */
 
@@ -23352,13 +23419,8 @@ aarch64_simd_valid_imm (rtx op, simd_immediate_info *info,
     n_elts = CONST_VECTOR_NPATTERNS (op);
   else if (which == AARCH64_CHECK_MOV
 	   && TARGET_SVE
-	   && const_vec_series_p (op, &base, &step))
+	   && aarch64_sve_index_series_p (op, &base, &step))
     {
-      gcc_assert (GET_MODE_CLASS (mode) == MODE_VECTOR_INT);
-      if (!aarch64_sve_index_immediate_p (base)
-	  || !aarch64_sve_index_immediate_p (step))
-	return false;
-
       if (info)
 	{
 	  /* Get the corresponding container mode.  E.g. an INDEX on V2SI
@@ -23470,6 +23532,8 @@ aarch64_simd_valid_imm (rtx op, simd_immediate_info *info,
       long int as_long_ints[2];
       as_long_ints[0] = ival & 0xFFFFFFFF;
       as_long_ints[1] = (ival >> 32) & 0xFFFFFFFF;
+      if (imode == DImode && FLOAT_WORDS_BIG_ENDIAN)
+	std::swap (as_long_ints[0], as_long_ints[1]);
 
       REAL_VALUE_TYPE r;
       real_from_target (&r, as_long_ints, fmode);
@@ -24553,6 +24617,13 @@ aarch64_expand_vector_init (rtx target, rtx vals)
       emit_insn (rec_seq);
     }
 
+  /* The two halves should (by induction) be individually endian-correct.
+     However, in the memory layout provided by VALS, the nth element of
+     HALVES[0] comes immediately before the nth element HALVES[1].
+     This means that, on big-endian targets, the nth element of HALVES[0]
+     is more significant than the nth element HALVES[1].  */
+  if (BYTES_BIG_ENDIAN)
+    std::swap (halves[0], halves[1]);
   rtvec v = gen_rtvec (2, halves[0], halves[1]);
   rtx_insn *zip1_insn
     = emit_set_insn (target, gen_rtx_UNSPEC (mode, v, UNSPEC_ZIP1));
@@ -26448,7 +26519,6 @@ aarch64_evpc_hvla (struct expand_vec_perm_d *d)
   machine_mode vmode = d->vmode;
   if (!TARGET_SVE2p1
       || !TARGET_NON_STREAMING
-      || BYTES_BIG_ENDIAN
       || d->vec_flags != VEC_SVE_DATA
       || GET_MODE_UNIT_BITSIZE (vmode) > 64)
     return false;
@@ -26608,12 +26678,23 @@ aarch64_evpc_tbl (struct expand_vec_perm_d *d)
 static bool
 aarch64_evpc_sve_tbl (struct expand_vec_perm_d *d)
 {
-  unsigned HOST_WIDE_INT nelt;
+  if (!d->one_vector_p)
+    {
+      /* aarch64_expand_sve_vec_perm does not yet handle variable-length
+	 vectors.  */
+      if (!d->perm.length ().is_constant ())
+	return false;
 
-  /* Permuting two variable-length vectors could overflow the
-     index range.  */
-  if (!d->one_vector_p && !d->perm.length ().is_constant (&nelt))
-    return false;
+      /* This permutation reduces to the vec_perm optab if the elements are
+	 large enough to hold all selector indices.  Do not handle that case
+	 here, since the general TBL+SUB+TBL+ORR sequence is too expensive to
+	 be considered a "native" constant permutation.
+
+	 Not doing this would undermine code that queries can_vec_perm_const_p
+	 with allow_variable_p set to false.  See PR121027.  */
+      if (selector_fits_mode_p (d->vmode, d->perm))
+	return false;
+    }
 
   if (d->testing_p)
     return true;

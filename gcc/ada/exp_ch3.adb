@@ -5423,18 +5423,12 @@ package body Exp_Ch3 is
             --  with an initial value, its Init_Proc will never be called. The
             --  initial value itself may have been expanded into assignments,
             --  in which case the declaration has the No_Initialization flag.
-            --  The exception is when the initial value is a 2-pass aggregate,
-            --  because the special expansion used for it creates a temporary
-            --  that needs a fully-fledged initialization.
 
             if Is_Itype (Base)
               and then Nkind (Associated_Node_For_Itype (Base)) =
                                                     N_Object_Declaration
               and then
-                ((Present (Expression (Associated_Node_For_Itype (Base)))
-                    and then not
-                      Is_Two_Pass_Aggregate
-                        (Expression (Associated_Node_For_Itype (Base))))
+                (Present (Expression (Associated_Node_For_Itype (Base)))
                   or else No_Initialization (Associated_Node_For_Itype (Base)))
             then
                null;
@@ -6321,19 +6315,27 @@ package body Exp_Ch3 is
             --  frozen inside.
 
             if Is_Controlled (Typ) then
-               Append_Freeze_Actions (Typ,
-                 Freeze_Entity
-                   (Find_Controlled_Prim_Op (Typ, Name_Initialize), Typ));
+               declare
+                  Prim : Entity_Id;
 
-               if not Is_Limited_Type (Typ) then
-                  Append_Freeze_Actions (Typ,
-                    Freeze_Entity
-                      (Find_Controlled_Prim_Op (Typ, Name_Adjust), Typ));
-               end if;
+               begin
+                  Prim := Find_Controlled_Prim_Op (Typ, Name_Initialize);
+                  if Present (Prim) then
+                     Append_Freeze_Actions (Typ, Freeze_Entity (Prim, Typ));
+                  end if;
 
-               Append_Freeze_Actions (Typ,
-                 Freeze_Entity
-                   (Find_Controlled_Prim_Op (Typ, Name_Finalize), Typ));
+                  if not Is_Limited_Type (Typ) then
+                     Prim := Find_Controlled_Prim_Op (Typ, Name_Adjust);
+                     if Present (Prim) then
+                        Append_Freeze_Actions (Typ, Freeze_Entity (Prim, Typ));
+                     end if;
+                  end if;
+
+                  Prim := Find_Controlled_Prim_Op (Typ, Name_Finalize);
+                  if Present (Prim) then
+                     Append_Freeze_Actions (Typ, Freeze_Entity (Prim, Typ));
+                  end if;
+               end;
             end if;
 
             --  Freeze rest of primitive operations. There is no need to handle
@@ -6886,7 +6888,9 @@ package body Exp_Ch3 is
 
          --  Processing for objects that require finalization actions
 
-         if Needs_Finalization (Ret_Typ) then
+         if Needs_Finalization (Ret_Typ)
+           and then not Has_Relaxed_Finalization (Ret_Typ)
+         then
             declare
                Decls       : constant List_Id := New_List;
                Fin_Coll_Id : constant Entity_Id :=
@@ -8285,12 +8289,15 @@ package body Exp_Ch3 is
             --  where the object has been initialized by a call to a function
             --  returning on the primary stack (see Expand_Ctrl_Function_Call)
             --  since no copy occurred, given that the type is by-reference.
+            --  Likewise if it is initialized by a 2-pass aggregate, since the
+            --  actual initialization will only occur during the second pass.
             --  Similarly, no adjustment is needed if we are going to rewrite
             --  the object declaration into a renaming declaration.
 
             if Needs_Finalization (Typ)
               and then not Is_Inherently_Limited_Type (Typ)
               and then Nkind (Expr_Q) /= N_Function_Call
+              and then not Is_Two_Pass_Aggregate (Expr_Q)
               and then not Rewrite_As_Renaming
             then
                Adj_Call :=

@@ -307,20 +307,28 @@ cgraph_node::expand_all_artificial_thunks ()
       e = e->next_caller;
 }
 
+/* Dump information about creation of a call graph node clone to the dump file
+   created by the -fdump-ipa-clones option.  ORIGINAL is the function being
+   cloned, CLONE is the new clone.  SUFFIX is a string that helps identify the
+   reason for cloning, often it is the suffix used by a particular IPA pass to
+   create unique function names.  SUFFIX can be NULL and in that case the
+   dumping will not take place, which must be the case only for helper clones
+   which will never be emitted to the output.  */
+
 void
 dump_callgraph_transformation (const cgraph_node *original,
 			       const cgraph_node *clone,
 			       const char *suffix)
 {
-  if (symtab->ipa_clones_dump_file)
+  if (suffix && symtab->ipa_clones_dump_file)
     {
       fprintf (symtab->ipa_clones_dump_file,
 	       "Callgraph clone;%s;%d;%s;%d;%d;%s;%d;%s;%d;%d;%s\n",
-	       original->asm_name (), original->order,
+	       original->asm_name (), original->get_uid (),
 	       DECL_SOURCE_FILE (original->decl),
 	       DECL_SOURCE_LINE (original->decl),
 	       DECL_SOURCE_COLUMN (original->decl), clone->asm_name (),
-	       clone->order, DECL_SOURCE_FILE (clone->decl),
+	       clone->get_uid (), DECL_SOURCE_FILE (clone->decl),
 	       DECL_SOURCE_LINE (clone->decl), DECL_SOURCE_COLUMN (clone->decl),
 	       suffix);
 

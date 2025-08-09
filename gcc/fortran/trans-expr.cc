@@ -2784,9 +2784,11 @@ gfc_conv_substring (gfc_se * se, gfc_ref * ref, int kind,
 	start.expr = gfc_evaluate_now (start.expr, &se->pre);
 
       /* Change the start of the string.  */
-      if ((TREE_CODE (TREE_TYPE (se->expr)) == ARRAY_TYPE
-	   || TREE_CODE (TREE_TYPE (se->expr)) == INTEGER_TYPE)
-	  && TYPE_STRING_FLAG (TREE_TYPE (se->expr)))
+      if (((TREE_CODE (TREE_TYPE (se->expr)) == ARRAY_TYPE
+	    || TREE_CODE (TREE_TYPE (se->expr)) == INTEGER_TYPE)
+	   && TYPE_STRING_FLAG (TREE_TYPE (se->expr)))
+	  || (POINTER_TYPE_P (TREE_TYPE (se->expr))
+	      && TREE_CODE (TREE_TYPE (TREE_TYPE (se->expr))) != ARRAY_TYPE))
 	tmp = se->expr;
       else
 	tmp = build_fold_indirect_ref_loc (input_location,
@@ -2796,6 +2798,14 @@ gfc_conv_substring (gfc_se * se, gfc_ref * ref, int kind,
 	{
 	  tmp = gfc_build_array_ref (tmp, start.expr, NULL_TREE, true);
 	  se->expr = gfc_build_addr_expr (type, tmp);
+	}
+      else if (POINTER_TYPE_P (TREE_TYPE (tmp)))
+	{
+	  tree diff;
+	  diff = fold_build2 (MINUS_EXPR, size_type_node, start.expr,
+			      build_one_cst (size_type_node));
+	  se->expr
+	    = fold_build2 (POINTER_PLUS_EXPR, TREE_TYPE (tmp), tmp, diff);
 	}
     }
 
@@ -7890,21 +7900,21 @@ gfc_conv_procedure_call (gfc_se * se, gfc_symbol * sym,
 	  se->ss->info->class_container = arg1_cntnr;
 	}
 
+      /* Obtain the character length of an assumed character length procedure
+	 from the typespec of the actual argument.  */
+      if (e
+	  && parmse.string_length == NULL_TREE
+	  && e->ts.type == BT_PROCEDURE
+	  && e->symtree->n.sym->ts.type == BT_CHARACTER
+	  && e->symtree->n.sym->ts.u.cl->length != NULL
+	  && e->symtree->n.sym->ts.u.cl->length->expr_type == EXPR_CONSTANT)
+	{
+	  gfc_conv_const_charlen (e->symtree->n.sym->ts.u.cl);
+	  parmse.string_length = e->symtree->n.sym->ts.u.cl->backend_decl;
+	}
+
       if (fsym && e)
 	{
-	  /* Obtain the character length of an assumed character length
-	     length procedure from the typespec.  */
-	  if (fsym->ts.type == BT_CHARACTER
-	      && parmse.string_length == NULL_TREE
-	      && e->ts.type == BT_PROCEDURE
-	      && e->symtree->n.sym->ts.type == BT_CHARACTER
-	      && e->symtree->n.sym->ts.u.cl->length != NULL
-	      && e->symtree->n.sym->ts.u.cl->length->expr_type == EXPR_CONSTANT)
-	    {
-	      gfc_conv_const_charlen (e->symtree->n.sym->ts.u.cl);
-	      parmse.string_length = e->symtree->n.sym->ts.u.cl->backend_decl;
-	    }
-
 	  /* Obtain the character length for a NULL() actual with a character
 	     MOLD argument.  Otherwise substitute a suitable dummy length.
 	     Here we handle non-optional dummies of non-bind(c) procedures.  */
@@ -8140,14 +8150,15 @@ gfc_conv_procedure_call (gfc_se * se, gfc_symbol * sym,
 		msg = xasprintf ("Pointer actual argument '%s' is not "
 				 "associated", e->symtree->n.sym->name);
 	      else if (attr.proc_pointer && !e->value.function.actual
-		       && (fsym == NULL || !fsym_attr.proc_pointer))
+		       && (fsym == NULL
+			   || (!fsym_attr.proc_pointer && !fsym_attr.optional)))
 		msg = xasprintf ("Proc-pointer actual argument '%s' is not "
 				 "associated", e->symtree->n.sym->name);
 	      else
 		goto end_pointer_check;
 
 	      tmp = parmse.expr;
-	      if (fsym && fsym->ts.type == BT_CLASS)
+	      if (fsym && fsym->ts.type == BT_CLASS && !attr.proc_pointer)
 		{
 		  if (POINTER_TYPE_P (TREE_TYPE (tmp)))
 		    tmp = build_fold_indirect_ref_loc (input_location, tmp);
@@ -10909,9 +10920,11 @@ gfc_trans_pointer_assignment (gfc_expr * expr1, gfc_expr * expr2)
   gfc_init_se (&lse, NULL);
 
   /* Usually testing whether this is not a proc pointer assignment.  */
-  non_proc_ptr_assign = !(gfc_expr_attr (expr1).proc_pointer
-			&& expr2->expr_type == EXPR_VARIABLE
-			&& expr2->symtree->n.sym->attr.flavor == FL_PROCEDURE);
+  non_proc_ptr_assign
+    = !(gfc_expr_attr (expr1).proc_pointer
+	&& ((expr2->expr_type == EXPR_VARIABLE
+	     && expr2->symtree->n.sym->attr.flavor == FL_PROCEDURE)
+	    || expr2->expr_type == EXPR_NULL));
 
   /* Check whether the expression is a scalar or not; we cannot use
      expr1->rank as it can be nonzero for proc pointers.  */

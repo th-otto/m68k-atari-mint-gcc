@@ -3022,7 +3022,8 @@ namespace views::__adaptor
 	  { _M_satisfy(); }
 
 	  [[no_unique_address]]
-	    __detail::__maybe_present_t<forward_range<_Base>, _Outer_iter> _M_outer;
+	    __detail::__maybe_present_t<forward_range<_Base>, _Outer_iter> _M_outer
+	      = decltype(_M_outer)();
 	  optional<_Inner_iter> _M_inner;
 	  _Parent* _M_parent = nullptr;
 
@@ -3376,7 +3377,8 @@ namespace views::__adaptor
 
 	  [[no_unique_address]]
 	    __detail::__maybe_present_t<forward_range<_Vp>,
-					iterator_t<_Base>> _M_current;
+					iterator_t<_Base>> _M_current
+	      = decltype(_M_current)();
 	  bool _M_trailing_empty = false;
 
 	public:
@@ -5336,7 +5338,7 @@ namespace views::__adaptor
 	requires move_constructible<decay_t<_Fp>> && regular_invocable<decay_t<_Fp>&>
 	  && is_object_v<decay_t<invoke_result_t<decay_t<_Fp>&>>>
 	constexpr auto
-	operator() [[nodiscard]] (_Fp&& __f) const
+	operator() [[nodiscard]] (_Fp&&) const
 	{
 	  return views::empty<decay_t<invoke_result_t<decay_t<_Fp>&>>>;
 	}
@@ -6598,7 +6600,7 @@ namespace views::__adaptor
     }
 
     friend constexpr difference_type
-    operator-(default_sentinel_t __y, const _Iterator& __x)
+    operator-(default_sentinel_t, const _Iterator& __x)
       requires sized_sentinel_for<sentinel_t<_Base>, iterator_t<_Base>>
     { return __detail::__div_ceil(__x._M_end - __x._M_current, __x._M_n); }
 
@@ -7287,8 +7289,8 @@ namespace views::__adaptor
 	using iterator_category = decltype(_S_iter_cat());
     };
 
-    template<bool> struct _Iterator;
-    template<bool> struct _Sentinel;
+    template<bool> class _Iterator;
+    template<bool> class _Sentinel;
 
   public:
     join_with_view() requires (default_initializable<_Vp>
@@ -7400,7 +7402,8 @@ namespace views::__adaptor
 
     _Parent* _M_parent = nullptr;
     [[no_unique_address]]
-      __detail::__maybe_present_t<forward_range<_Base>, _OuterIter> _M_outer_it;
+      __detail::__maybe_present_t<forward_range<_Base>, _OuterIter> _M_outer_it
+	= decltype(_M_outer_it)();
     variant<_PatternIter, _InnerIter> _M_inner_it;
 
     constexpr _OuterIter&
@@ -7743,7 +7746,7 @@ namespace views::__adaptor
     __detail::__box<_Tp> _M_value;
     [[no_unique_address]] _Bound _M_bound = _Bound();
 
-    struct _Iterator;
+    class _Iterator;
 
     template<typename _Range>
     friend constexpr auto
@@ -8303,7 +8306,7 @@ namespace views::__adaptor
     }
 
     friend constexpr difference_type
-    operator-(default_sentinel_t __y, const _Iterator& __x)
+    operator-(default_sentinel_t, const _Iterator& __x)
       requires sized_sentinel_for<sentinel_t<_Base>, iterator_t<_Base>>
     { return __detail::__div_ceil(__x._M_end - __x._M_current, __x._M_stride); }
 
@@ -9735,7 +9738,7 @@ namespace ranges
     end() requires (!(__detail::__simple_view<_Vs> && ...))
     {
       constexpr auto __n = sizeof...(_Vs);
-      if constexpr ((semiregular<iterator_t<_Vs>> && ...)
+      if constexpr (__detail::__all_forward<false, _Vs...>
 		    && common_range<_Vs...[__n - 1]>)
 	return _Iterator<false>(this, in_place_index<__n - 1>,
 				ranges::end(std::get<__n - 1>(_M_views)));
@@ -9747,7 +9750,7 @@ namespace ranges
     end() const requires (range<const _Vs> && ...) && __detail::__concatable<const _Vs...>
     {
       constexpr auto __n = sizeof...(_Vs);
-      if constexpr ((semiregular<iterator_t<const _Vs>> && ...)
+      if constexpr (__detail::__all_forward<true, _Vs...>
 		    && common_range<const _Vs...[__n - 1]>)
 	return _Iterator<true>(this, in_place_index<__n - 1>,
 			       ranges::end(std::get<__n - 1>(_M_views)));

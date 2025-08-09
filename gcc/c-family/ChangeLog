@@ -1,3 +1,26 @@
+2025-08-08  Release Manager
+
+	* GCC 15.2.0 released.
+
+2025-07-11  Jakub Jelinek  <jakub@redhat.com>
+
+	Backported from master:
+	2025-07-04  Jakub Jelinek  <jakub@redhat.com>
+
+	PR c/120837
+	* c-common.cc (pointer_int_sum): Rewrite the intop PLUS_EXPR or
+	MINUS_EXPR optimization into extension of both intop operands,
+	their separate multiplication and then addition/subtraction followed
+	by rest of pointer_int_sum handling after the multiplication.
+
+2025-05-07  Jason Merrill  <jason@redhat.com>
+
+	Backported from master:
+	2025-05-03  Jason Merrill  <jason@redhat.com>
+
+	* c-opts.cc (c_common_post_options): Let plain -Wabi warn
+	about changes in a future version.
+
 2025-04-25  Release Manager
 
 	* GCC 15.1.0 released.

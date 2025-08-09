@@ -4336,6 +4336,8 @@ get_c_type_name (gfc_typespec *ts, gfc_array_spec *as, const char **pre,
 	  mpz_clear (sz);
 	  *asterisk = false;
 	}
+      else
+	*asterisk = true;
     }
   return ret;
 }
@@ -4380,10 +4382,11 @@ write_type (gfc_symbol *sym)
 {
   gfc_component *c;
 
-  /* Don't dump our iso c module, nor vtypes.  */
+  /* Don't dump types that are not interoperable, our very own ISO C Binding
+     module, or vtypes.  */
 
   if (sym->from_intmod == INTMOD_ISO_C_BINDING || sym->attr.flavor != FL_DERIVED
-      || sym->attr.vtype)
+      || sym->attr.vtype || !sym->attr.is_bind_c)
     return;
 
   fprintf (dumpfile, "typedef struct %s {\n", sym->name);

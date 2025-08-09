@@ -533,7 +533,8 @@ gfc_resolve_formal_arglist (gfc_symbol *proc)
 	    }
 	}
     }
-
+  if (sym)
+    sym->formal_resolved = 1;
   gfc_current_ns = orig_current_ns;
 }
 
@@ -3472,7 +3473,7 @@ resolve_function (gfc_expr *expr)
 			   &expr->where, &sym->formal_at);
 	    }
 	}
-      else
+      else if (!sym->formal_resolved)
 	{
 	  gfc_get_formal_from_actual_arglist (sym, expr->value.function.actual);
 	  sym->formal_at = expr->where;
@@ -4033,7 +4034,7 @@ resolve_call (gfc_code *c)
 			   &c->loc, &csym->formal_at);
 	    }
 	}
-      else
+      else if (!csym->formal_resolved)
 	{
 	  gfc_get_formal_from_actual_arglist (csym, c->ext.actual);
 	  csym->formal_at = c->loc;
@@ -4806,34 +4807,6 @@ resolve_operator (gfc_expr *e)
 	      return false;
 	    }
 	}
-
-      /* coranks have to be equal or one has to be zero to be combinable.  */
-      if (op1->corank == op2->corank || (op1->corank != 0 && op2->corank == 0))
-	{
-	  e->corank = op1->corank;
-	  /* Only do this, when regular array has not set a shape yet.  */
-	  if (e->shape == NULL)
-	    {
-	      if (op1->corank != 0)
-		{
-		  e->shape = gfc_copy_shape (op1->shape, op1->corank);
-		}
-	    }
-	}
-      else if (op1->corank == 0 && op2->corank != 0)
-	{
-	  e->corank = op2->corank;
-	  /* Only do this, when regular array has not set a shape yet.  */
-	  if (e->shape == NULL)
-	    e->shape = gfc_copy_shape (op2->shape, op2->corank);
-	}
-      else
-	{
-	  gfc_error ("Inconsistent coranks for operator at %L and %L",
-		     &op1->where, &op2->where);
-	  return false;
-	}
-
       break;
 
     case INTRINSIC_PARENTHESES:
@@ -6069,8 +6042,8 @@ gfc_op_rank_conformable (gfc_expr *op1, gfc_expr *op2)
     gfc_expression_rank (op2);
 
   return (op1->rank == 0 || op2->rank == 0 || op1->rank == op2->rank)
-	 && (op1->corank == 0 || op2->corank == 0
-	     || op1->corank == op2->corank);
+	 && (op1->corank == 0 || op2->corank == 0 || op1->corank == op2->corank
+	     || (!gfc_is_coindexed (op1) && !gfc_is_coindexed (op2)));
 }
 
 /* Resolve a variable expression.  */
@@ -8739,7 +8712,24 @@ static bool
 conformable_arrays (gfc_expr *e1, gfc_expr *e2)
 {
   gfc_ref *tail;
+  bool scalar;
+
   for (tail = e2->ref; tail && tail->next; tail = tail->next);
+
+  /* If MOLD= is present and is not scalar, and the allocate-object has an
+     explicit-shape-spec, the ranks need not agree.  This may be unintended,
+     so let's emit a warning if -Wsurprising is given.  */
+  scalar = !tail || tail->type == REF_COMPONENT;
+  if (e1->mold && e1->rank > 0
+      && (scalar || (tail->type == REF_ARRAY && tail->u.ar.type != AR_FULL)))
+    {
+      if (scalar || (tail->u.ar.as && e1->rank != tail->u.ar.as->rank))
+	gfc_warning (OPT_Wsurprising, "Allocate-object at %L has rank %d "
+		     "but MOLD= expression at %L has rank %d",
+		     &e2->where, scalar ? 0 : tail->u.ar.as->rank,
+		     &e1->where, e1->rank);
+      return true;
+    }
 
   /* First compare rank.  */
   if ((tail && (!tail->u.ar.as || e1->rank != tail->u.ar.as->rank))
@@ -17969,16 +17959,16 @@ skip_interfaces:
 	  || (a->dummy && !a->pointer && a->intent == INTENT_OUT
 	      && sym->ns->proc_name->attr.if_source != IFSRC_IFBODY))
 	apply_default_init (sym);
+      else if (a->function && !a->pointer && !a->allocatable && !a->use_assoc
+	       && sym->result)
+	/* Default initialization for function results.  */
+	apply_default_init (sym->result);
       else if (a->function && sym->result && a->access != ACCESS_PRIVATE
 	       && (sym->ts.u.derived->attr.alloc_comp
 		   || sym->ts.u.derived->attr.pointer_comp))
 	/* Mark the result symbol to be referenced, when it has allocatable
 	   components.  */
 	sym->result->attr.referenced = 1;
-      else if (a->function && !a->pointer && !a->allocatable && !a->use_assoc
-	       && sym->result)
-	/* Default initialization for function results.  */
-	apply_default_init (sym->result);
     }
 
   if (sym->ts.type == BT_CLASS && sym->ns == gfc_current_ns
@@ -18459,6 +18449,16 @@ gfc_impure_variable (gfc_symbol *sym)
 
   if (sym->attr.use_assoc || sym->attr.in_common)
     return 1;
+
+  /* The namespace of a module procedure interface holds the arguments and
+     symbols, and so the symbol namespace can be different to that of the
+     procedure.  */
+  if (sym->ns != gfc_current_ns
+      && gfc_current_ns->proc_name->abr_modproc_decl
+      && sym->ns->proc_name->attr.function
+      && sym->attr.result
+      && !strcmp (sym->ns->proc_name->name, gfc_current_ns->proc_name->name))
+    return 0;
 
   /* Check if the symbol's ns is inside the pure procedure.  */
   for (ns = gfc_current_ns; ns; ns = ns->parent)

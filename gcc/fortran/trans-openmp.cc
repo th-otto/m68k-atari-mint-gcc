@@ -2478,6 +2478,26 @@ gfc_omp_deep_mapping_do (bool is_cnt, const gimple *ctx, tree clause,
   else
     while (TREE_CODE (tmp) == COMPONENT_REF || TREE_CODE (tmp) == ARRAY_REF)
       tmp = TREE_OPERAND (tmp, TREE_CODE (tmp) == COMPONENT_REF ? 1 : 0);
+  if (TREE_CODE (tmp) == MEM_REF)
+    tmp = TREE_OPERAND (tmp, 0);
+  if (TREE_CODE (tmp) == SSA_NAME)
+    {
+      gimple *def_stmt = SSA_NAME_DEF_STMT (tmp);
+      if (gimple_code (def_stmt) == GIMPLE_ASSIGN)
+	{
+	  tmp = gimple_assign_rhs1 (def_stmt);
+	  if (poly)
+	    {
+	      tmp = TYPE_FIELDS (type);
+	      type = TREE_TYPE (tmp);
+	    }
+	  else
+	    while (TREE_CODE (tmp) == COMPONENT_REF
+		   || TREE_CODE (tmp) == ARRAY_REF)
+	      tmp = TREE_OPERAND (tmp,
+				  TREE_CODE (tmp) == COMPONENT_REF ? 1 : 0);
+	}
+    }
   /* If the clause argument is nonallocatable, skip is-allocate check. */
   if (GFC_DECL_GET_SCALAR_ALLOCATABLE (tmp)
       || GFC_DECL_GET_SCALAR_POINTER (tmp)
@@ -9683,11 +9703,12 @@ gfc_trans_omp_declare_variant (gfc_namespace *ns, gfc_namespace *parent_ns)
 	{
 	  gfc_symtree *proc_st;
 	  gfc_find_sym_tree (variant_proc_name, gfc_current_ns, 1, &proc_st);
-	  variant_proc_sym = proc_st->n.sym;
+	  variant_proc_sym = proc_st ? proc_st->n.sym : NULL;
 	}
       if (variant_proc_sym == NULL)
 	{
-	  gfc_error ("Cannot find symbol %qs", variant_proc_name);
+	  gfc_error ("Cannot find symbol %qs at %L", variant_proc_name,
+						     &odv->where);
 	  continue;
 	}
       set_selectors = omp_check_context_selector

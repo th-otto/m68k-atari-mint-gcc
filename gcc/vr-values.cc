@@ -1023,6 +1023,10 @@ range_fits_type_p (const irange *vr,
   widest_int tem;
   signop src_sgn;
 
+  /* Now we can only handle ranges with constant bounds.  */
+  if (vr->undefined_p () || vr->varying_p ())
+    return false;
+
   /* We can only handle integral and pointer types.  */
   src_type = vr->type ();
   if (!INTEGRAL_TYPE_P (src_type)
@@ -1031,16 +1035,12 @@ range_fits_type_p (const irange *vr,
 
   /* An extension is fine unless VR is SIGNED and dest_sgn is UNSIGNED,
      and so is an identity transform.  */
-  src_precision = TYPE_PRECISION (vr->type ());
+  src_precision = TYPE_PRECISION (src_type);
   src_sgn = TYPE_SIGN (src_type);
   if ((src_precision < dest_precision
        && !(dest_sgn == UNSIGNED && src_sgn == SIGNED))
       || (src_precision == dest_precision && src_sgn == dest_sgn))
     return true;
-
-  /* Now we can only handle ranges with constant bounds.  */
-  if (vr->undefined_p () || vr->varying_p ())
-    return false;
 
   wide_int vrmin = vr->lower_bound ();
   wide_int vrmax = vr->upper_bound ();
@@ -1996,10 +1996,13 @@ simplify_using_ranges::simplify (gimple_stmt_iterator *gsi)
 
 	case BIT_AND_EXPR:
 	case BIT_IOR_EXPR:
-	  /* Optimize away BIT_AND_EXPR and BIT_IOR_EXPR
-	     if all the bits being cleared are already cleared or
-	     all the bits being set are already set.  */
-	  if (INTEGRAL_TYPE_P (TREE_TYPE (rhs1)))
+	  /* Optimize away BIT_AND_EXPR and BIT_IOR_EXPR if all the bits
+	     being cleared are already cleared or all the bits being set
+	     are already set.  Beware that boolean types must be handled
+	     logically (see range-op.cc) unless they have precision 1.  */
+	  if (INTEGRAL_TYPE_P (TREE_TYPE (rhs1))
+	      && (TREE_CODE (TREE_TYPE (rhs1)) != BOOLEAN_TYPE
+		  || TYPE_PRECISION (TREE_TYPE (rhs1)) == 1))
 	    return simplify_bit_ops_using_ranges (gsi, stmt);
 	  break;
 

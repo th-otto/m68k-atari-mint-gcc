@@ -1640,6 +1640,19 @@ cgraph_update_edges_for_call_stmt_node (cgraph_node *node,
 
       if (e)
 	{
+	  /* If call was devirtualized during cloning, mark edge
+	     as resolved.  */
+	  if (e->speculative)
+	    {
+	      if (new_stmt && is_gimple_call (new_stmt))
+		{
+		  tree decl = gimple_call_fndecl (new_stmt);
+		  if (decl)
+		    e = cgraph_edge::resolve_speculation (e, decl);
+		}
+	      else
+		e = cgraph_edge::resolve_speculation (e, NULL);
+	    }
 	  /* Keep calls marked as dead dead.  */
 	  if (new_stmt && is_gimple_call (new_stmt) && e->callee
 	      && fndecl_built_in_p (e->callee->decl, BUILT_IN_UNREACHABLE,
@@ -1879,7 +1892,7 @@ cgraph_node::remove (void)
   clone_info *info, saved_info;
   if (symtab->ipa_clones_dump_file && symtab->cloned_nodes.contains (this))
     fprintf (symtab->ipa_clones_dump_file,
-	     "Callgraph removal;%s;%d;%s;%d;%d\n", asm_name (), order,
+	     "Callgraph removal;%s;%d;%s;%d;%d\n", asm_name (), get_uid (),
 	     DECL_SOURCE_FILE (decl), DECL_SOURCE_LINE (decl),
 	     DECL_SOURCE_COLUMN (decl));
 

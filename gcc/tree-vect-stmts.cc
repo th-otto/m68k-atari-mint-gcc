@@ -419,18 +419,22 @@ vect_stmt_relevant_p (stmt_vec_info stmt_info, loop_vec_info loop_vinfo,
 	}
     }
 
-  /* Check if it's an induction and multiple exits.  In this case there will be
-     a usage later on after peeling which is needed for the alternate exit.  */
+  /* Check if it's a not live PHI and multiple exits.  In this case
+     there will be a usage later on after peeling which is needed for the
+     alternate exit.  */
   if (LOOP_VINFO_EARLY_BREAKS (loop_vinfo)
-      && STMT_VINFO_DEF_TYPE (stmt_info) == vect_induction_def)
+      && is_a <gphi *> (stmt)
+      && gimple_bb (stmt) == LOOP_VINFO_LOOP (loop_vinfo)->header
+      && ((! VECTORIZABLE_CYCLE_DEF (STMT_VINFO_DEF_TYPE (stmt_info))
+	  && ! *live_p)
+	  || STMT_VINFO_DEF_TYPE (stmt_info) == vect_induction_def))
     {
       if (dump_enabled_p ())
-	  dump_printf_loc (MSG_NOTE, vect_location,
-			   "vec_stmt_relevant_p: induction forced for "
-			   "early break.\n");
+	dump_printf_loc (MSG_NOTE, vect_location,
+			 "vec_stmt_relevant_p: PHI forced live for "
+			 "early break.\n");
       LOOP_VINFO_EARLY_BREAKS_LIVE_IVS (loop_vinfo).safe_push (stmt_info);
       *live_p = true;
-
     }
 
   if (*live_p && *relevant == vect_unused_in_scope
@@ -714,6 +718,8 @@ vect_mark_stmts_to_be_vectorized (loop_vec_info loop_vinfo, bool *fatal)
       bb = bbs[i];
       for (si = gsi_start_phis (bb); !gsi_end_p (si); gsi_next (&si))
 	{
+	  if (virtual_operand_p (gimple_phi_result (gsi_stmt (si))))
+	    continue;
 	  stmt_vec_info phi_info = loop_vinfo->lookup_stmt (gsi_stmt (si));
 	  if (dump_enabled_p ())
 	    dump_printf_loc (MSG_NOTE, vect_location, "init: phi relevant? %G",
@@ -3554,7 +3560,13 @@ vectorizable_call (vec_info *vinfo,
 
   int mask_opno = -1;
   if (internal_fn_p (cfn))
-    mask_opno = internal_fn_mask_index (as_internal_fn (cfn));
+    {
+      /* We can only handle direct internal masked calls here,
+	 vectorizable_simd_clone_call is for the rest.  */
+      if (cfn == CFN_MASK_CALL)
+	return false;
+      mask_opno = internal_fn_mask_index (as_internal_fn (cfn));
+    }
 
   for (i = 0; i < nargs; i++)
     {
@@ -5914,6 +5926,20 @@ vectorizable_conversion (vec_info *vinfo,
       gcc_unreachable ();
     }
 
+  if (modifier == WIDEN
+      && loop_vinfo
+      && LOOP_VINFO_CAN_USE_PARTIAL_VECTORS_P (loop_vinfo)
+      && (code1 == VEC_WIDEN_MULT_EVEN_EXPR
+	  || widening_evenodd_fn_p (code1)))
+    {
+      if (dump_enabled_p ())
+	dump_printf_loc (MSG_MISSED_OPTIMIZATION, vect_location,
+			 "can't use a fully-masked loop because"
+			 " widening operation on even/odd elements"
+			 " mixes up lanes.\n");
+      LOOP_VINFO_CAN_USE_PARTIAL_VECTORS_P (loop_vinfo) = false;
+    }
+
   if (!vec_stmt)		/* transformation not required.  */
     {
       if (slp_node
@@ -6849,7 +6875,7 @@ vectorizable_operation (vec_info *vinfo,
   poly_uint64 nunits_out;
   tree vectype_out;
   unsigned int ncopies;
-  int vec_num;
+  unsigned vec_num;
   int i;
   vec<tree> vec_oprnds0 = vNULL;
   vec<tree> vec_oprnds1 = vNULL;
@@ -7420,8 +7446,8 @@ vectorizable_operation (vec_info *vinfo,
 	      && code == BIT_AND_EXPR
 	      && VECTOR_BOOLEAN_TYPE_P (vectype))
 	    {
-	      if (loop_vinfo->scalar_cond_masked_set.contains ({ op0,
-								 ncopies}))
+	      if (loop_vinfo->scalar_cond_masked_set.contains
+						   ({ op0, vec_num * ncopies}))
 		{
 		  mask = vect_get_loop_mask (loop_vinfo, gsi, masks,
 					     vec_num * ncopies, vectype, i);
@@ -7430,8 +7456,8 @@ vectorizable_operation (vec_info *vinfo,
 					   vop0, gsi);
 		}
 
-	      if (loop_vinfo->scalar_cond_masked_set.contains ({ op1,
-								 ncopies }))
+	      if (loop_vinfo->scalar_cond_masked_set.contains
+						  ({ op1, vec_num * ncopies }))
 		{
 		  mask = vect_get_loop_mask (loop_vinfo, gsi, masks,
 					     vec_num * ncopies, vectype, i);
@@ -10056,7 +10082,8 @@ vectorizable_store (vec_info *vinfo,
 		= fold_build2 (MEM_REF, vectype, dataref_ptr,
 			       dataref_offset ? dataref_offset
 					      : build_int_cst (ref_type, 0));
-	      if (alignment_support_scheme == dr_aligned)
+	      if (alignment_support_scheme == dr_aligned
+		  && align >= TYPE_ALIGN_UNIT (vectype))
 		;
 	      else
 		TREE_TYPE (data_ref)
@@ -12248,7 +12275,8 @@ vectorizable_load (vec_info *vinfo,
 		      {
 			data_ref
 			  = fold_build2 (MEM_REF, ltype, dataref_ptr, offset);
-			if (alignment_support_scheme == dr_aligned)
+			if (alignment_support_scheme == dr_aligned
+			    && align >= TYPE_ALIGN_UNIT (ltype))
 			  ;
 			else
 			  TREE_TYPE (data_ref)
@@ -15020,6 +15048,8 @@ supportable_widening_operation (vec_info *vinfo,
 
       internal_fn lo, hi, even, odd;
       lookup_hilo_internal_fn (ifn, &lo, &hi);
+      if (BYTES_BIG_ENDIAN)
+	std::swap (lo, hi);
       *code1 = as_combined_fn (lo);
       *code2 = as_combined_fn (hi);
       optab1 = direct_internal_fn_optab (lo, {vectype, vectype});

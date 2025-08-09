@@ -292,7 +292,7 @@ ipcp_lattice<valtype>::print (FILE * f, bool dump_sources, bool dump_benefits)
 	  else
 	    fprintf (f, " [scc: %i, from:", val->scc_no);
 	  for (s = val->sources; s; s = s->next)
-	    fprintf (f, " %i(%f)", s->cs->caller->order,
+	    fprintf (f, " %i(%f)", s->cs->caller->get_uid (),
 		     s->cs->sreal_frequency ().to_double ());
 	  fprintf (f, "]");
 	}
@@ -6398,6 +6398,11 @@ ipcp_store_vr_results (void)
 						     TYPE_PRECISION (type),
 						     TYPE_SIGN (type)));
 		  tmp.update_bitmask (bm);
+		  // Reflecting the bitmask on the ranges can sometime
+		  // produce an UNDEFINED value if the the bitmask update
+		  // was previously deferred.  See PR 120048.
+		  if (tmp.undefined_p ())
+		    tmp.set_varying (type);
 		  ipa_vr vr (tmp);
 		  ts->m_vr->quick_push (vr);
 		}
@@ -6419,6 +6424,11 @@ ipcp_store_vr_results (void)
 						 TYPE_PRECISION (type),
 						 TYPE_SIGN (type)));
 	      tmp.update_bitmask (bm);
+	      // Reflecting the bitmask on the ranges can sometime
+	      // produce an UNDEFINED value if the the bitmask update
+	      // was previously deferred.  See PR 120048.
+	      if (tmp.undefined_p ())
+		tmp.set_varying (type);
 	      ipa_vr vr (tmp);
 	      ts->m_vr->quick_push (vr);
 	    }

@@ -2650,7 +2650,8 @@ PROCEDURE MakeProcType (tok: CARDINAL; ProcTypeName: Name) : CARDINAL ;
                       ParamType into ProcType Sym.
 *)
 
-PROCEDURE PutProcTypeParam (Sym: CARDINAL;
+PROCEDURE PutProcTypeParam (tok: CARDINAL;
+                            Sym: CARDINAL;
                             ParamType: CARDINAL; isUnbounded: BOOLEAN) ;
 
 
@@ -2659,7 +2660,8 @@ PROCEDURE PutProcTypeParam (Sym: CARDINAL;
                          ParamType into ProcType Sym.
 *)
 
-PROCEDURE PutProcTypeVarParam (Sym: CARDINAL;
+PROCEDURE PutProcTypeVarParam (tok: CARDINAL;
+                               Sym: CARDINAL;
                                ParamType: CARDINAL; isUnbounded: BOOLEAN) ;
 
 
@@ -3476,6 +3478,22 @@ PROCEDURE UsesOptArgAny (Sym: CARDINAL) : BOOLEAN ;
 *)
 
 PROCEDURE GetProcedureKindDesc (kind: ProcedureKind) : String ;
+
+
+(*
+   GetNthParamAnyClosest - returns the nth parameter from the order
+                           proper procedure, forward declaration
+                           or definition module procedure.
+                           It chooses the parameter which is closest
+                           in source terms to currentmodule.
+                           The same module will return using the order
+                           proper procedure, forward procedure, definition module.
+                           Whereas an imported procedure will choose from
+                           DefProcedure, ProperProcedure, ForwardProcedure.
+*)
+
+PROCEDURE GetNthParamAnyClosest (sym: CARDINAL; ParamNo: CARDINAL;
+                                 currentmodule: CARDINAL) : CARDINAL ;
 
 
 END SymbolTable.

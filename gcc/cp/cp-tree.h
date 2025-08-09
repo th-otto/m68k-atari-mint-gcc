@@ -2491,6 +2491,7 @@ struct GTY(()) lang_type {
   unsigned unique_obj_representations_set : 1;
   bool erroneous : 1;
   bool non_pod_aggregate : 1;
+  bool non_aggregate_pod : 1;
 
   /* When adding a flag here, consider whether or not it ought to
      apply to a template instance if it applies to the template.  If
@@ -2499,7 +2500,7 @@ struct GTY(()) lang_type {
   /* There are some bits left to fill out a 32-bit word.  Keep track
      of this by updating the size of this bitfield whenever you add or
      remove a flag.  */
-  unsigned dummy : 3;
+  unsigned dummy : 2;
 
   tree primary_base;
   vec<tree_pair_s, va_gc> *vcall_indices;
@@ -2826,6 +2827,11 @@ struct GTY(()) lang_type {
    with a hash_set only filled in when abi_version_crosses (17).  */
 #define CLASSTYPE_NON_POD_AGGREGATE(NODE) \
   (LANG_TYPE_CLASS_CHECK (NODE)->non_pod_aggregate)
+
+/* True if this class is layout-POD though it's not an aggregate in C++20 and
+   above (c++/120012).  This could also be a hash_set.  */
+#define CLASSTYPE_NON_AGGREGATE_POD(NODE) \
+  (LANG_TYPE_CLASS_CHECK (NODE)->non_aggregate_pod)
 
 /* Additional macros for inheritance information.  */
 
@@ -5515,6 +5521,10 @@ decl_template_parm_check (const_tree t, const char *f, int l, const char *fn)
    back to the original (ramp) function.  */
 #define DECL_RAMP_FN(NODE) \
   (coro_get_ramp_function (NODE))
+
+/* For a FUNCTION_DECL this is true if it is a coroutine ramp.  */
+#define DECL_RAMP_P(NODE) \
+  DECL_COROUTINE_P (NODE) && !DECL_RAMP_FN (NODE)
 
 /* True for an OMP_ATOMIC that has dependent parameters.  These are stored
    as an expr in operand 1, and integer_zero_node or clauses in operand 0.  */
