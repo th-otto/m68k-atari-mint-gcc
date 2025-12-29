@@ -19,6 +19,19 @@ extern "C" {
 #define SYMVER(name, ver) SYMVER1(name, ver)
 
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#include <features.h>
+
+/*
+ * avoid references to __isoc23_strtol*,
+ * which are only available in glibc >= 2.38
+ */
+#undef __GLIBC_USE_C2X_STRTOL
+#define __GLIBC_USE_C2X_STRTOL 0
+
+
 /* Symbols redirected to earlier glibc versions */
 SYMVER(__libc_start_main, GLIBC_2.2.5)
 SYMVER(__libpthread_version_placeholder, GLIBC_2.12)
@@ -1474,11 +1487,11 @@ extern int __xstat(int __ver, const char *__filename,
 extern int __lxstat(int __ver, const char *__filename,
        struct stat *__stat_buf) __attribute__ ((__nothrow__ , __leaf__)) __attribute__ ((__nonnull__ (2, 3)));
 extern int __fxstatat (int __ver, int __fildes, const char *__filename,
-         struct stat *__stat_buf, int __flag)
+	struct stat *__stat_buf, int __flag)
      __attribute__ ((__nothrow__ , __leaf__)) __attribute__ ((__nonnull__ (3, 4)));
 #ifdef __USE_LARGEFILE64
 extern int __xstat64(int __ver, const char *__filename,
-      struct stat64 *__stat_buf) __attribute__ ((__nothrow__ , __leaf__)) __attribute__ ((__nonnull__ (2, 3)));
+	struct stat64 *__stat_buf) __attribute__ ((__nothrow__ , __leaf__)) __attribute__ ((__nonnull__ (2, 3)));
 extern int __lxstat64(int __ver, const char *__filename,
        struct stat64 *__stat_buf) __attribute__ ((__nothrow__ , __leaf__)) __attribute__ ((__nonnull__ (2, 3)));
 extern int __fxstat64(int __ver, int __fildes, struct stat64 *__stat_buf)
@@ -1493,21 +1506,21 @@ int stat(const char *__path, struct stat *__statbuf)
 }
 
 extern __inline __attribute__((__gnu_inline__))
-__attribute__((__nothrow__)) 
+__attribute__((__nothrow__))
 int lstat (const char *__path, struct stat *__statbuf)
 {
 	return __lxstat(1, __path, __statbuf);
 }
 
 extern __inline __attribute__((__gnu_inline__))
-__attribute__((__nothrow__)) 
+__attribute__((__nothrow__))
 int fstat(int __fd, struct stat *__statbuf)
 {
 	return __fxstat(1, __fd, __statbuf);
 }
 
 extern __inline __attribute__((__gnu_inline__))
-__attribute__((__nothrow__)) 
+__attribute__((__nothrow__))
 int fstatat(int __fd, const char *__filename, struct stat *__statbuf, int __flag)
 {
 	return __fxstatat(1, __fd, __filename, __statbuf, __flag);
@@ -1522,14 +1535,14 @@ int stat64(const char *__path, struct stat64 *__statbuf)
 }
 
 extern __inline __attribute__((__gnu_inline__))
-__attribute__((__nothrow__)) 
+__attribute__((__nothrow__))
 int lstat64 (const char *__path, struct stat64 *__statbuf)
 {
 	return __lxstat64(1, __path, __statbuf);
 }
 
 extern __inline __attribute__((__gnu_inline__))
-__attribute__((__nothrow__)) 
+__attribute__((__nothrow__))
 int fstat64(int __fd, struct stat64 *__statbuf)
 {
 	return __fxstat64(1, __fd, __statbuf);
