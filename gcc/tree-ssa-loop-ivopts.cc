@@ -7170,15 +7170,37 @@ find_optimal_iv_set (struct ivopts_data *data)
 	       cost.cost, cost.complexity);
     }
 
-  /* Choose the one with the best cost.  */
-  if (origcost <= cost)
+  /* Choose the one with the best cost.
+     If costs are equal, prefer fewer IVs.  */
+  if (origcost < cost)
     {
       if (set)
-	iv_ca_free (&set);
+        iv_ca_free (&set);
       set = origset;
     }
-  else if (origset)
-    iv_ca_free (&origset);
+  else if (origcost == cost)
+    {
+      /* Equal cost - prefer fewer IV candidates.  */
+      unsigned orig_n_cands = iv_ca_n_cands (origset);
+      unsigned new_n_cands = iv_ca_n_cands (set);
+      
+      if (orig_n_cands <= new_n_cands)
+        {
+          if (set)
+            iv_ca_free (&set);
+          set = origset;
+        }
+      else
+        {
+          if (origset)
+            iv_ca_free (&origset);
+        }
+    }
+  else
+    {
+      if (origset)
+        iv_ca_free (&origset);
+    }
 
   for (i = 0; i < data->vgroups.length (); i++)
     {
