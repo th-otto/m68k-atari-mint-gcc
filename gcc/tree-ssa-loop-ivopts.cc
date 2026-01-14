@@ -4720,18 +4720,43 @@ get_address_cost (struct ivopts_data *data, struct iv_use *use,
 	  && ratio == 1
 	  && ptrdiff_tree_p (cand->iv->step, &ainc_step))
 	{
-	  poly_int64 ainc_offset = (aff_inv->offset).force_shwi ();
-
-	  if (stmt_after_increment (data->current_loop, cand, use->stmt))
-	    ainc_offset += ainc_step;
-	  cost = get_address_cost_ainc (ainc_step, ainc_offset,
-					addr_mode, mem_mode, as, speed);
-	  if (!cost.infinite_cost_p ())
+	  /* For auto-increment candidates, check if this use is in an inner
+	     loop relative to the auto-increment position.  Auto-increment
+	     only fires once per iteration of the loop containing the
+	     increment, so uses in inner nested loops cannot benefit from it
+	     and must use offset addressing.  The adjustment logic below
+	     (adding ainc_step when stmt_after_increment) would incorrectly
+	     make such uses appear valid for auto-increment.  */
+	  bool dominated_by_ainc_use = true;
+	  if ((cand->pos == IP_AFTER_USE || cand->pos == IP_BEFORE_USE)
+	      && cand->ainc_use != NULL
+	      && cand->ainc_use != use)
 	    {
-	      *can_autoinc = true;
-	      return cost;
+	      basic_block ainc_bb = gimple_bb (cand->ainc_use->stmt);
+	      basic_block use_bb = gimple_bb (use->stmt);
+	      /* If the use is in a deeper nested loop than the auto-inc
+		 position, auto-increment cannot be used for this access.  */
+	      if (use_bb->loop_father != ainc_bb->loop_father
+		  && flow_loop_nested_p (ainc_bb->loop_father,
+					 use_bb->loop_father))
+		dominated_by_ainc_use = false;
 	    }
-	  cost = no_cost;
+
+	  if (dominated_by_ainc_use)
+	    {
+	      poly_int64 ainc_offset = (aff_inv->offset).force_shwi ();
+
+	      if (stmt_after_increment (data->current_loop, cand, use->stmt))
+		ainc_offset += ainc_step;
+	      cost = get_address_cost_ainc (ainc_step, ainc_offset,
+					    addr_mode, mem_mode, as, speed);
+	      if (!cost.infinite_cost_p ())
+		{
+		  *can_autoinc = true;
+		  return cost;
+		}
+	      cost = no_cost;
+	    }
 	}
       if (!aff_combination_zero_p (aff_inv))
 	{
