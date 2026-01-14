@@ -7510,6 +7510,68 @@ gimplify_modify_expr (tree *expr_p, gimple_seq *pre_p, gimple_seq *post_p,
   gsi = gsi_last (*pre_p);
   maybe_fold_stmt (&gsi);
 
+  /* Reorder post-increment patterns to enable auto-inc addressing.
+     Detect pattern:
+       p1: b = a + offset;    (POINTER_PLUS_EXPR)
+       p2: x = *a;            (load from MEM_REF using same base)
+     Or:
+       p1: b = a + offset;
+       p2: *a = x;            (store to MEM_REF using same base)
+     Reorder to:
+       p2: x = *a;  (or *a = x)
+       p1: b = a + offset;
+     This allows later passes to recognize the post-increment pattern.  */
+  /* Reorder post-increment patterns to enable auto-inc addressing.
+     Search backwards through the sequence to find a POINTER_PLUS_EXPR
+     that matches the MEM_REF base in the last statement.  */
+  {
+    gimple *p2 = gimple_seq_last_stmt (*pre_p);
+    if (p2
+	&& gimple_code (p2) == GIMPLE_ASSIGN
+	&& gimple_num_ops (p2) == 2)
+      {
+	tree x1 = gimple_assign_lhs (p2);
+	tree x2 = gimple_assign_rhs1 (p2);
+	tree mem_ptr = NULL_TREE;
+
+	/* Get the pointer from the MEM_REF (either load or store).  */
+	if (TREE_CODE (x2) == MEM_REF)
+	  mem_ptr = TREE_OPERAND (x2, 0);
+	else if (TREE_CODE (x1) == MEM_REF)
+	  mem_ptr = TREE_OPERAND (x1, 0);
+
+	if (mem_ptr)
+	  {
+	    /* Search backwards for matching POINTER_PLUS_EXPR.  */
+	    for (gimple *p1 = p2->prev;
+		 p1 && p1 != p2;
+		 p1 = p1->prev)
+	      {
+		if (gimple_code (p1) == GIMPLE_ASSIGN
+		    && gimple_assign_rhs_code (p1) == POINTER_PLUS_EXPR)
+		  {
+		    tree b = gimple_assign_lhs (p1);
+		    tree var = gimple_assign_rhs1 (p1);
+
+		    /* Check if the MEM_REF uses var (the original pointer
+		       before increment).  */
+		    if (operand_equal_p (mem_ptr, var, 0)
+			&& !operand_equal_p (mem_ptr, b, 0))
+		      {
+			/* Found matching pattern. Move p1 to after p2.  */
+			gimple_stmt_iterator gsi_to = gsi_last (*pre_p);
+			gimple_stmt_iterator gsi_from = gsi_to;
+			gsi_from.ptr = p1;
+			gsi_remove (&gsi_from, false);
+			gsi_insert_after (&gsi_to, p1, GSI_NEW_STMT);
+			break;
+		      }
+		  }
+	      }
+	  }
+      }
+  }
+
   if (want_value)
     {
       *expr_p = TREE_THIS_VOLATILE (*to_p) ? *from_p : unshare_expr (*to_p);

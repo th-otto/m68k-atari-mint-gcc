@@ -125,3 +125,8 @@ void m68k_order_regs_for_local_alloc(void);
 void m68k_call_abi_override (const_tree);
 enum calling_abi m68k_function_type_abi (const_tree);
 enum calling_abi m68k_cfun_abi (void);
+
+/* Functions from m68k-passes.cc.  */
+class rtl_opt_pass;
+namespace gcc { class context; }
+extern rtl_opt_pass *make_m68k_pass_opt_autoinc (gcc::context *);

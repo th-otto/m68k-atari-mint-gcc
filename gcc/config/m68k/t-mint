@@ -5,7 +5,15 @@
 # Extra object file for m68k cost functions
 m68k_costs.o: $(srcdir)/config/m68k/m68k_costs.cc
 	$(COMPILE) $<
-	$(POSTCOMPILE) 
+	$(POSTCOMPILE)
+
+# Extra object file for m68k optimization passes
+m68k-passes.o: $(srcdir)/config/m68k/m68k-passes.cc
+	$(COMPILE) $<
+	$(POSTCOMPILE)
+
+# Register the m68k-specific passes
+PASSES_EXTRA += $(srcdir)/config/m68k/m68k-passes.def 
 
 M68K_AWK = $(strip $(shell $(AWK) 'BEGIN { FS="[ \t]*[,()][ \t]*"; ORS=" " }; \
 	/^M68K_DEVICE/ { CPU=$$3; FLAGS=$$8; \
