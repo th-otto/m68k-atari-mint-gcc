@@ -68,6 +68,9 @@ along with GCC; see the file COPYING3.  If not see
 #include "rtl-iter.h"
 #include "toplev.h"
 #include "dbxout.h"
+#include "cfgloop.h"
+#include "gimple.h"
+#include "gimple-iterator.h"
 
 /* This file should be included last.  */
 #include "target-def.h"
@@ -422,6 +425,15 @@ TARGET_GNU_ATTRIBUTES (m68k_attribute_table,
 
 #undef TARGET_DOCUMENTATION_NAME
 #define TARGET_DOCUMENTATION_NAME "m68k"
+
+#undef TARGET_CAN_USE_DOLOOP_P
+#define TARGET_CAN_USE_DOLOOP_P m68k_can_use_doloop_p
+
+#undef TARGET_PREFERRED_DOLOOP_MODE
+#define TARGET_PREFERRED_DOLOOP_MODE m68k_preferred_doloop_mode
+
+#undef TARGET_PREDICT_DOLOOP_P
+#define TARGET_PREDICT_DOLOOP_P m68k_predict_doloop_p
 
 
 /* Base flags for 68k ISAs.  */
@@ -8349,6 +8361,113 @@ m68k_use_lra_p ()
 #else
 #define NEED_INDICATE_EXEC_STACK	0
 #endif
+
+/* Implement TARGET_CAN_USE_DOLOOP_P.
+   The dbra instruction operates only on the low 16 bits of a data register,
+   supporting a maximum of 65536 iterations (counting from 65535 down to -1).  */
+
+static bool
+m68k_can_use_doloop_p (const widest_int &iterations,
+		       const widest_int &iterations_max,
+		       unsigned int loop_depth,
+		       bool entered_at_top ATTRIBUTE_UNUSED)
+{
+  /* ColdFire doesn't have dbra.  */
+  if (TARGET_COLDFIRE)
+    return false;
+
+  /* Allow up to two levels of loop nesting for dbra.  Each dbra loop
+     typically uses ~2 IV registers, so 2 nested loops use ~4 registers,
+     roughly 25% of the available register set.  This keeps register
+     pressure manageable.  Deeper nesting has diminishing returns.  */
+  if (loop_depth > 2)
+    return false;
+
+  /* If we know the exact iteration count, check it fits in 16 bits.
+     dbra can do up to 65536 iterations (counter 65535 down to -1).  */
+  if (iterations != 0)
+    return wi::leu_p (iterations, 65536);
+
+  /* Unknown exact iteration count - check the maximum bound.
+     iterations_max == 0 means the maximum is also unknown.  */
+  if (iterations_max == 0)
+    {
+      /* Both iteration count and maximum are unknown.
+	 We cannot safely use dbra since we can't guarantee
+	 the count fits in 16 bits.  */
+      return false;
+    }
+
+  /* Maximum is known - check it fits in 16 bits.  */
+  return wi::leu_p (iterations_max, 65536);
+}
+
+/* Implement TARGET_PREFERRED_DOLOOP_MODE.
+   Always return HImode since dbra operates on 16-bit values.
+   The can_use_doloop_p hook ensures iteration counts fit in 16 bits.  */
+
+static machine_mode
+m68k_preferred_doloop_mode (machine_mode mode ATTRIBUTE_UNUSED)
+{
+  return HImode;
+}
+
+/* Implement TARGET_PREDICT_DOLOOP_P.
+   This helps IVOPTS preserve count-based IVs when doloop is likely to be used.
+   Without this, IVOPTS at -O2 may transform counted loops into pointer-based
+   loops before the DOLOOP pass runs, preventing dbra usage.  */
+
+static bool
+m68k_predict_doloop_p (class loop *loop)
+{
+  /* ColdFire doesn't have dbra.  */
+  if (TARGET_COLDFIRE)
+    return false;
+
+  /* Check iteration bounds if available.
+     dbra can handle up to 65536 iterations.  */
+  if (loop->any_upper_bound
+      && wi::gtu_p (loop->nb_iterations_upper_bound, 65536))
+    return false;
+
+  /* For loops with inner loops, check that the outer loop body
+     (excluding inner loops) doesn't contain function calls.
+     Function calls clobber 4 or 5 caller-saved registers, so avoiding dbra
+     in outer loops with calls keeps register pressure under ~25% of the
+     register set.  Inner loops still benefit from dbra since they are
+     typically hotter and gain more from the optimization.  */
+  if (loop->inner != NULL)
+    {
+      basic_block *bbs = get_loop_body (loop);
+      unsigned n_bbs = loop->num_nodes;
+
+      for (unsigned i = 0; i < n_bbs; i++)
+	{
+	  basic_block bb = bbs[i];
+
+	  /* Skip BBs that are part of inner loops.  */
+	  if (bb->loop_father != loop)
+	    continue;
+
+	  /* Check all statements in this BB for calls.  */
+	  for (gimple_stmt_iterator gsi = gsi_start_bb (bb);
+	       !gsi_end_p (gsi); gsi_next (&gsi))
+	    {
+	      gimple *stmt = gsi_stmt (gsi);
+	      if (is_gimple_call (stmt)
+		  && !gimple_call_internal_p (stmt))
+		{
+		  free (bbs);
+		  return false;
+		}
+	    }
+	}
+      free (bbs);
+    }
+
+  /* Predict doloop will be used - tell IVOPTS to preserve count-based IV.  */
+  return true;
+}
 
 static void
 m68k_file_end (void)
