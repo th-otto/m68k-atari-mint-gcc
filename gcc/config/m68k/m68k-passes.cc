@@ -117,6 +117,183 @@ is_reg_increment (rtx_insn *insn, int *pregno, HOST_WIDE_INT *pincr)
   return false;
 }
 
+/* Update a memory operand's offset in place.  Returns true on success.  */
+
+static bool
+update_mem_offset_inplace (rtx *mem_loc, int regno, HOST_WIDE_INT new_offset)
+{
+  rtx old_mem = *mem_loc;
+  if (!MEM_P (old_mem))
+    return false;
+
+  rtx addr = XEXP (old_mem, 0);
+
+  /* Check if this MEM uses the target register with an offset.  */
+  if (GET_CODE (addr) != PLUS
+      || !REG_P (XEXP (addr, 0))
+      || REGNO (XEXP (addr, 0)) != (unsigned) regno
+      || !CONST_INT_P (XEXP (addr, 1)))
+    return false;
+
+  machine_mode mem_mode = GET_MODE (old_mem);
+  rtx reg = gen_rtx_REG (Pmode, regno);
+
+  rtx new_addr;
+  if (new_offset == 0)
+    new_addr = reg;
+  else
+    new_addr = gen_rtx_PLUS (Pmode, reg, GEN_INT (new_offset));
+
+  rtx new_mem = gen_rtx_MEM (mem_mode, new_addr);
+  MEM_COPY_ATTRIBUTES (new_mem, old_mem);
+  *mem_loc = new_mem;
+  return true;
+}
+
+/* Check if a MEM operand uses the given register with a negative offset.
+   Returns the offset if found, or 0 if not.  */
+
+static HOST_WIDE_INT
+get_negative_offset (rtx mem, int regno)
+{
+  if (!MEM_P (mem))
+    return 0;
+
+  int mem_regno;
+  HOST_WIDE_INT offset;
+  if (mem_reg_offset_p (mem, &mem_regno, &offset)
+      && mem_regno == regno && offset < 0)
+    return offset;
+
+  return 0;
+}
+
+/* Try to normalize increment position: move increment instructions that
+   are followed by negative-offset memory accesses to after those accesses,
+   adjusting the offsets to be positive.
+
+   This transforms:
+     move.w (%a0),(%a1)
+     move.w 2(%a0),2(%a1)
+     move.w 4(%a0),4(%a1)
+     addq.l #8,%a0             ; increment in middle
+     addq.l #8,%a1
+     move.w -2(%a0),-2(%a1)    ; negative offset
+
+   Into:
+     move.w (%a0),(%a1)
+     move.w 2(%a0),2(%a1)
+     move.w 4(%a0),4(%a1)
+     move.w 6(%a0),6(%a1)      ; -2 + 8 = 6
+     addq.l #8,%a0             ; moved to end
+     addq.l #8,%a1             ; moved to end
+
+   Returns true if any transformation was made.  */
+
+static bool
+try_normalize_increment_position (basic_block bb, rtx_insn *add_insn,
+				  int regno, HOST_WIDE_INT incr)
+{
+  /* Must be an address register (a0-a7 = regs 8-15).  */
+  if (regno < 8 || regno > 15)
+    return false;
+
+  /* Only handle positive increments.  */
+  if (incr <= 0)
+    return false;
+
+  /* Collect instructions with negative offsets that need adjustment.  */
+  struct insn_to_fix {
+    rtx_insn *insn;
+    HOST_WIDE_INT src_offset;   /* 0 if src doesn't need fixing */
+    HOST_WIDE_INT dest_offset;  /* 0 if dest doesn't need fixing */
+  };
+  auto_vec<insn_to_fix> fixups;
+  rtx_insn *last_fixup_insn = nullptr;
+
+  for (rtx_insn *insn = next_nondebug_insn_bb (bb, add_insn);
+       insn;
+       insn = next_nondebug_insn_bb (bb, insn))
+    {
+      rtx set = single_set (insn);
+      if (!set)
+	break;
+
+      rtx src = SET_SRC (set);
+      rtx dest = SET_DEST (set);
+
+      HOST_WIDE_INT src_neg = get_negative_offset (src, regno);
+      HOST_WIDE_INT dest_neg = get_negative_offset (dest, regno);
+
+      if (src_neg < 0 || dest_neg < 0)
+	{
+	  insn_to_fix fix;
+	  fix.insn = insn;
+	  fix.src_offset = src_neg;
+	  fix.dest_offset = dest_neg;
+	  fixups.safe_push (fix);
+	  last_fixup_insn = insn;
+	  continue;
+	}
+
+      /* If the register is modified by another instruction, stop.  */
+      if (reg_set_p (gen_rtx_REG (Pmode, regno), insn))
+	break;
+
+      /* If the register is used in some other way, stop.  */
+      if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (insn)))
+	break;
+    }
+
+  if (fixups.is_empty ())
+    return false;
+
+  /* Verify all negative offsets can be adjusted to valid positive offsets.  */
+  for (const insn_to_fix &fix : fixups)
+    {
+      if (fix.src_offset < 0)
+	{
+	  HOST_WIDE_INT new_off = fix.src_offset + incr;
+	  if (new_off < 0 || new_off > 32767)
+	    return false;
+	}
+      if (fix.dest_offset < 0)
+	{
+	  HOST_WIDE_INT new_off = fix.dest_offset + incr;
+	  if (new_off < 0 || new_off > 32767)
+	    return false;
+	}
+    }
+
+  /* Perform the transformation: adjust offsets.  */
+  for (const insn_to_fix &fix : fixups)
+    {
+      rtx set = single_set (fix.insn);
+
+      if (fix.src_offset < 0)
+	{
+	  HOST_WIDE_INT new_offset = fix.src_offset + incr;
+	  update_mem_offset_inplace (&SET_SRC (set), regno, new_offset);
+	}
+      if (fix.dest_offset < 0)
+	{
+	  HOST_WIDE_INT new_offset = fix.dest_offset + incr;
+	  update_mem_offset_inplace (&SET_DEST (set), regno, new_offset);
+	}
+
+      /* Validate the transformed instruction.  */
+      INSN_CODE (fix.insn) = -1;
+      if (recog_memoized (fix.insn) < 0)
+	return false;
+    }
+
+  /* Move the increment instruction to after the last fixup instruction.  */
+  remove_insn (add_insn);
+  add_insn_after (add_insn, last_fixup_insn, bb);
+
+  return true;
+}
+
 /* Try to convert a memory access and subsequent offset accesses to POST_INC.
    Returns true if any transformation was made.  */
 
@@ -331,6 +508,85 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
   return true;
 }
 
+/* Main function for the normalize_autoinc pass.
+
+   This pass normalizes increment positions by moving increment instructions
+   that are followed by negative-offset memory accesses to after those
+   accesses, adjusting the offsets to be positive.
+
+   This transforms:
+     move.w (%a0),(%a1)
+     move.w 2(%a0),2(%a1)
+     move.w 4(%a0),4(%a1)
+     addq.l #8,%a0             ; increment in middle
+     addq.l #8,%a1
+     move.w -2(%a0),-2(%a1)    ; negative offset
+
+   Into:
+     move.w (%a0),(%a1)
+     move.w 2(%a0),2(%a1)
+     move.w 4(%a0),4(%a1)
+     move.w 6(%a0),6(%a1)      ; -2 + 8 = 6
+     addq.l #8,%a0             ; moved to end
+     addq.l #8,%a1             ; moved to end
+
+   This enables subsequent passes (m68k-autoinc, peephole2) to convert
+   all accesses to POST_INC addressing and merge adjacent word accesses
+   into long accesses.  */
+
+static unsigned int
+m68k_normalize_autoinc (function *func)
+{
+  unsigned int changes = 0;
+  bool made_changes;
+
+  /* Repeat until no more changes are made, since moving one increment
+     may expose opportunities for moving others.  */
+  do
+    {
+      made_changes = false;
+      basic_block bb;
+      FOR_EACH_BB_FN (bb, func)
+	{
+	  rtx_insn *insn, *next;
+	  for (insn = BB_HEAD (bb); insn != BB_END (bb); insn = next)
+	    {
+	      next = NEXT_INSN (insn);
+	      if (!NONDEBUG_INSN_P (insn))
+		continue;
+
+	      int regno;
+	      HOST_WIDE_INT incr;
+	      if (is_reg_increment (insn, &regno, &incr))
+		{
+		  if (try_normalize_increment_position (bb, insn, regno, incr))
+		    {
+		      changes++;
+		      made_changes = true;
+		    }
+		}
+	    }
+	  /* Also check the last instruction.  */
+	  if (NONDEBUG_INSN_P (BB_END (bb)))
+	    {
+	      int regno;
+	      HOST_WIDE_INT incr;
+	      if (is_reg_increment (BB_END (bb), &regno, &incr))
+		{
+		  if (try_normalize_increment_position (bb, BB_END (bb), regno, incr))
+		    {
+		      changes++;
+		      made_changes = true;
+		    }
+		}
+	    }
+	}
+    }
+  while (made_changes);
+
+  return changes;
+}
+
 /* Main function for the opt_autoinc pass.  */
 
 static unsigned int
@@ -338,7 +594,7 @@ m68k_opt_autoinc (function *func)
 {
   unsigned int changes = 0;
 
-  /* Process each basic block.  */
+  /* Convert memory accesses to POST_INC.  */
   basic_block bb;
   FOR_EACH_BB_FN (bb, func)
     {
@@ -375,6 +631,39 @@ m68k_opt_autoinc (function *func)
   return changes;
 }
 
+/* Pass data for m68k_pass_normalize_autoinc.  */
+
+const pass_data m68k_pass_data_normalize_autoinc =
+{
+  RTL_PASS,		  /* type */
+  "m68k-normalize-autoinc", /* name */
+  OPTGROUP_NONE,	  /* optinfo_flags */
+  TV_MACH_DEP,		  /* tv_id */
+  0,			  /* properties_required */
+  0,			  /* properties_provided */
+  0,			  /* properties_destroyed */
+  0,			  /* todo_flags_start */
+  TODO_df_finish	  /* todo_flags_finish */
+};
+
+/* The pass class for normalize_autoinc.  */
+
+class m68k_pass_normalize_autoinc : public rtl_opt_pass
+{
+public:
+  m68k_pass_normalize_autoinc (gcc::context *ctxt)
+    : rtl_opt_pass (m68k_pass_data_normalize_autoinc, ctxt)
+  {}
+
+  unsigned int execute (function *func) final override
+  {
+    if (optimize)
+      return m68k_normalize_autoinc (func);
+    return 0;
+  }
+
+}; /* class m68k_pass_normalize_autoinc */
+
 /* Pass data for m68k_pass_opt_autoinc.  */
 
 const pass_data m68k_pass_data_opt_autoinc =
@@ -390,7 +679,7 @@ const pass_data m68k_pass_data_opt_autoinc =
   TODO_df_finish    /* todo_flags_finish */
 };
 
-/* The pass class.  */
+/* The pass class for opt_autoinc.  */
 
 class m68k_pass_opt_autoinc : public rtl_opt_pass
 {
@@ -410,7 +699,15 @@ public:
 
 } /* anonymous namespace */
 
-/* Factory function for pass_m68k_opt_autoinc.  */
+/* Factory function for m68k_pass_normalize_autoinc.  */
+
+rtl_opt_pass *
+make_m68k_pass_normalize_autoinc (gcc::context *ctxt)
+{
+  return new m68k_pass_normalize_autoinc (ctxt);
+}
+
+/* Factory function for m68k_pass_opt_autoinc.  */
 
 rtl_opt_pass *
 make_m68k_pass_opt_autoinc (gcc::context *ctxt)

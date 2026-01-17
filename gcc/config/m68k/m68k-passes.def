@@ -17,6 +17,37 @@
    along with GCC; see the file COPYING3.  If not see
    <http://www.gnu.org/licenses/>.  */
 
+/* Normalize increment positions for auto-increment optimization.
+
+   When GCC's IVOPTS pass places pointer increments in the middle of a
+   sequence of memory accesses, it can result in some accesses using
+   negative offsets (e.g., -2(%a0)).  This prevents conversion to
+   POST_INC addressing mode.
+
+   This pass detects such patterns and moves the increment to after all
+   memory accesses, adjusting negative offsets to positive:
+
+   Before:
+     move.w (%a0),(%a1)
+     move.w 2(%a0),2(%a1)
+     move.w 4(%a0),4(%a1)
+     addq.l #8,%a0
+     addq.l #8,%a1
+     move.w -2(%a0),-2(%a1)    ; negative offset blocks POST_INC
+
+   After:
+     move.w (%a0),(%a1)
+     move.w 2(%a0),2(%a1)
+     move.w 4(%a0),4(%a1)
+     move.w 6(%a0),6(%a1)      ; adjusted to positive
+     addq.l #8,%a0             ; moved to end
+     addq.l #8,%a1
+
+   This runs before m68k_pass_opt_autoinc to enable full POST_INC conversion,
+   and before peephole2 which can then merge adjacent word moves into longs.  */
+
+INSERT_PASS_BEFORE (pass_peephole2, 1, m68k_pass_normalize_autoinc);
+
 /* A post reload optimization pass that converts indexed addressing to
    POST_INC or PRE_DEC addressing modes.  m68k has efficient (ax)+ and -(ax)
    addressing modes that perform memory access and pointer arithmetic in

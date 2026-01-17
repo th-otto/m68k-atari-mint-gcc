@@ -129,4 +129,5 @@ enum calling_abi m68k_cfun_abi (void);
 /* Functions from m68k-passes.cc.  */
 class rtl_opt_pass;
 namespace gcc { class context; }
+extern rtl_opt_pass *make_m68k_pass_normalize_autoinc (gcc::context *);
 extern rtl_opt_pass *make_m68k_pass_opt_autoinc (gcc::context *);
