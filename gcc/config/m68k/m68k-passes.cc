@@ -345,6 +345,13 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
       int mem_regno;
       HOST_WIDE_INT offset;
 
+      /* Check if register is used in BOTH src and dest - can't handle that
+	 case since we'd need to update both operands consistently.  */
+      bool src_uses_reg = reg_mentioned_p (gen_rtx_REG (Pmode, regno), src);
+      bool dest_uses_reg = reg_mentioned_p (gen_rtx_REG (Pmode, regno), dest);
+      if (src_uses_reg && dest_uses_reg)
+	return false;
+
       /* Check source operand.  */
       if (MEM_P (src))
 	{
@@ -387,18 +394,33 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
 	return false;
     }
 
-  /* Need at least one fixup and an add instruction.  */
-  if (fixup_insns.is_empty () || !add_insn)
+  /* Need at least one fixup instruction.  */
+  if (fixup_insns.is_empty ())
     return false;
 
-  /* Verify the add increment matches what we expect.  */
-  int add_regno;
-  HOST_WIDE_INT add_incr;
-  if (!is_reg_increment (add_insn, &add_regno, &add_incr))
-    return false;
+  /* If no add instruction, only proceed if the register is dead
+     at the end of the basic block (we can safely modify it).  */
+  HOST_WIDE_INT add_incr = 0;
+  if (add_insn)
+    {
+      /* Verify the add increment matches what we expect.  */
+      int add_regno;
+      if (!is_reg_increment (add_insn, &add_regno, &add_incr))
+	return false;
 
-  if (add_incr < expected_offset)
-    return false;
+      if (add_incr < expected_offset)
+	return false;
+    }
+  else
+    {
+      /* No add instruction - check if register is dead.  */
+      bitmap live_out = df_get_live_out (bb);
+      if (bitmap_bit_p (live_out, regno))
+	return false;  /* Register is live, can't safely modify it.  */
+
+      /* Set add_incr to the expected offset so the transformation works.  */
+      add_incr = expected_offset;
+    }
 
   /* Now perform the transformation.  */
 
@@ -488,21 +510,24 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
 	add_reg_note (insn, REG_INC, reg);
     }
 
-  /* 3. Adjust or delete the add instruction.  */
-  HOST_WIDE_INT remaining = add_incr - current_adj;
-  if (remaining == 0)
+  /* 3. Adjust or delete the add instruction (if present).  */
+  if (add_insn)
     {
-      /* Delete the add instruction entirely.  */
-      SET_INSN_DELETED (add_insn);
-    }
-  else if (remaining > 0)
-    {
-      /* Reduce the add value.  */
-      rtx set = single_set (add_insn);
-      rtx src = SET_SRC (set);
-      XEXP (src, 1) = GEN_INT (remaining);
-      INSN_CODE (add_insn) = -1;
-      recog_memoized (add_insn);
+      HOST_WIDE_INT remaining = add_incr - current_adj;
+      if (remaining == 0)
+	{
+	  /* Delete the add instruction entirely.  */
+	  SET_INSN_DELETED (add_insn);
+	}
+      else if (remaining > 0)
+	{
+	  /* Reduce the add value.  */
+	  rtx set = single_set (add_insn);
+	  rtx src = SET_SRC (set);
+	  XEXP (src, 1) = GEN_INT (remaining);
+	  INSN_CODE (add_insn) = -1;
+	  recog_memoized (add_insn);
+	}
     }
 
   return true;
