@@ -1046,6 +1046,1126 @@ public:
 
 }; /* class m68k_pass_narrow_index_mult */
 
+
+/* =======================================================================
+   RTL pass: m68k_pass_elim_andi
+
+   This pass eliminates redundant zero-extension instructions:
+   - andi.l #65535,%dn (word to long zero-extension)
+   - andi.l #255,%dn (byte to long zero-extension)
+   - andi.w #255,%dn (byte to word zero-extension)
+
+   On M68K, word (.w) and byte (.b) operations only modify the lower bits,
+   leaving upper bits unchanged.  If we pre-clear a register with moveq #0,
+   and all subsequent operations until the andi are appropriately sized,
+   then the upper bits remain zero and the andi is redundant.
+
+   Word extension example:
+     Before:
+       move.w (%a0),%d0      ; load 16-bit value, upper bits undefined
+       subq.w #1,%d0         ; word operation
+       andi.l #65535,%d0     ; zero-extend for 32-bit use
+
+     After:
+       moveq #0,%d0          ; pre-clear register (2 bytes, 4 cycles)
+       move.w (%a0),%d0      ; load 16-bit, upper bits stay 0
+       subq.w #1,%d0         ; word op, upper bits stay 0
+       ; andi eliminated!
+
+   Byte extension example:
+     Before:
+       move.b (%a0),%d0      ; load 8-bit value
+       addq.b #1,%d0         ; byte operation
+       and.l #255,%d0        ; zero-extend for 32-bit use
+
+     After:
+       moveq #0,%d0          ; pre-clear register
+       move.b (%a0),%d0      ; load 8-bit, upper bits stay 0
+       addq.b #1,%d0         ; byte op, upper bits stay 0
+       ; andi eliminated!
+
+   This pass also performs cross-basic-block optimization using dataflow
+   analysis to trace definitions across block boundaries.
+
+   Runs after fast_rtl_dce to avoid DCE deleting inserted moveq.
+   ======================================================================= */
+
+/* Extension type being optimized.  */
+
+enum extension_type {
+  EXT_NONE,
+  EXT_BYTE_TO_WORD,   /* andi.w #255 */
+  EXT_BYTE_TO_LONG,   /* andi.l #255 */
+  EXT_WORD_TO_LONG    /* andi.l #65535 */
+};
+
+/* Classification of how an instruction affects a specific register.  */
+
+enum insn_reg_effect {
+  EFFECT_NO_EFFECT,     /* Doesn't reference the register */
+  EFFECT_USES_AS_LONG,  /* Uses register as 32-bit source */
+  EFFECT_USES_AS_WORD,  /* Uses register as 16-bit source (for byte ext) */
+  EFFECT_MODIFIES_WORD, /* Modifies lower 16 bits only (preserves upper) */
+  EFFECT_MODIFIES_BYTE, /* Modifies lower 8 bits only (preserves upper) */
+  EFFECT_DEFINES_BYTE,  /* First definition, byte-sized (preserves upper) */
+  EFFECT_DEFINES_WORD,  /* First definition, word-sized (preserves upper) */
+  EFFECT_DEFINES_LONG,  /* Defines all 32 bits */
+  EFFECT_CLOBBERS       /* Call or asm clobbers register */
+};
+
+/* Return the extension type if INSN is an andi for zero-extension.
+   If so, set *REG to the register.  Detects:
+   - andi.l #65535,%dn (word to long)
+   - andi.l #255,%dn (byte to long)
+   - andi.w #255,%dn (byte to word)  */
+
+static enum extension_type
+classify_andi_extension (rtx_insn *insn, rtx *reg)
+{
+  if (!NONJUMP_INSN_P (insn))
+    return EXT_NONE;
+
+  rtx pat = PATTERN (insn);
+
+  if (GET_CODE (pat) != SET)
+    return EXT_NONE;
+
+  rtx dest = SET_DEST (pat);
+  rtx src = SET_SRC (pat);
+
+  /* Must be setting a data register.  */
+  if (!REG_P (dest) || !DATA_REG_P (dest))
+    return EXT_NONE;
+
+  /* Source must be (and:MODE reg (const)).  */
+  if (GET_CODE (src) != AND)
+    return EXT_NONE;
+
+  rtx op0 = XEXP (src, 0);
+  rtx op1 = XEXP (src, 1);
+
+  /* Operands: same register AND constant.  */
+  if (!REG_P (op0) || REGNO (op0) != REGNO (dest))
+    return EXT_NONE;
+
+  if (!CONST_INT_P (op1))
+    return EXT_NONE;
+
+  HOST_WIDE_INT mask = INTVAL (op1);
+  machine_mode mode = GET_MODE (src);
+
+  if (mode == SImode && mask == 65535)
+    {
+      *reg = dest;
+      return EXT_WORD_TO_LONG;
+    }
+
+  if (mode == SImode && mask == 255)
+    {
+      *reg = dest;
+      return EXT_BYTE_TO_LONG;
+    }
+
+  if (mode == HImode && mask == 255)
+    {
+      *reg = dest;
+      return EXT_BYTE_TO_WORD;
+    }
+
+  return EXT_NONE;
+}
+
+/* Return true if INSN is andi.l #65535 on a data register.
+   If so, set *REG to the register.  */
+
+static bool
+andi_65535_p (rtx_insn *insn, rtx *reg)
+{
+  return classify_andi_extension (insn, reg) == EXT_WORD_TO_LONG;
+}
+
+/* Check if INSN is moveq #0 or clr.l on a specific register.  */
+
+static bool
+is_clear_insn_p (rtx_insn *insn, unsigned regno)
+{
+  if (!NONJUMP_INSN_P (insn))
+    return false;
+
+  rtx pat = PATTERN (insn);
+
+  if (GET_CODE (pat) != SET)
+    return false;
+
+  rtx dest = SET_DEST (pat);
+  rtx src = SET_SRC (pat);
+
+  if (!REG_P (dest)
+      || REGNO (dest) != regno
+      || GET_MODE (dest) != SImode)
+    return false;
+
+  return src == const0_rtx;
+}
+
+/* Classify how an RTL source expression defines a register.
+   Returns the classification of the definition type.  */
+
+static enum insn_reg_effect
+classify_definition (rtx dest, rtx src)
+{
+  machine_mode mode = GET_MODE (dest);
+
+  /* Check destination mode.  */
+  if (mode == SImode)
+    {
+      /* Check for muls/mulu pattern: (mult (sign/zero_extend ...) ...).  */
+      if (GET_CODE (src) == MULT)
+	{
+	  rtx op0 = XEXP (src, 0);
+	  if (GET_CODE (op0) == SIGN_EXTEND
+	      || GET_CODE (op0) == ZERO_EXTEND)
+	    return EFFECT_DEFINES_LONG;  /* Produces 32-bit result.  */
+	}
+
+      /* Check for ext.l pattern: (sign_extend:SI (reg:HI)).  */
+      if (GET_CODE (src) == SIGN_EXTEND
+	  && GET_MODE (XEXP (src, 0)) == HImode)
+	return EFFECT_DEFINES_LONG;
+
+      /* Check for zero_extend:SI (reg:HI) - clears upper 16 bits.  */
+      if (GET_CODE (src) == ZERO_EXTEND
+	  && GET_MODE (XEXP (src, 0)) == HImode)
+	return EFFECT_DEFINES_WORD;
+
+      /* Check for zero_extend:SI (reg:QI) - clears upper 24 bits.  */
+      if (GET_CODE (src) == ZERO_EXTEND
+	  && GET_MODE (XEXP (src, 0)) == QImode)
+	return EFFECT_DEFINES_BYTE;
+
+      /* Regular 32-bit definition.  */
+      return EFFECT_DEFINES_LONG;
+    }
+
+  if (mode == HImode)
+    {
+      /* Check for zero_extend:HI (reg:QI) - clears upper 8 bits.  */
+      if (GET_CODE (src) == ZERO_EXTEND
+	  && GET_MODE (XEXP (src, 0)) == QImode)
+	return EFFECT_DEFINES_BYTE;
+
+      return EFFECT_DEFINES_WORD;
+    }
+
+  if (mode == QImode)
+    return EFFECT_DEFINES_BYTE;
+
+  return EFFECT_DEFINES_LONG;  /* Conservative default.  */
+}
+
+/* Check if X uses REG in a mode wider than max_mode.
+   For byte extension, max_mode is QImode (uses in HI or SI mode are bad).
+   For word extension, max_mode is HImode (uses in SI mode are bad).  */
+
+static bool
+uses_reg_wider_than_p (rtx x, unsigned regno, machine_mode max_mode)
+{
+  if (x == NULL_RTX)
+    return false;
+
+  enum rtx_code code = GET_CODE (x);
+
+  if (code == REG && REGNO (x) == regno)
+    {
+      machine_mode m = GET_MODE (x);
+      if (GET_MODE_SIZE (m) > GET_MODE_SIZE (max_mode))
+	return true;
+    }
+
+  if (code == MEM)
+    {
+      /* Check address for register use in wider mode.  */
+      rtx addr = XEXP (x, 0);
+      if (addr == NULL_RTX)
+	return false;
+      if (REG_P (addr) && REGNO (addr) == regno)
+	return true;  /* Address registers are always 32-bit.  */
+
+      if (GET_CODE (addr) == PLUS)
+	{
+	  rtx base = XEXP (addr, 0);
+	  rtx index = XEXP (addr, 1);
+
+	  if (base && REG_P (base) && REGNO (base) == regno)
+	    return true;
+
+	  if (index && GET_CODE (index) == MULT)
+	    {
+	      rtx idx_reg = XEXP (index, 0);
+	      if (idx_reg && REG_P (idx_reg) && REGNO (idx_reg) == regno)
+		{
+		  /* Check index mode - .l uses 32 bits, .w uses 16 bits.  */
+		  if (GET_MODE (idx_reg) == SImode)
+		    return true;
+		  if (max_mode == QImode && GET_MODE (idx_reg) == HImode)
+		    return true;
+		}
+	    }
+	  else if (index && REG_P (index) && REGNO (index) == regno)
+	    return true;
+	}
+    }
+
+  /* Recursively check subexpressions.  */
+  const char *fmt = GET_RTX_FORMAT (code);
+  int len = GET_RTX_LENGTH (code);
+  for (int i = 0; i < len; i++)
+    {
+      if (fmt[i] == 'e')
+	{
+	  rtx sub = XEXP (x, i);
+	  if (sub && uses_reg_wider_than_p (sub, regno, max_mode))
+	    return true;
+	}
+      else if (fmt[i] == 'E')
+	{
+	  int veclen = XVECLEN (x, i);
+	  for (int j = 0; j < veclen; j++)
+	    {
+	      rtx sub = XVECEXP (x, i, j);
+	      if (sub && uses_reg_wider_than_p (sub, regno, max_mode))
+		return true;
+	    }
+	}
+    }
+
+  return false;
+}
+
+/* Check if SRC uses REG as a 32-bit value (which would read undefined
+   upper bits if we haven't pre-cleared).  */
+
+static bool
+uses_reg_as_long_p (rtx x, unsigned regno)
+{
+  if (x == NULL_RTX)
+    return false;
+
+  enum rtx_code code = GET_CODE (x);
+
+  if (code == REG && REGNO (x) == regno)
+    {
+      /* Check if this is a full 32-bit use.  */
+      if (GET_MODE (x) == SImode)
+	return true;
+    }
+
+  if (code == MEM)
+    {
+      /* Check address for 32-bit register use.  */
+      rtx addr = XEXP (x, 0);
+      if (addr == NULL_RTX)
+	return false;
+      if (REG_P (addr) && REGNO (addr) == regno)
+	return true;
+
+      if (GET_CODE (addr) == PLUS)
+	{
+	  rtx base = XEXP (addr, 0);
+	  rtx index = XEXP (addr, 1);
+
+	  if (base && REG_P (base) && REGNO (base) == regno)
+	    return true;
+
+	  /* Check indexed addressing: (plus base (mult index scale)).  */
+	  if (index && GET_CODE (index) == MULT)
+	    {
+	      rtx idx_reg = XEXP (index, 0);
+	      /* If index uses .l mode, it reads full 32 bits.  */
+	      if (idx_reg && REG_P (idx_reg) && REGNO (idx_reg) == regno
+		  && GET_MODE (idx_reg) == SImode)
+		return true;
+	    }
+	  /* Check for (plus (reg) (reg)) indexed.  */
+	  else if (index && REG_P (index) && REGNO (index) == regno)
+	    return true;
+	}
+    }
+
+  /* Recursively check subexpressions.  */
+  const char *fmt = GET_RTX_FORMAT (code);
+  int len = GET_RTX_LENGTH (code);
+  for (int i = 0; i < len; i++)
+    {
+      if (fmt[i] == 'e')
+	{
+	  rtx sub = XEXP (x, i);
+	  if (sub && uses_reg_as_long_p (sub, regno))
+	    return true;
+	}
+      else if (fmt[i] == 'E')
+	{
+	  int veclen = XVECLEN (x, i);
+	  for (int j = 0; j < veclen; j++)
+	    {
+	      rtx sub = XVECEXP (x, i, j);
+	      if (sub && uses_reg_as_long_p (sub, regno))
+		return true;
+	    }
+	}
+    }
+
+  return false;
+}
+
+/* Classify how an instruction affects a specific register.  */
+
+static enum insn_reg_effect
+classify_insn_effect (rtx_insn *insn, unsigned regno)
+{
+  if (!NONDEBUG_INSN_P (insn))
+    return EFFECT_NO_EFFECT;
+
+  /* Handle CALL instructions.  */
+  if (CALL_P (insn))
+    {
+      /* D0-D1 are caller-saved.  */
+      if (regno <= 1)
+	return EFFECT_CLOBBERS;
+      return EFFECT_NO_EFFECT;
+    }
+
+  rtx pat = PATTERN (insn);
+
+  /* Handle SET patterns.  */
+  if (GET_CODE (pat) == SET)
+    {
+      rtx dest = SET_DEST (pat);
+      rtx src = SET_SRC (pat);
+
+      /* Check for STRICT_LOW_PART: (set (strict_low_part (reg:HI)) ...).  */
+      if (GET_CODE (dest) == STRICT_LOW_PART)
+	{
+	  rtx inner = XEXP (dest, 0);
+	  if (REG_P (inner) && REGNO (inner) == regno)
+	    {
+	      /* Even though dest is a word modify, the source might
+		 use the register as 32-bit (e.g., in an address).  */
+	      if (uses_reg_as_long_p (src, regno))
+		return EFFECT_USES_AS_LONG;
+	      if (GET_MODE (inner) == HImode)
+		return EFFECT_MODIFIES_WORD;
+	      if (GET_MODE (inner) == QImode)
+		return EFFECT_MODIFIES_BYTE;
+	    }
+	}
+
+      /* Check if this instruction defines our register.  */
+      if (REG_P (dest) && REGNO (dest) == regno)
+	{
+	  /* CRITICAL: Check if the source expression uses the register
+	     in ANY mode BEFORE we consider this a definition.
+	     For example:
+	     - move.w (%a0,%d0.l),%d0 uses d0.l in the address
+	     - subq.w #1,%d0 uses d0.w as input to the add
+	     In both cases, we can't insert moveq #0 before it.
+	     Only a pure definition (no prior use) is safe for optimization.  */
+	  if (uses_reg_as_long_p (src, regno))
+	    return EFFECT_USES_AS_LONG;
+
+	  /* Check if source uses the register in any mode (HI, QI, etc.).
+	     This catches cases like (plus:HI (reg:HI d0) ...).  */
+	  if (reg_mentioned_p (gen_rtx_REG (GET_MODE (dest), regno), src))
+	    {
+	      /* It's a modification, not a pure definition.  */
+	      if (GET_MODE (dest) == HImode)
+		return EFFECT_MODIFIES_WORD;
+	      if (GET_MODE (dest) == QImode)
+		return EFFECT_MODIFIES_BYTE;
+	      return EFFECT_DEFINES_LONG;  /* Conservative.  */
+	    }
+
+	  return classify_definition (dest, src);
+	}
+
+      /* Check if instruction uses our register as 32-bit.  */
+      if (uses_reg_as_long_p (src, regno))
+	return EFFECT_USES_AS_LONG;
+
+      /* Check if register is used in dest address as 32-bit.  */
+      if (MEM_P (dest) && uses_reg_as_long_p (dest, regno))
+	return EFFECT_USES_AS_LONG;
+
+      return EFFECT_NO_EFFECT;
+    }
+
+  /* Handle PARALLEL (multiple sets, often from calls or movem).  */
+  if (GET_CODE (pat) == PARALLEL)
+    {
+      enum insn_reg_effect result = EFFECT_NO_EFFECT;
+
+      for (int i = 0; i < XVECLEN (pat, 0); i++)
+	{
+	  rtx elem = XVECEXP (pat, 0, i);
+
+	  if (GET_CODE (elem) == CLOBBER)
+	    {
+	      rtx clobbered = XEXP (elem, 0);
+	      if (REG_P (clobbered) && REGNO (clobbered) == regno)
+		return EFFECT_CLOBBERS;
+	    }
+
+	  if (GET_CODE (elem) == SET)
+	    {
+	      rtx dest = SET_DEST (elem);
+	      rtx src = SET_SRC (elem);
+
+	      if (REG_P (dest) && REGNO (dest) == regno)
+		{
+		  enum insn_reg_effect eff = classify_definition (dest, src);
+		  if (eff == EFFECT_DEFINES_LONG || eff == EFFECT_CLOBBERS)
+		    return eff;
+		  if (eff > result)
+		    result = eff;
+		}
+
+	      if (uses_reg_as_long_p (src, regno))
+		return EFFECT_USES_AS_LONG;
+	    }
+	}
+
+      return result;
+    }
+
+  return EFFECT_NO_EFFECT;
+}
+
+/* State for tracking a potential optimization candidate.  */
+
+struct andi_candidate {
+  rtx_insn *andi_insn;      /* The andi instruction.  */
+  rtx reg;                  /* The data register (D0-D7).  */
+  vec<rtx_insn *> def_insns;  /* Appropriately-sized definitions.  */
+  enum extension_type ext_type;  /* Type of extension being eliminated.  */
+  bool valid;               /* Still a valid candidate.  */
+
+  andi_candidate () : andi_insn (nullptr), reg (nullptr),
+		      def_insns (vNULL), ext_type (EXT_NONE), valid (false) {}
+};
+
+/* Check if an effect is compatible with the extension type being optimized.
+   For word-to-long: byte and word operations are safe.
+   For byte-to-long/word: only byte operations are safe.  */
+
+static bool
+effect_compatible_with_ext (enum insn_reg_effect effect,
+			    enum extension_type ext_type)
+{
+  switch (ext_type)
+    {
+    case EXT_WORD_TO_LONG:
+      /* Word operations preserve upper 16 bits.  */
+      return (effect == EFFECT_MODIFIES_WORD
+	      || effect == EFFECT_MODIFIES_BYTE
+	      || effect == EFFECT_NO_EFFECT);
+
+    case EXT_BYTE_TO_LONG:
+    case EXT_BYTE_TO_WORD:
+      /* Only byte operations preserve upper 24/8 bits.  */
+      return (effect == EFFECT_MODIFIES_BYTE
+	      || effect == EFFECT_NO_EFFECT);
+
+    default:
+      return false;
+    }
+}
+
+/* Check if a definition effect is the right size for the extension type.  */
+
+static bool
+definition_matches_ext (enum insn_reg_effect effect,
+			enum extension_type ext_type)
+{
+  switch (ext_type)
+    {
+    case EXT_WORD_TO_LONG:
+      return effect == EFFECT_DEFINES_WORD;
+
+    case EXT_BYTE_TO_LONG:
+    case EXT_BYTE_TO_WORD:
+      return effect == EFFECT_DEFINES_BYTE;
+
+    default:
+      return false;
+    }
+}
+
+/* Classify instruction effect with consideration for extension type.
+   For byte extensions, word-mode uses are also problematic.  */
+
+static enum insn_reg_effect
+classify_insn_effect_for_ext (rtx_insn *insn, unsigned regno,
+			      enum extension_type ext_type)
+{
+  enum insn_reg_effect effect = classify_insn_effect (insn, regno);
+
+  /* For byte extensions, we need to also check for word-mode uses.  */
+  if ((ext_type == EXT_BYTE_TO_LONG || ext_type == EXT_BYTE_TO_WORD)
+      && effect == EFFECT_NO_EFFECT)
+    {
+      rtx pat = PATTERN (insn);
+      if (GET_CODE (pat) == SET)
+	{
+	  rtx src = SET_SRC (pat);
+	  rtx dest = SET_DEST (pat);
+
+	  /* Check if register is used in word mode in src or dest.  */
+	  if (uses_reg_wider_than_p (src, regno, QImode)
+	      || uses_reg_wider_than_p (dest, regno, QImode))
+	    return EFFECT_USES_AS_WORD;
+	}
+    }
+
+  /* For byte extensions, word modifications clobber the bits we need.  */
+  if ((ext_type == EXT_BYTE_TO_LONG || ext_type == EXT_BYTE_TO_WORD)
+      && effect == EFFECT_MODIFIES_WORD)
+    return EFFECT_DEFINES_LONG;  /* Treat as clobbering upper bits.  */
+
+  /* For byte extensions, word definitions also clobber needed bits.  */
+  if ((ext_type == EXT_BYTE_TO_LONG || ext_type == EXT_BYTE_TO_WORD)
+      && effect == EFFECT_DEFINES_WORD)
+    return EFFECT_DEFINES_LONG;
+
+  return effect;
+}
+
+/* Recursive helper for cross-BB definition finding.
+   VISITED tracks blocks already seen to avoid infinite loops on back-edges.
+   DEPTH limits recursion to avoid excessive compile time.  */
+
+static bool
+find_cross_bb_definitions_1 (basic_block bb, unsigned regno,
+			     enum extension_type ext_type,
+			     vec<rtx_insn *> *def_insns,
+			     bitmap visited, int depth)
+{
+  /* Limit recursion depth to avoid excessive compile time.  */
+  if (depth > 10)
+    return false;
+
+  edge e;
+  edge_iterator ei;
+
+  FOR_EACH_EDGE (e, ei, bb->preds)
+    {
+      basic_block pred_bb = e->src;
+
+      /* Skip entry block.  */
+      if (pred_bb == ENTRY_BLOCK_PTR_FOR_FN (cfun))
+	return false;
+
+      /* Skip already-visited blocks (handles loops).  */
+      if (bitmap_bit_p (visited, pred_bb->index))
+	continue;
+      bitmap_set_bit (visited, pred_bb->index);
+
+      /* Find the last definition in the predecessor block.  */
+      rtx_insn *pred_def = nullptr;
+      bool safe_path = true;
+      bool need_recurse = false;
+
+      /* Defensive: check block has valid head/end.  */
+      if (BB_HEAD (pred_bb) == nullptr || BB_END (pred_bb) == nullptr)
+	return false;
+
+      for (rtx_insn *insn = BB_END (pred_bb);
+	   insn && insn != PREV_INSN (BB_HEAD (pred_bb));
+	   insn = PREV_INSN (insn))
+	{
+	  if (!NONDEBUG_INSN_P (insn))
+	    continue;
+
+	  /* Defensive: verify insn has a valid pattern.  */
+	  if (PATTERN (insn) == NULL_RTX)
+	    continue;
+
+	  enum insn_reg_effect effect
+	    = classify_insn_effect_for_ext (insn, regno, ext_type);
+
+	  switch (effect)
+	    {
+	    case EFFECT_DEFINES_BYTE:
+	      if (ext_type == EXT_BYTE_TO_LONG
+		  || ext_type == EXT_BYTE_TO_WORD)
+		{
+		  pred_def = insn;
+		  goto found_in_pred;
+		}
+	      safe_path = false;
+	      goto found_in_pred;
+
+	    case EFFECT_DEFINES_WORD:
+	      if (ext_type == EXT_WORD_TO_LONG)
+		{
+		  pred_def = insn;
+		  goto found_in_pred;
+		}
+	      safe_path = false;
+	      goto found_in_pred;
+
+	    case EFFECT_DEFINES_LONG:
+	    case EFFECT_CLOBBERS:
+	    case EFFECT_USES_AS_LONG:
+	    case EFFECT_USES_AS_WORD:
+	      safe_path = false;
+	      goto found_in_pred;
+
+	    case EFFECT_MODIFIES_WORD:
+	      if (ext_type != EXT_WORD_TO_LONG)
+		{
+		  safe_path = false;
+		  goto found_in_pred;
+		}
+	      continue;
+
+	    case EFFECT_MODIFIES_BYTE:
+	      continue;
+
+	    case EFFECT_NO_EFFECT:
+	      continue;
+	    }
+	}
+
+      /* Reached beginning of predecessor without finding definition.
+	 Recurse into this block's predecessors.  */
+      need_recurse = true;
+
+    found_in_pred:
+      if (!safe_path)
+	return false;
+
+      if (need_recurse)
+	{
+	  /* No definition in this block - recurse to its predecessors.  */
+	  if (!find_cross_bb_definitions_1 (pred_bb, regno, ext_type,
+					    def_insns, visited, depth + 1))
+	    return false;
+	}
+      else if (pred_def != nullptr)
+	{
+	  def_insns->safe_push (pred_def);
+	}
+      else
+	{
+	  /* safe_path but no def and no recurse - shouldn't happen.  */
+	  return false;
+	}
+    }
+
+  return true;
+}
+
+/* Try to trace backward across basic block boundaries to find the
+   definitions of a register.  Fills def_insns with all defining
+   instructions from all predecessor blocks.
+   Returns true if safe to optimize, false otherwise.
+
+   NOTE: Currently limited to single-predecessor cases to avoid crashes
+   in complex functions.  Full cross-BB analysis is disabled pending
+   investigation of the root cause.  */
+
+static bool
+find_cross_bb_definitions (basic_block bb, unsigned regno,
+			   enum extension_type ext_type,
+			   vec<rtx_insn *> *def_insns)
+{
+  auto_bitmap visited;
+  bitmap_set_bit (visited, bb->index);
+
+  if (!find_cross_bb_definitions_1 (bb, regno, ext_type, def_insns,
+				    visited, 0))
+    return false;
+
+  return !def_insns->is_empty ();
+}
+
+/* Try to eliminate andi instructions in a basic block by inserting
+   moveq #0 before the first appropriately-sized definition.
+   ALREADY_CLEARED_BEFORE tracks def_insns that already have moveq inserted
+   across all BBs in the function to avoid duplicate insertions.
+   Returns the number of eliminations performed.  */
+
+static unsigned int
+m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before)
+{
+  auto_vec<andi_candidate> candidates;
+
+  if (dump_file)
+    fprintf (dump_file, "m68k-elim-andi: Processing BB %d\n", bb->index);
+
+  /* Pass 1: Find all andi zero-extension instructions.  */
+  rtx_insn *insn;
+  FOR_BB_INSNS (bb, insn)
+    {
+      rtx reg;
+      enum extension_type ext_type = classify_andi_extension (insn, &reg);
+      if (ext_type != EXT_NONE)
+	{
+	  if (dump_file)
+	    {
+	      fprintf (dump_file, "  Found andi ext_type=%d reg=%d: ",
+		       ext_type, REGNO (reg));
+	      print_rtl_single (dump_file, insn);
+	    }
+	  andi_candidate cand;
+	  cand.andi_insn = insn;
+	  cand.reg = reg;
+	  cand.ext_type = ext_type;
+	  candidates.safe_push (cand);
+	}
+    }
+
+  if (candidates.is_empty ())
+    return 0;
+
+  /* Pass 2: For each candidate, trace backward to find definition.  */
+  for (andi_candidate &cand : candidates)
+    {
+      unsigned regno = REGNO (cand.reg);
+      bool found_def = false;
+      bool already_cleared = false;
+
+      if (dump_file)
+	fprintf (dump_file, "  Scanning backward for d%d definition\n", regno);
+
+      /* Collect BB instructions in order, then scan backward from andi.  */
+      auto_vec<rtx_insn *> bb_insns;
+      rtx_insn *bb_insn;
+      FOR_BB_INSNS (bb, bb_insn)
+	if (NONDEBUG_INSN_P (bb_insn))
+	  bb_insns.safe_push (bb_insn);
+
+      /* Find andi position and scan backward.  */
+      int andi_idx = -1;
+      for (unsigned i = 0; i < bb_insns.length (); i++)
+	if (bb_insns[i] == cand.andi_insn)
+	  {
+	    andi_idx = i;
+	    break;
+	  }
+
+      for (int i = andi_idx - 1; i >= 0; i--)
+	{
+	  rtx_insn *scan = bb_insns[i];
+	  if (dump_file)
+	    {
+	      fprintf (dump_file, "    Checking: ");
+	      print_rtl_single (dump_file, scan);
+	    }
+
+	  /* Check if register is already cleared.  */
+	  if (is_clear_insn_p (scan, regno))
+	    {
+	      if (dump_file)
+		fprintf (dump_file, "    -> Already cleared!\n");
+	      already_cleared = true;
+	      break;
+	    }
+
+	  enum insn_reg_effect effect
+	    = classify_insn_effect_for_ext (scan, regno, cand.ext_type);
+
+	  if (dump_file)
+	    fprintf (dump_file, "    -> effect=%d\n", effect);
+
+	  switch (effect)
+	    {
+	    case EFFECT_DEFINES_BYTE:
+	      if (dump_file)
+		fprintf (dump_file, "    -> DEFINES_BYTE, valid=%d\n",
+			 cand.ext_type == EXT_BYTE_TO_LONG
+			 || cand.ext_type == EXT_BYTE_TO_WORD);
+	      if (cand.ext_type == EXT_BYTE_TO_LONG
+		  || cand.ext_type == EXT_BYTE_TO_WORD)
+		{
+		  cand.def_insns.safe_push (scan);
+		  cand.valid = true;
+		}
+	      found_def = true;
+	      break;
+
+	    case EFFECT_DEFINES_WORD:
+	      if (dump_file)
+		fprintf (dump_file, "    -> DEFINES_WORD, valid=%d\n",
+			 cand.ext_type == EXT_WORD_TO_LONG);
+	      if (cand.ext_type == EXT_WORD_TO_LONG)
+		{
+		  cand.def_insns.safe_push (scan);
+		  cand.valid = true;
+		}
+	      found_def = true;
+	      break;
+
+	    case EFFECT_DEFINES_LONG:
+	    case EFFECT_CLOBBERS:
+	      found_def = true;
+	      break;
+
+	    case EFFECT_USES_AS_LONG:
+	    case EFFECT_USES_AS_WORD:
+	      found_def = true;
+	      break;
+
+	    case EFFECT_MODIFIES_WORD:
+	      if (cand.ext_type == EXT_WORD_TO_LONG)
+		continue;
+	      found_def = true;  /* For byte ext, word modify clobbers.  */
+	      break;
+
+	    case EFFECT_MODIFIES_BYTE:
+	      continue;
+
+	    case EFFECT_NO_EFFECT:
+	      continue;
+	    }
+
+	  if (found_def)
+	    break;
+	}
+
+      if (dump_file)
+	fprintf (dump_file, "  After scan: found_def=%d already_cleared=%d valid=%d\n",
+		 found_def, already_cleared, cand.valid);
+
+      /* If register is already cleared, just delete andi (no defs needed).  */
+      if (already_cleared && !cand.valid)
+	cand.valid = true;
+
+      /* If not found in this block, try cross-basic-block analysis.  */
+      if (!found_def && !already_cleared)
+	{
+	  if (dump_file)
+	    fprintf (dump_file, "  Trying cross-BB analysis\n");
+	  if (find_cross_bb_definitions (bb, regno, cand.ext_type,
+					 &cand.def_insns))
+	    {
+	      if (dump_file)
+		fprintf (dump_file, "  Found %d cross-BB definitions!\n",
+			 (int)cand.def_insns.length ());
+	      cand.valid = true;
+	    }
+	}
+
+      if (dump_file)
+	fprintf (dump_file, "  Final: valid=%d num_defs=%d\n",
+		 cand.valid, (int)cand.def_insns.length ());
+    }
+
+  /* Pass 3: Apply transformations.  */
+  unsigned int changes = 0;
+
+  for (const andi_candidate &cand : candidates)
+    {
+      if (!cand.valid)
+	continue;
+
+      /* Insert moveq #0,reg before each definition.  */
+      bool all_succeeded = true;
+      auto_vec<rtx_insn *> inserted_insns;
+
+      if (dump_file)
+	fprintf (dump_file, "  Starting transform loop for %d def_insns\n",
+		 (int)cand.def_insns.length ());
+
+      for (rtx_insn *def_insn : cand.def_insns)
+	{
+	  if (dump_file)
+	    fprintf (dump_file, "  Processing def_insn %p\n", (void *)def_insn);
+
+	  /* Validate def_insn is still valid.  */
+	  if (def_insn == nullptr || def_insn->deleted ())
+	    {
+	      if (dump_file)
+		fprintf (dump_file, "  SKIP: def_insn null or deleted\n");
+	      all_succeeded = false;
+	      break;
+	    }
+
+	  /* Ensure def_insn has a valid basic block.  */
+	  basic_block def_bb = BLOCK_FOR_INSN (def_insn);
+	  if (def_bb == nullptr)
+	    {
+	      if (dump_file)
+		fprintf (dump_file, "  SKIP: def_insn has no BB\n");
+	      all_succeeded = false;
+	      break;
+	    }
+
+	  /* Check if we already inserted a moveq before this def for this reg.  */
+	  unsigned regno = REGNO (cand.reg);
+	  unsigned key = (INSN_UID (def_insn) << 4) | (regno & 0xf);
+	  if (bitmap_bit_p (already_cleared_before, key))
+	    {
+	      if (dump_file)
+		fprintf (dump_file, "  SKIP: already cleared before uid=%d "
+			 "for d%d\n", INSN_UID (def_insn), regno);
+	      continue;  /* Already have moveq, just skip.  */
+	    }
+
+	  /* Extra validation for cross-BB insertions.  */
+	  if (def_bb != bb)
+	    {
+	      if (dump_file)
+		{
+		  fprintf (dump_file, "  Cross-BB: inserting in BB %d "
+			   "(current BB %d)\n", def_bb->index, bb->index);
+		  fprintf (dump_file, "    def_bb head uid=%d, end uid=%d\n",
+			   INSN_UID (BB_HEAD (def_bb)),
+			   INSN_UID (BB_END (def_bb)));
+		  fprintf (dump_file, "    def_insn uid=%d\n",
+			   INSN_UID (def_insn));
+		}
+
+	      /* Validate BB structure.  */
+	      if (BB_HEAD (def_bb) == nullptr || BB_END (def_bb) == nullptr)
+		{
+		  if (dump_file)
+		    fprintf (dump_file, "  SKIP: def_bb has invalid head/end\n");
+		  all_succeeded = false;
+		  break;
+		}
+	    }
+
+	  if (dump_file)
+	    {
+	      fprintf (dump_file, "  Transform: def_insn uid=%d in BB %d\n",
+		       INSN_UID (def_insn), def_bb->index);
+	    }
+
+	  /* For SI mode register, use moveq #0.
+	     For HI mode (byte-to-word), need to clear just the word.  */
+	  rtx clear_reg;
+	  if (cand.ext_type == EXT_BYTE_TO_WORD)
+	    clear_reg = gen_rtx_REG (HImode, REGNO (cand.reg));
+	  else
+	    clear_reg = gen_rtx_REG (SImode, REGNO (cand.reg));
+
+	  rtx clear_pat = gen_rtx_SET (clear_reg, const0_rtx);
+	  rtx_insn *new_insn = emit_insn_before (clear_pat, def_insn);
+
+	  /* Mark that we've inserted a clear for this def_insn + register.  */
+	  bitmap_set_bit (already_cleared_before, key);
+
+	  /* Validate the new insn.  */
+	  INSN_CODE (new_insn) = -1;
+	  if (recog_memoized (new_insn) < 0)
+	    {
+	      /* Failed to recognize - remove and clean up.  */
+	      delete_insn (new_insn);
+	      all_succeeded = false;
+	      break;
+	    }
+
+	  /* Note: we don't call df_insn_rescan here - let TODO_df_finish
+	     handle dataflow rebuild at the end of the pass.  Calling
+	     df_insn_rescan during cross-BB insertions can cause issues.  */
+
+	  inserted_insns.safe_push (new_insn);
+	}
+
+      if (!all_succeeded)
+	{
+	  /* Remove any insns we inserted.  Use delete_insn() to properly
+	     update the dataflow framework.  */
+	  for (rtx_insn *ins : inserted_insns)
+	    delete_insn (ins);
+	  continue;
+	}
+
+      /* Delete the andi instruction.  Use delete_insn() instead of
+	 SET_INSN_DELETED() to properly update the dataflow framework.  */
+      if (dump_file)
+	fprintf (dump_file, "deleting insn with uid = %d.\n",
+		 INSN_UID (cand.andi_insn));
+      delete_insn (cand.andi_insn);
+      changes++;
+    }
+
+  if (dump_file)
+    fprintf (dump_file, "m68k-elim-andi: Done with BB %d, changes=%d\n",
+	     bb->index, changes);
+
+  return changes;
+}
+
+/* Main function for the elim_andi pass.  */
+
+static unsigned int
+m68k_elim_andi (function *func)
+{
+  unsigned int changes = 0;
+
+  /* Track def_insns that already have moveq inserted before them.
+     Key is (insn UID << 4) | regno to handle different registers.
+     This is shared across all BBs to prevent duplicate insertions
+     when multiple BBs reference the same def_insn in a predecessor.  */
+  auto_bitmap already_cleared_before;
+
+  basic_block bb;
+  FOR_EACH_BB_FN (bb, func)
+    {
+      changes += m68k_elim_andi_bb (bb, already_cleared_before);
+    }
+
+  if (dump_file)
+    fprintf (dump_file, "m68k-elim-andi: Pass complete, total changes=%d\n",
+	     changes);
+
+  /* Don't call df_analyze() manually - let TODO_df_finish handle
+     dataflow cleanup.  delete_insn() has already notified DF about
+     the deleted instructions.  */
+
+  if (dump_file)
+    fprintf (dump_file, "m68k-elim-andi: Returning from pass\n");
+
+  /* Return 0 - the TODO_df_finish in pass_data will trigger
+     df_finish_pass() to rebuild dataflow as needed.  */
+  return 0;
+}
+
+/* Pass data for m68k_pass_elim_andi.  */
+
+const pass_data m68k_pass_data_elim_andi =
+{
+  RTL_PASS,		/* type */
+  "m68k-elim-andi",	/* name */
+  OPTGROUP_NONE,	/* optinfo_flags */
+  TV_MACH_DEP,		/* tv_id */
+  0,			/* properties_required */
+  0,			/* properties_provided */
+  0,			/* properties_destroyed */
+  0,			/* todo_flags_start */
+  TODO_df_finish	/* todo_flags_finish */
+};
+
+/* The pass class for elim_andi.  */
+
+class m68k_pass_elim_andi : public rtl_opt_pass
+{
+public:
+  m68k_pass_elim_andi (gcc::context *ctxt)
+    : rtl_opt_pass (m68k_pass_data_elim_andi, ctxt)
+  {}
+
+  unsigned int execute (function *func) final override
+  {
+    if (optimize)
+      return m68k_elim_andi (func);
+    return 0;
+  }
+
+}; /* class m68k_pass_elim_andi */
+
 } /* anonymous namespace */
 
 /* Factory function for m68k_pass_normalize_autoinc.  */
@@ -1070,4 +2190,12 @@ gimple_opt_pass *
 make_m68k_pass_narrow_index_mult (gcc::context *ctxt)
 {
   return new m68k_pass_narrow_index_mult (ctxt);
+}
+
+/* Factory function for m68k_pass_elim_andi.  */
+
+rtl_opt_pass *
+make_m68k_pass_elim_andi (gcc::context *ctxt)
+{
+  return new m68k_pass_elim_andi (ctxt);
 }

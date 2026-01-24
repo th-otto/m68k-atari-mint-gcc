@@ -75,3 +75,31 @@ INSERT_PASS_BEFORE (pass_peephole2, 1, m68k_pass_normalize_autoinc);
    This runs after peephole2 to catch opportunities that other passes miss.  */
 
 INSERT_PASS_AFTER (pass_peephole2, 1, m68k_pass_opt_autoinc);
+
+/* Eliminate redundant andi.l #65535 zero-extension instructions.
+
+   On M68K, word (.w) operations only modify the lower 16 bits, leaving
+   upper bits unchanged.  This pass detects patterns where:
+   1. A register is defined by a word-sized operation
+   2. All subsequent operations until the andi are word/byte operations
+   3. An andi.l #65535 is used to zero-extend for 32-bit use
+
+   By inserting moveq #0 before the first definition, the upper bits
+   remain zero throughout, making the andi redundant:
+
+   Before:
+     move.w (%a0),%d0      ; 6 bytes - upper bits undefined
+     subq.w #1,%d0         ; word op
+     andi.l #65535,%d0     ; 6 bytes - zero-extend
+
+   After:
+     moveq #0,%d0          ; 2 bytes - clear upper bits
+     move.w (%a0),%d0      ; 6 bytes - upper bits stay 0
+     subq.w #1,%d0         ; word op - upper bits stay 0
+     ; andi eliminated!    ; saves 4 bytes, 8-16 cycles
+
+   Runs after rtl_dce (the last DCE pass) to prevent the inserted
+   moveq from being deleted as dead code.  GCC's DCE doesn't understand
+   that m68k word operations preserve upper register bits.  */
+
+INSERT_PASS_AFTER (pass_fast_rtl_dce, 1, m68k_pass_elim_andi);
