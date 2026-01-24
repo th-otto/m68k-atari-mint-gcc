@@ -17,6 +17,16 @@
    along with GCC; see the file COPYING3.  If not see
    <http://www.gnu.org/licenses/>.  */
 
+/* Narrow index multiply optimization for m68k .w indexing.
+
+   Narrows 32-bit multiplies to 16-bit when safe, enabling .w indexed
+   addressing which sign-extends automatically.  Handles both explicit
+   casts from narrow types and 32-bit values with VRP-constrained ranges.
+
+   Runs after VRP1 to see range constraints from [[assume(...)]].  */
+
+INSERT_PASS_AFTER (pass_vrp, 1, m68k_pass_narrow_index_mult);
+
 /* Normalize increment positions for auto-increment optimization.
 
    When GCC's IVOPTS pass places pointer increments in the middle of a
