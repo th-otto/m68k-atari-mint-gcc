@@ -134,3 +134,4 @@ extern rtl_opt_pass *make_m68k_pass_normalize_autoinc (gcc::context *);
 extern rtl_opt_pass *make_m68k_pass_opt_autoinc (gcc::context *);
 extern gimple_opt_pass *make_m68k_pass_narrow_index_mult (gcc::context *);
 extern rtl_opt_pass *make_m68k_pass_elim_andi (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_highword_opt (gcc::context *);

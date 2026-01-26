@@ -2166,6 +2166,1098 @@ public:
 
 }; /* class m68k_pass_elim_andi */
 
+
+/* =======================================================================
+   RTL pass: m68k_pass_highword_opt
+
+   This pass optimizes high-word field access for small structs passed
+   by value in registers:
+
+   1. Extraction: Removes redundant clr.w before swap
+      clr.w %d0; swap %d0  ->  swap %d0
+
+   2. Computation: Removes unnecessary ext.l before HImode ops
+      swap %d0; ext.l %d0; add.w %d1,%d0  ->  swap %d0; add.w %d1,%d0
+
+   3. Insertion: Converts mask+or to swap+strict_low_part+swap
+      swap %d1; clr.w %d1; and.l #65535,%d0; or.l %d1,%d0
+      ->  swap %d0; move.w %d1,%d0; swap %d0
+
+   Runs after fast_rtl_dce to avoid premature DCE of inserted code.
+   ======================================================================= */
+
+/* Check if INSN is lshiftrt:SI by 16 (which outputs "clr.w; swap").
+   Pattern: (set reg:SI (lshiftrt:SI reg:SI (const_int 16)))
+   Returns the register if found, NULL_RTX otherwise.  */
+
+static rtx
+highword_is_lshiftrt_16_p (rtx_insn *insn)
+{
+  if (!NONJUMP_INSN_P (insn))
+    return NULL_RTX;
+
+  rtx pat = PATTERN (insn);
+  if (GET_CODE (pat) != SET)
+    return NULL_RTX;
+
+  rtx dest = SET_DEST (pat);
+  rtx src = SET_SRC (pat);
+
+  if (!REG_P (dest)
+      || !DATA_REG_P (dest)
+      || GET_MODE (dest) != SImode)
+    return NULL_RTX;
+
+  if (GET_CODE (src) != LSHIFTRT)
+    return NULL_RTX;
+
+  rtx shift_reg = XEXP (src, 0);
+  rtx shift_cnt = XEXP (src, 1);
+
+  if (!REG_P (shift_reg)
+      || REGNO (shift_reg) != REGNO (dest)
+      || !CONST_INT_P (shift_cnt)
+      || INTVAL (shift_cnt) != 16)
+    return NULL_RTX;
+
+  return dest;
+}
+
+/* Check if INSN is ashiftrt:SI by 16 (which outputs "swap; ext.l").
+   Pattern: (set reg:SI (ashiftrt:SI reg:SI (const_int 16)))
+   Returns the register if found, NULL_RTX otherwise.  */
+
+static rtx
+highword_is_ashiftrt_16_p (rtx_insn *insn)
+{
+  if (!NONJUMP_INSN_P (insn))
+    return NULL_RTX;
+
+  rtx pat = PATTERN (insn);
+  if (GET_CODE (pat) != SET)
+    return NULL_RTX;
+
+  rtx dest = SET_DEST (pat);
+  rtx src = SET_SRC (pat);
+
+  if (!REG_P (dest)
+      || !DATA_REG_P (dest)
+      || GET_MODE (dest) != SImode)
+    return NULL_RTX;
+
+  if (GET_CODE (src) != ASHIFTRT)
+    return NULL_RTX;
+
+  rtx shift_reg = XEXP (src, 0);
+  rtx shift_cnt = XEXP (src, 1);
+
+  if (!REG_P (shift_reg)
+      || REGNO (shift_reg) != REGNO (dest)
+      || !CONST_INT_P (shift_cnt)
+      || INTVAL (shift_cnt) != 16)
+    return NULL_RTX;
+
+  return dest;
+}
+
+/* Check if INSN is ashift:SI by 16 (which outputs "swap; clr.w").
+   Pattern: (set reg:SI (ashift:SI reg:SI (const_int 16)))
+   Returns the register if found, NULL_RTX otherwise.  */
+
+static rtx
+highword_is_ashift_16_p (rtx_insn *insn)
+{
+  if (!NONJUMP_INSN_P (insn))
+    return NULL_RTX;
+
+  rtx pat = PATTERN (insn);
+  if (GET_CODE (pat) != SET)
+    return NULL_RTX;
+
+  rtx dest = SET_DEST (pat);
+  rtx src = SET_SRC (pat);
+
+  if (!REG_P (dest)
+      || !DATA_REG_P (dest)
+      || GET_MODE (dest) != SImode)
+    return NULL_RTX;
+
+  if (GET_CODE (src) != ASHIFT)
+    return NULL_RTX;
+
+  rtx shift_reg = XEXP (src, 0);
+  rtx shift_cnt = XEXP (src, 1);
+
+  if (!REG_P (shift_reg)
+      || REGNO (shift_reg) != REGNO (dest)
+      || !CONST_INT_P (shift_cnt)
+      || INTVAL (shift_cnt) != 16)
+    return NULL_RTX;
+
+  return dest;
+}
+
+/* Check if INSN clears the low word of a data register.
+   Patterns:
+     (set (strict_low_part (subreg:HI reg:SI 2)) (const_int 0))
+     (set (subreg:HI reg:SI 2) (const_int 0))
+   Returns the SI register if found, NULL_RTX otherwise.  */
+
+static rtx
+highword_is_clr_low_word_p (rtx_insn *insn)
+{
+  if (!NONJUMP_INSN_P (insn))
+    return NULL_RTX;
+
+  rtx pat = PATTERN (insn);
+  if (GET_CODE (pat) != SET)
+    return NULL_RTX;
+
+  rtx dest = SET_DEST (pat);
+  rtx src = SET_SRC (pat);
+
+  if (src != const0_rtx)
+    return NULL_RTX;
+
+  /* Check for strict_low_part form.  */
+  if (GET_CODE (dest) == STRICT_LOW_PART)
+    {
+      rtx inner = XEXP (dest, 0);
+      if (GET_CODE (inner) == SUBREG
+	  && GET_MODE (inner) == HImode
+	  && SUBREG_BYTE (inner) == 2
+	  && REG_P (SUBREG_REG (inner))
+	  && DATA_REG_P (SUBREG_REG (inner)))
+	return SUBREG_REG (inner);
+    }
+
+  /* Check for direct subreg form.  */
+  if (GET_CODE (dest) == SUBREG
+      && GET_MODE (dest) == HImode
+      && SUBREG_BYTE (dest) == 2
+      && REG_P (SUBREG_REG (dest))
+      && DATA_REG_P (SUBREG_REG (dest)))
+    return SUBREG_REG (dest);
+
+  return NULL_RTX;
+}
+
+/* Check if INSN is a swap (rotate by 16) on a data register.
+   Pattern: (set reg:SI (rotate:SI reg:SI (const_int 16)))
+   Returns the register if found, NULL_RTX otherwise.  */
+
+static rtx
+highword_is_swap_p (rtx_insn *insn)
+{
+  if (!NONJUMP_INSN_P (insn))
+    return NULL_RTX;
+
+  rtx pat = PATTERN (insn);
+  if (GET_CODE (pat) != SET)
+    return NULL_RTX;
+
+  rtx dest = SET_DEST (pat);
+  rtx src = SET_SRC (pat);
+
+  if (!REG_P (dest)
+      || !DATA_REG_P (dest)
+      || GET_MODE (dest) != SImode)
+    return NULL_RTX;
+
+  if (GET_CODE (src) != ROTATE)
+    return NULL_RTX;
+
+  rtx rot_reg = XEXP (src, 0);
+  rtx rot_cnt = XEXP (src, 1);
+
+  if (!REG_P (rot_reg)
+      || REGNO (rot_reg) != REGNO (dest)
+      || !CONST_INT_P (rot_cnt)
+      || INTVAL (rot_cnt) != 16)
+    return NULL_RTX;
+
+  return dest;
+}
+
+/* Check if INSN is ext.l (sign_extend:SI from low word of same reg).
+   Pattern: (set reg:SI (sign_extend:SI (subreg:HI reg:SI 2)))
+   Returns the register if found, NULL_RTX otherwise.  */
+
+static rtx
+highword_is_ext_long_p (rtx_insn *insn)
+{
+  if (!NONJUMP_INSN_P (insn))
+    return NULL_RTX;
+
+  rtx pat = PATTERN (insn);
+  if (GET_CODE (pat) != SET)
+    return NULL_RTX;
+
+  rtx dest = SET_DEST (pat);
+  rtx src = SET_SRC (pat);
+
+  if (!REG_P (dest)
+      || !DATA_REG_P (dest)
+      || GET_MODE (dest) != SImode)
+    return NULL_RTX;
+
+  if (GET_CODE (src) != SIGN_EXTEND
+      || GET_MODE (XEXP (src, 0)) != HImode)
+    return NULL_RTX;
+
+  rtx inner = XEXP (src, 0);
+
+  /* Check for (subreg:HI reg:SI 2) form.  */
+  if (GET_CODE (inner) == SUBREG
+      && SUBREG_BYTE (inner) == 2
+      && REG_P (SUBREG_REG (inner))
+      && REGNO (SUBREG_REG (inner)) == REGNO (dest))
+    return dest;
+
+  /* Check for direct reg:HI form (same regno).  */
+  if (REG_P (inner) && REGNO (inner) == REGNO (dest))
+    return dest;
+
+  return NULL_RTX;
+}
+
+/* Check if INSN is and.l #65535 on a data register.
+   Pattern: (set reg:SI (and:SI reg:SI (const_int 65535)))
+   Returns the register if found, NULL_RTX otherwise.  */
+
+static rtx
+highword_is_and_65535_p (rtx_insn *insn)
+{
+  if (!NONJUMP_INSN_P (insn))
+    return NULL_RTX;
+
+  rtx pat = PATTERN (insn);
+  if (GET_CODE (pat) != SET)
+    return NULL_RTX;
+
+  rtx dest = SET_DEST (pat);
+  rtx src = SET_SRC (pat);
+
+  if (!REG_P (dest)
+      || !DATA_REG_P (dest)
+      || GET_MODE (dest) != SImode)
+    return NULL_RTX;
+
+  if (GET_CODE (src) != AND)
+    return NULL_RTX;
+
+  rtx op0 = XEXP (src, 0);
+  rtx op1 = XEXP (src, 1);
+
+  if (!REG_P (op0)
+      || REGNO (op0) != REGNO (dest)
+      || !CONST_INT_P (op1)
+      || INTVAL (op1) != 65535)
+    return NULL_RTX;
+
+  return dest;
+}
+
+/* Check if INSN is or.l #const on a data register, where const's low
+   16 bits are zero (e.g., or.l #0xC00000).
+   Pattern: (set reg:SI (ior:SI reg:SI (const_int N))) where (N & 0xffff) == 0
+   Sets *const_val to the constant value if found.
+   Returns the register if found, NULL_RTX otherwise.  */
+
+static rtx
+highword_is_ior_high_const_p (rtx_insn *insn, HOST_WIDE_INT *const_val)
+{
+  if (!NONJUMP_INSN_P (insn))
+    return NULL_RTX;
+
+  rtx pat = PATTERN (insn);
+  if (GET_CODE (pat) != SET)
+    return NULL_RTX;
+
+  rtx dest = SET_DEST (pat);
+  rtx src = SET_SRC (pat);
+
+  if (!REG_P (dest)
+      || !DATA_REG_P (dest)
+      || GET_MODE (dest) != SImode)
+    return NULL_RTX;
+
+  if (GET_CODE (src) != IOR)
+    return NULL_RTX;
+
+  rtx op0 = XEXP (src, 0);
+  rtx op1 = XEXP (src, 1);
+
+  if (!REG_P (op0)
+      || REGNO (op0) != REGNO (dest)
+      || !CONST_INT_P (op1))
+    return NULL_RTX;
+
+  HOST_WIDE_INT val = INTVAL (op1);
+  /* Check that low 16 bits are zero - this means the constant only
+     affects the high word, so we can use or.w from memory.  */
+  if ((val & 0xffff) != 0)
+    return NULL_RTX;
+
+  *const_val = val;
+  return dest;
+}
+
+/* Check if INSN is a memory load to a data register.
+   Pattern: (set reg:SI (mem:SI addr))
+   Sets *mem_addr to the memory address if found.
+   Returns the register if found, NULL_RTX otherwise.  */
+
+static rtx
+highword_is_mem_load_p (rtx_insn *insn, rtx *mem_addr)
+{
+  if (!NONJUMP_INSN_P (insn))
+    return NULL_RTX;
+
+  rtx pat = PATTERN (insn);
+  if (GET_CODE (pat) != SET)
+    return NULL_RTX;
+
+  rtx dest = SET_DEST (pat);
+  rtx src = SET_SRC (pat);
+
+  if (!REG_P (dest)
+      || !DATA_REG_P (dest)
+      || GET_MODE (dest) != SImode)
+    return NULL_RTX;
+
+  if (!MEM_P (src) || GET_MODE (src) != SImode)
+    return NULL_RTX;
+
+  *mem_addr = XEXP (src, 0);
+  return dest;
+}
+
+/* Check if INSN is or.l of two registers where dest is one of them.
+   Pattern: (set reg0:SI (ior:SI reg0:SI reg1:SI))
+   Sets *other_reg to the other operand if found.
+   Returns the destination register if found, NULL_RTX otherwise.  */
+
+static rtx
+highword_is_ior_regs_p (rtx_insn *insn, rtx *other_reg)
+{
+  if (!NONJUMP_INSN_P (insn))
+    return NULL_RTX;
+
+  rtx pat = PATTERN (insn);
+  if (GET_CODE (pat) != SET)
+    return NULL_RTX;
+
+  rtx dest = SET_DEST (pat);
+  rtx src = SET_SRC (pat);
+
+  if (!REG_P (dest)
+      || !DATA_REG_P (dest)
+      || GET_MODE (dest) != SImode)
+    return NULL_RTX;
+
+  if (GET_CODE (src) != IOR)
+    return NULL_RTX;
+
+  rtx op0 = XEXP (src, 0);
+  rtx op1 = XEXP (src, 1);
+
+  if (REG_P (op0) && REG_P (op1))
+    {
+      if (REGNO (op0) == REGNO (dest))
+	{
+	  *other_reg = op1;
+	  return dest;
+	}
+      if (REGNO (op1) == REGNO (dest))
+	{
+	  *other_reg = op0;
+	  return dest;
+	}
+    }
+
+  return NULL_RTX;
+}
+
+/* Check if INSN uses REG only in HImode (not SImode).
+   Used to verify ext.l is unnecessary before HImode operations.  */
+
+static bool
+highword_insn_uses_only_himode_p (rtx_insn *insn, unsigned regno)
+{
+  rtx pat = PATTERN (insn);
+  if (GET_CODE (pat) != SET)
+    return false;
+
+  rtx src = SET_SRC (pat);
+  rtx dest = SET_DEST (pat);
+
+  /* Check source doesn't use reg in SImode.  */
+  if (uses_reg_as_long_p (src, regno))
+    return false;
+
+  /* Check dest doesn't use reg in SImode (e.g., in address).  */
+  if (MEM_P (dest) && uses_reg_as_long_p (dest, regno))
+    return false;
+
+  /* Verify it actually uses the register in HImode.  */
+  rtx hi_reg = gen_rtx_REG (HImode, regno);
+  return reg_mentioned_p (hi_reg, pat);
+}
+
+/* Optimize extraction: Replace shift-right by 16 with rotate when safe.
+   Transforms:
+     lshiftrt:SI by 16 (clr.w; swap) -> rotate:SI by 16 (swap)
+     ashiftrt:SI by 16 (swap; ext.l) -> rotate:SI by 16 (swap)
+
+   The lshrsi_16 pattern outputs "clr.w %0; swap %0" which clears upper bits.
+   The ashrsi_16 pattern outputs "swap %0; ext.l %0" which sign-extends.
+
+   If the result is only used in HImode (as a short), the upper bits don't
+   matter and we can use just "swap" (rotate by 16).
+
+   This is safe because:
+   1. The swap moves the high word to the low position
+   2. If the result is only used as HImode, upper bits are ignored
+   3. Case 1 (low word extraction) returns with just rts, proving
+      HImode returns don't require the high word to be cleared
+   4. For ashiftrt, signed overflow is UB so ext.l is unnecessary
+
+   Returns true if any optimization was performed.  */
+
+static bool
+highword_optimize_extraction (basic_block bb)
+{
+  bool changed = false;
+
+  for (rtx_insn *insn = BB_HEAD (bb);
+       insn && insn != NEXT_INSN (BB_END (bb));
+       insn = NEXT_INSN (insn))
+    {
+      if (!NONDEBUG_INSN_P (insn))
+	continue;
+
+      /* Check for lshiftrt:SI by 16 or ashiftrt:SI by 16.  */
+      rtx shift_reg = highword_is_lshiftrt_16_p (insn);
+      const char *shift_name = "lshiftrt";
+      if (shift_reg == NULL_RTX)
+	{
+	  shift_reg = highword_is_ashiftrt_16_p (insn);
+	  shift_name = "ashiftrt";
+	}
+      if (shift_reg == NULL_RTX)
+	continue;
+
+      unsigned regno = REGNO (shift_reg);
+
+      /* Check if the register is only used in HImode after this insn,
+	 or if it's dead.  We can safely use rotate instead of shift
+	 in these cases because the upper 16 bits don't matter.  */
+
+      bool upper_bits_matter = false;
+      for (rtx_insn *scan = NEXT_INSN (insn);
+	   scan && scan != NEXT_INSN (BB_END (bb));
+	   scan = NEXT_INSN (scan))
+	{
+	  if (!NONDEBUG_INSN_P (scan))
+	    continue;
+
+	  /* If register is redefined, we're safe - upper bits reset.  */
+	  if (reg_set_p (shift_reg, scan))
+	    break;
+
+	  /* If register is used in SImode, upper bits matter.  */
+	  if (uses_reg_as_long_p (PATTERN (scan), regno))
+	    {
+	      upper_bits_matter = true;
+	      break;
+	    }
+	}
+
+      /* Also check if reg is live out of BB - be conservative.  */
+      if (!upper_bits_matter)
+	{
+	  bitmap live_out = df_get_live_out (bb);
+	  if (bitmap_bit_p (live_out, regno))
+	    {
+	      /* Live out of block.  For return values (d0), check if
+		 the function returns HImode - in that case upper bits
+		 don't matter even if live out.  */
+	      if (regno == 0)
+		{
+		  /* Check if function returns HImode.  */
+		  tree ret_type = TREE_TYPE (TREE_TYPE (cfun->decl));
+		  if (ret_type && INTEGRAL_TYPE_P (ret_type)
+		      && TYPE_PRECISION (ret_type) <= 16)
+		    {
+		      /* Function returns HImode or smaller - upper bits
+			 don't matter.  */
+		    }
+		  else
+		    upper_bits_matter = true;
+		}
+	      else
+		upper_bits_matter = true;
+	    }
+	}
+
+      if (upper_bits_matter)
+	continue;
+
+      /* Safe to replace shift with rotate.  */
+      if (dump_file)
+	{
+	  fprintf (dump_file, "m68k-highword-opt: Replacing %s:SI by 16 "
+		   "with rotate:SI (d%d):\n", shift_name, regno);
+	  print_rtl_single (dump_file, insn);
+	}
+
+      /* Create new rotate pattern: (set reg:SI (rotate:SI reg:SI 16))  */
+      rtx new_pat = gen_rtx_SET (shift_reg,
+				 gen_rtx_ROTATE (SImode, shift_reg,
+						 GEN_INT (16)));
+      rtx_insn *new_insn = emit_insn_before (new_pat, insn);
+      INSN_CODE (new_insn) = -1;  /* Force recog.  */
+
+      /* Delete the old shift insn.  */
+      delete_insn (insn);
+
+      /* Update df info.  */
+      df_insn_rescan (new_insn);
+
+      changed = true;
+    }
+
+  return changed;
+}
+
+/* Optimize computation: Remove ext.l before HImode ops.
+   Transform: swap %d0; ext.l %d0; add.w %d1,%d0  ->  swap %d0; add.w %d1,%d0
+
+   This is safe because:
+   1. The ext.l sign-extends the low word to 32 bits
+   2. If the next operation is HImode (add.w), it only affects low 16 bits
+   3. Signed overflow in C is undefined behavior
+
+   Returns true if any optimization was performed.  */
+
+static bool
+highword_optimize_computation (basic_block bb)
+{
+  bool changed = false;
+
+  for (rtx_insn *insn = BB_HEAD (bb);
+       insn && insn != NEXT_INSN (BB_END (bb));
+       insn = NEXT_INSN (insn))
+    {
+      if (!NONDEBUG_INSN_P (insn))
+	continue;
+
+      rtx ext_reg = highword_is_ext_long_p (insn);
+      if (ext_reg == NULL_RTX)
+	continue;
+
+      unsigned regno = REGNO (ext_reg);
+
+      /* Look for next non-debug insn.  */
+      rtx_insn *next = insn;
+      while ((next = NEXT_INSN (next)) != NULL
+	     && next != NEXT_INSN (BB_END (bb))
+	     && DEBUG_INSN_P (next))
+	;
+
+      if (next == NULL || next == NEXT_INSN (BB_END (bb)))
+	continue;
+
+      /* Check if next insn uses register only in HImode.  */
+      if (!highword_insn_uses_only_himode_p (next, regno))
+	continue;
+
+      /* Verify register is not used in SImode before being redefined.  */
+      bool safe = true;
+      for (rtx_insn *scan = NEXT_INSN (next);
+	   scan && scan != NEXT_INSN (BB_END (bb));
+	   scan = NEXT_INSN (scan))
+	{
+	  if (!NONDEBUG_INSN_P (scan))
+	    continue;
+
+	  if (reg_set_p (ext_reg, scan))
+	    break;  /* Redefined - safe.  */
+
+	  if (uses_reg_as_long_p (PATTERN (scan), regno))
+	    {
+	      safe = false;
+	      break;
+	    }
+	}
+
+      if (!safe)
+	continue;
+
+      /* Also check live-out.  */
+      bitmap live_out = df_get_live_out (bb);
+      if (bitmap_bit_p (live_out, regno))
+	continue;
+
+      /* Safe to remove ext.l.  */
+      if (dump_file)
+	{
+	  fprintf (dump_file, "m68k-highword-opt: Removing unnecessary ext.l "
+		   "before HImode op (d%d):\n", regno);
+	  print_rtl_single (dump_file, insn);
+	}
+
+      delete_insn (insn);
+      changed = true;
+    }
+
+  return changed;
+}
+
+/* Optimize insertion: Convert ashift+and+or to swap+move.w+swap.
+   Transform:
+     ashift:SI %d1,#16 (swap+clr.w); and.l #65535,%d0; or.l %d1,%d0
+   To:
+     swap %d0; move.w %d1,%d0; swap %d0
+
+   The ashift:SI by 16 pattern (ashlsi_16) outputs "swap; clr.w".
+   We replace the whole sequence with swap/move.w/swap which is
+   one instruction shorter.
+
+   Prerequisites:
+   - value_reg must be dead after the or.l
+   - The ashift must have value to insert in low 16 bits originally
+
+   Returns true if any optimization was performed.  */
+
+static bool
+highword_optimize_insertion (basic_block bb)
+{
+  bool changed = false;
+
+  for (rtx_insn *insn = BB_HEAD (bb);
+       insn && insn != NEXT_INSN (BB_END (bb)); )
+    {
+      rtx_insn *next_iter = NEXT_INSN (insn);
+
+      if (!NONDEBUG_INSN_P (insn))
+	{
+	  insn = next_iter;
+	  continue;
+	}
+
+      /* Look for: ashift:SI value_reg,#16 (outputs swap+clr.w).  */
+      rtx ashift_reg = highword_is_ashift_16_p (insn);
+      if (ashift_reg == NULL_RTX)
+	{
+	  insn = next_iter;
+	  continue;
+	}
+
+      unsigned value_regno = REGNO (ashift_reg);
+      rtx_insn *ashift_insn = insn;
+
+      /* Look for: and.l #65535, struct_reg.  Skip notes and debug insns.  */
+      rtx_insn *and_insn = ashift_insn;
+      while ((and_insn = NEXT_INSN (and_insn)) != NULL
+	     && and_insn != NEXT_INSN (BB_END (bb))
+	     && !NONDEBUG_INSN_P (and_insn))
+	;
+
+      if (and_insn == NULL || and_insn == NEXT_INSN (BB_END (bb)))
+	{
+	  insn = next_iter;
+	  continue;
+	}
+
+      rtx and_reg = highword_is_and_65535_p (and_insn);
+      if (and_reg == NULL_RTX)
+	{
+	  insn = next_iter;
+	  continue;
+	}
+
+      unsigned struct_regno = REGNO (and_reg);
+      if (struct_regno == value_regno)
+	{
+	  insn = next_iter;
+	  continue;  /* Must be different registers.  */
+	}
+
+      /* Look for: or.l value_reg, struct_reg.  Skip notes and debug insns.  */
+      rtx_insn *ior_insn = and_insn;
+      while ((ior_insn = NEXT_INSN (ior_insn)) != NULL
+	     && ior_insn != NEXT_INSN (BB_END (bb))
+	     && !NONDEBUG_INSN_P (ior_insn))
+	;
+
+      if (ior_insn == NULL || ior_insn == NEXT_INSN (BB_END (bb)))
+	{
+	  insn = next_iter;
+	  continue;
+	}
+
+      rtx ior_other;
+      rtx ior_reg = highword_is_ior_regs_p (ior_insn, &ior_other);
+      if (ior_reg == NULL_RTX
+	  || REGNO (ior_reg) != struct_regno
+	  || !REG_P (ior_other)
+	  || REGNO (ior_other) != value_regno)
+	{
+	  insn = next_iter;
+	  continue;
+	}
+
+      /* Check that value_reg is dead after ior_insn.  */
+      if (!find_regno_note (ior_insn, REG_DEAD, value_regno))
+	{
+	  bitmap live_out = df_get_live_out (bb);
+	  if (bitmap_bit_p (live_out, value_regno))
+	    {
+	      insn = next_iter;
+	      continue;
+	    }
+	}
+
+      /* Found complete pattern! Transform it.  */
+      if (dump_file)
+	{
+	  fprintf (dump_file, "m68k-highword-opt: Found insertion pattern:\n");
+	  fprintf (dump_file, "  ashift d%d,#16: ", value_regno);
+	  print_rtl_single (dump_file, ashift_insn);
+	  fprintf (dump_file, "  and.l #65535,d%d: ", struct_regno);
+	  print_rtl_single (dump_file, and_insn);
+	  fprintf (dump_file, "  or.l d%d,d%d: ", value_regno, struct_regno);
+	  print_rtl_single (dump_file, ior_insn);
+	}
+
+      /* Create: swap %d0 (struct register).  */
+      rtx struct_reg = gen_rtx_REG (SImode, struct_regno);
+      rtx new_swap1_pat = gen_rtx_SET (struct_reg,
+				       gen_rtx_ROTATE (SImode, struct_reg,
+						       GEN_INT (16)));
+      rtx_insn *new_swap1 = emit_insn_before (new_swap1_pat, ashift_insn);
+
+      /* Create: move.w %d1,%d0 (value -> struct low word).
+	 The value we want is in the low 16 bits of value_reg BEFORE
+	 the ashift.  Since ashift hasn't executed in our new sequence,
+	 we can read the original value directly.  */
+      rtx value_hi = gen_rtx_REG (HImode, value_regno);
+      rtx slp = gen_rtx_STRICT_LOW_PART (VOIDmode,
+					 gen_rtx_SUBREG (HImode, struct_reg, 2));
+      rtx new_move_pat = gen_rtx_SET (slp, value_hi);
+      rtx_insn *new_move = emit_insn_after (new_move_pat, new_swap1);
+
+      /* Create: swap %d0 (back to correct order).  */
+      rtx new_swap2_pat = gen_rtx_SET (struct_reg,
+				       gen_rtx_ROTATE (SImode, struct_reg,
+						       GEN_INT (16)));
+      rtx_insn *new_swap2 = emit_insn_after (new_swap2_pat, new_move);
+
+      /* Validate new instructions.  */
+      INSN_CODE (new_swap1) = -1;
+      INSN_CODE (new_move) = -1;
+      INSN_CODE (new_swap2) = -1;
+
+      if (recog_memoized (new_swap1) < 0
+	  || recog_memoized (new_move) < 0
+	  || recog_memoized (new_swap2) < 0)
+	{
+	  /* Failed - restore original.  */
+	  if (dump_file)
+	    fprintf (dump_file, "  FAILED: New insns not recognized\n");
+	  delete_insn (new_swap1);
+	  delete_insn (new_move);
+	  delete_insn (new_swap2);
+	  insn = next_iter;
+	  continue;
+	}
+
+      if (dump_file)
+	{
+	  fprintf (dump_file, "  Transformed to:\n");
+	  fprintf (dump_file, "  swap d%d: ", struct_regno);
+	  print_rtl_single (dump_file, new_swap1);
+	  fprintf (dump_file, "  move.w d%d,d%d: ", value_regno, struct_regno);
+	  print_rtl_single (dump_file, new_move);
+	  fprintf (dump_file, "  swap d%d: ", struct_regno);
+	  print_rtl_single (dump_file, new_swap2);
+	}
+
+      /* Delete original instructions.  */
+      delete_insn (ashift_insn);
+      delete_insn (and_insn);
+      delete_insn (ior_insn);
+
+      /* Update dataflow.  */
+      df_insn_rescan (new_swap1);
+      df_insn_rescan (new_move);
+      df_insn_rescan (new_swap2);
+
+      changed = true;
+      insn = NEXT_INSN (new_swap2);
+    }
+
+  return changed;
+}
+
+/* Optimize mask+or: Transform memory load + mask + or-high-const
+   into load-const + or-from-memory-low-word.
+
+   Transform:
+     move.l mem, rA          ; (set rA:SI (mem:SI addr))
+     and.l #65535, rA        ; (set rA:SI (and:SI rA:SI 65535))
+     or.l #high_const, rA    ; (set rA:SI (ior:SI rA:SI high_const))
+
+   Into:
+     move.l #high_const, rA  ; (set rA:SI high_const)
+     or.w mem+2, rA          ; (set rA:SI (ior:SI (zero_extend:SI (mem:HI addr+2)) rA))
+
+   Where high_const has no bits in the low 16 bits (e.g., 0xC00000).
+   This is profitable because:
+   - Original: 3 instructions (move.l + and.l + or.l)
+   - Optimized: 2 instructions (move.l + or.w)
+   - Saves ~4-6 bytes (and.l #65535 = 6 bytes)
+
+   The optimization is safe because:
+   1. The AND masks to low 16 bits, discarding the high word from memory
+   2. The OR adds a constant with no low bits, so it's equivalent to setting high word
+   3. We can read just the low word from memory (at addr+2 for big-endian) and OR
+
+   Returns true if any optimization was performed.  */
+
+static bool
+highword_optimize_mask_or (basic_block bb)
+{
+  bool changed = false;
+
+  for (rtx_insn *insn = BB_HEAD (bb);
+       insn && insn != NEXT_INSN (BB_END (bb));
+       insn = NEXT_INSN (insn))
+    {
+      if (!NONDEBUG_INSN_P (insn))
+	continue;
+
+      /* Look for: and.l #65535, rA  */
+      rtx and_reg = highword_is_and_65535_p (insn);
+      if (and_reg == NULL_RTX)
+	continue;
+
+      unsigned and_regno = REGNO (and_reg);
+      rtx_insn *and_insn = insn;
+
+      /* Find next non-debug insn.  */
+      rtx_insn *or_insn = NEXT_INSN (and_insn);
+      while (or_insn && or_insn != NEXT_INSN (BB_END (bb))
+	     && !NONDEBUG_INSN_P (or_insn))
+	or_insn = NEXT_INSN (or_insn);
+
+      if (!or_insn || or_insn == NEXT_INSN (BB_END (bb)))
+	continue;
+
+      /* Check for: or.l #high_const, rA (same register, const with no low bits)  */
+      HOST_WIDE_INT or_const;
+      rtx or_reg = highword_is_ior_high_const_p (or_insn, &or_const);
+      if (or_reg == NULL_RTX || REGNO (or_reg) != and_regno)
+	continue;
+
+      /* Look backward for the memory load to rA.  */
+      rtx mem_addr = NULL_RTX;
+      rtx_insn *load_insn = NULL;
+      rtx_insn *scan = PREV_INSN (and_insn);
+
+      while (scan && scan != PREV_INSN (BB_HEAD (bb)))
+	{
+	  if (!NONDEBUG_INSN_P (scan))
+	    {
+	      scan = PREV_INSN (scan);
+	      continue;
+	    }
+
+	  /* Check if this insn defines rA.  */
+	  rtx load_reg = highword_is_mem_load_p (scan, &mem_addr);
+	  if (load_reg != NULL_RTX && REGNO (load_reg) == and_regno)
+	    {
+	      load_insn = scan;
+	      break;
+	    }
+
+	  /* If any other insn defines rA, abort.  */
+	  if (reg_set_p (and_reg, scan))
+	    break;
+
+	  /* If any insn uses rA before the and, the load value might be needed
+	     for other purposes, so we can't optimize.  */
+	  if (reg_mentioned_p (and_reg, PATTERN (scan)))
+	    break;
+
+	  scan = PREV_INSN (scan);
+	}
+
+      if (!load_insn || mem_addr == NULL_RTX)
+	continue;
+
+      if (dump_file)
+	{
+	  fprintf (dump_file, "m68k-highword-opt: Found mask+or pattern:\n");
+	  fprintf (dump_file, "  Load: ");
+	  print_rtl_single (dump_file, load_insn);
+	  fprintf (dump_file, "  AND:  ");
+	  print_rtl_single (dump_file, and_insn);
+	  fprintf (dump_file, "  OR:   ");
+	  print_rtl_single (dump_file, or_insn);
+	}
+
+      /* Create the new instructions:
+	 1. move.l #high_const, rA
+	 2. or.w mem+2, rA  using iorsi_zext pattern  */
+
+      /* Compute the address for the low word (addr + 2 for big-endian).  */
+      rtx low_addr;
+      if (CONST_INT_P (mem_addr))
+	low_addr = GEN_INT (INTVAL (mem_addr) + 2);
+      else if (REG_P (mem_addr))
+	low_addr = gen_rtx_PLUS (Pmode, mem_addr, GEN_INT (2));
+      else if (GET_CODE (mem_addr) == PLUS
+	       && REG_P (XEXP (mem_addr, 0))
+	       && CONST_INT_P (XEXP (mem_addr, 1)))
+	low_addr = gen_rtx_PLUS (Pmode, XEXP (mem_addr, 0),
+				 GEN_INT (INTVAL (XEXP (mem_addr, 1)) + 2));
+      else if (GET_CODE (mem_addr) == PLUS
+	       && REG_P (XEXP (mem_addr, 0))
+	       && GET_CODE (XEXP (mem_addr, 1)) == PLUS)
+	{
+	  /* Indexed addressing: (plus reg (plus reg const)) */
+	  rtx base = XEXP (mem_addr, 0);
+	  rtx index_part = XEXP (mem_addr, 1);
+	  if (REG_P (XEXP (index_part, 0)) && CONST_INT_P (XEXP (index_part, 1)))
+	    {
+	      low_addr = gen_rtx_PLUS (Pmode, base,
+				       gen_rtx_PLUS (Pmode,
+						     XEXP (index_part, 0),
+						     GEN_INT (INTVAL (XEXP (index_part, 1)) + 2)));
+	    }
+	  else
+	    continue; /* Unsupported address form.  */
+	}
+      else
+	continue; /* Unsupported address form.  */
+
+      /* Create: (set rA (const_int or_const))  */
+      rtx new_load_pat = gen_rtx_SET (and_reg, GEN_INT (or_const));
+      rtx_insn *new_load = emit_insn_before (new_load_pat, and_insn);
+      INSN_CODE (new_load) = -1;
+
+      /* Create: (set rA (ior:SI (zero_extend:SI (mem:HI low_addr)) rA))
+	 This matches the iorsi_zext pattern and generates "or.w mem, rA".  */
+      rtx low_mem = gen_rtx_MEM (HImode, low_addr);
+      rtx zext = gen_rtx_ZERO_EXTEND (SImode, low_mem);
+      rtx new_or_pat = gen_rtx_SET (and_reg,
+				    gen_rtx_IOR (SImode, zext, and_reg));
+      rtx_insn *new_or = emit_insn_before (new_or_pat, and_insn);
+      INSN_CODE (new_or) = -1;
+
+      if (dump_file)
+	{
+	  fprintf (dump_file, "  Transformed to:\n");
+	  fprintf (dump_file, "  New load: ");
+	  print_rtl_single (dump_file, new_load);
+	  fprintf (dump_file, "  New OR:   ");
+	  print_rtl_single (dump_file, new_or);
+	}
+
+      /* Delete the original instructions.  */
+      delete_insn (load_insn);
+      delete_insn (and_insn);
+      delete_insn (or_insn);
+
+      /* Update dataflow.  */
+      df_insn_rescan (new_load);
+      df_insn_rescan (new_or);
+
+      changed = true;
+      insn = NEXT_INSN (new_or);
+    }
+
+  return changed;
+}
+
+/* Main function for the highword_opt pass.  */
+
+static unsigned int
+m68k_highword_opt (function *func)
+{
+  unsigned int changes = 0;
+
+  if (dump_file)
+    fprintf (dump_file, "m68k-highword-opt: Starting pass\n");
+
+  basic_block bb;
+  FOR_EACH_BB_FN (bb, func)
+    {
+      if (dump_file)
+	fprintf (dump_file, "m68k-highword-opt: Processing BB %d\n", bb->index);
+
+      /* Run each optimization. Order matters:
+	 1. Extraction first (simplest)
+	 2. Computation second (depends on swap being present)
+	 3. Insertion (most complex struct field insertion)
+	 4. Mask+or (memory load + mask + or pattern)  */
+
+      if (highword_optimize_extraction (bb))
+	changes++;
+
+      if (highword_optimize_computation (bb))
+	changes++;
+
+      if (highword_optimize_insertion (bb))
+	changes++;
+
+      if (highword_optimize_mask_or (bb))
+	changes++;
+    }
+
+  if (dump_file)
+    fprintf (dump_file, "m68k-highword-opt: Pass complete, %d changes\n",
+	     changes);
+
+  return 0;
+}
+
+/* Pass data for m68k_pass_highword_opt.  */
+
+const pass_data m68k_pass_data_highword_opt =
+{
+  RTL_PASS,		   /* type */
+  "m68k-highword-opt",	   /* name */
+  OPTGROUP_NONE,	   /* optinfo_flags */
+  TV_MACH_DEP,		   /* tv_id */
+  0,			   /* properties_required */
+  0,			   /* properties_provided */
+  0,			   /* properties_destroyed */
+  0,			   /* todo_flags_start */
+  TODO_df_finish	   /* todo_flags_finish */
+};
+
+/* The pass class for highword_opt.  */
+
+class m68k_pass_highword_opt : public rtl_opt_pass
+{
+public:
+  m68k_pass_highword_opt (gcc::context *ctxt)
+    : rtl_opt_pass (m68k_pass_data_highword_opt, ctxt)
+  {}
+
+  unsigned int execute (function *func) final override
+  {
+    if (optimize)
+      return m68k_highword_opt (func);
+    return 0;
+  }
+
+}; /* class m68k_pass_highword_opt */
+
 } /* anonymous namespace */
 
 /* Factory function for m68k_pass_normalize_autoinc.  */
@@ -2198,4 +3290,12 @@ rtl_opt_pass *
 make_m68k_pass_elim_andi (gcc::context *ctxt)
 {
   return new m68k_pass_elim_andi (ctxt);
+}
+
+/* Factory function for m68k_pass_highword_opt.  */
+
+rtl_opt_pass *
+make_m68k_pass_highword_opt (gcc::context *ctxt)
+{
+  return new m68k_pass_highword_opt (ctxt);
 }

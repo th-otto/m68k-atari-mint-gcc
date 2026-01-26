@@ -778,10 +778,14 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	  && CONST_INT_P (XEXP (x, 1))
 	  && INTVAL (XEXP (x, 1)) == 1)
 	{
-	  /* Single-bit test (BTST) - available on all m68k */
+	  /* Single-bit test (BTST) - available on all m68k.  */
 	  *total = costs->extract[1];
 	  return true;
 	}
+      /* Note: GCC does not generate ZERO_EXTRACT for word-aligned 16-bit
+	 extractions.  It uses lshiftrt:SI by 16 instead (matched by
+	 lshrsi_16 pattern).  ZERO_EXTRACT is only generated for non-aligned
+	 bitfield access which requires 68020+ bitfield instructions.  */
       if (!costs->extract_supported)
 	return false;
       *total = costs->extract[0];
@@ -795,6 +799,10 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	  *total = costs->extract[1];
 	  return true;
 	}
+      /* Note: GCC does not generate SIGN_EXTRACT for word-aligned 16-bit
+	 extractions.  It uses ashiftrt:SI by 16 instead (matched by
+	 ashrsi_16 pattern).  SIGN_EXTRACT is only generated for non-aligned
+	 bitfield access which requires 68020+ bitfield instructions.  */
       if (!costs->extract_supported)
 	return false;
       *total = costs->extract[0];
