@@ -1184,6 +1184,211 @@ andi_65535_p (rtx_insn *insn, rtx *reg)
   return classify_andi_extension (insn, reg) == EXT_WORD_TO_LONG;
 }
 
+/* Check if INSN is andi.l #65535 on a memory location.
+   If so, set *MEM to the memory RTX.
+   Pattern: (set (mem:SI addr) (and:SI (mem:SI addr) (const_int 65535)))  */
+
+static bool
+mem_andi_65535_p (rtx_insn *insn, rtx *mem)
+{
+  if (!NONJUMP_INSN_P (insn))
+    return false;
+
+  rtx pat = PATTERN (insn);
+  if (GET_CODE (pat) != SET)
+    return false;
+
+  rtx dest = SET_DEST (pat);
+  rtx src = SET_SRC (pat);
+
+  /* Must be setting a memory location.  */
+  if (!MEM_P (dest) || GET_MODE (dest) != SImode)
+    return false;
+
+  /* Source must be (and:SI mem (const_int 65535)).  */
+  if (GET_CODE (src) != AND || GET_MODE (src) != SImode)
+    return false;
+
+  rtx op0 = XEXP (src, 0);
+  rtx op1 = XEXP (src, 1);
+
+  /* Handle both operand orders: (and mem const) or (and const mem).  */
+  if (CONST_INT_P (op0))
+    std::swap (op0, op1);
+
+  /* First operand must be the same memory location.  */
+  if (!MEM_P (op0) || !rtx_equal_p (XEXP (op0, 0), XEXP (dest, 0)))
+    {
+      if (dump_file)
+	{
+	  fprintf (dump_file, "  mem AND but address mismatch: ");
+	  print_rtl_single (dump_file, insn);
+	}
+      return false;
+    }
+
+  if (!CONST_INT_P (op1) || INTVAL (op1) != 65535)
+    {
+      if (dump_file && MEM_P (op0))
+	{
+	  fprintf (dump_file, "  mem AND but mask=%lld not 65535: ",
+		   (long long) (CONST_INT_P (op1) ? INTVAL (op1) : -1));
+	  print_rtl_single (dump_file, insn);
+	}
+      return false;
+    }
+
+  *mem = dest;
+  return true;
+}
+
+/* Check if ADDR is a simple stack-relative address (sp + const).
+   If so, return the constant offset, otherwise return -1.  */
+
+static HOST_WIDE_INT
+get_sp_offset (rtx addr)
+{
+  /* Direct (sp) reference.  */
+  if (REG_P (addr) && REGNO (addr) == STACK_POINTER_REGNUM)
+    return 0;
+
+  /* (plus:SI (reg:SI sp) (const_int N))  */
+  if (GET_CODE (addr) == PLUS)
+    {
+      rtx base = XEXP (addr, 0);
+      rtx offset = XEXP (addr, 1);
+      if (REG_P (base) && REGNO (base) == STACK_POINTER_REGNUM
+	  && CONST_INT_P (offset))
+	return INTVAL (offset);
+    }
+
+  return -1;
+}
+
+/* Check if INSN clears the low word of a memory location at
+   the given stack offset (which should be base_offset + 2 for big-endian).
+   Patterns:
+   - (set (mem:HI addr) (const_int 0))
+   - (set (strict_low_part (mem:HI addr)) (const_int 0))
+   - (set (mem:SI addr) (and:SI (mem:SI addr) (const_int -65536)))  */
+
+static bool
+is_mem_clrw_at_offset_p (rtx_insn *insn, HOST_WIDE_INT expected_offset)
+{
+  if (!NONJUMP_INSN_P (insn))
+    return false;
+
+  rtx pat = PATTERN (insn);
+  if (GET_CODE (pat) != SET)
+    return false;
+
+  rtx dest = SET_DEST (pat);
+  rtx src = SET_SRC (pat);
+
+  /* Pattern 1: (set (mem:HI addr) (const_int 0))  */
+  if (MEM_P (dest) && GET_MODE (dest) == HImode && src == const0_rtx)
+    {
+      HOST_WIDE_INT offset = get_sp_offset (XEXP (dest, 0));
+      return offset == expected_offset;
+    }
+
+  /* Pattern 2: (set (strict_low_part (mem:HI addr)) (const_int 0))
+     This is the common form for clr.w on memory.  */
+  if (GET_CODE (dest) == STRICT_LOW_PART && src == const0_rtx)
+    {
+      rtx inner = XEXP (dest, 0);
+      if (MEM_P (inner) && GET_MODE (inner) == HImode)
+	{
+	  HOST_WIDE_INT offset = get_sp_offset (XEXP (inner, 0));
+	  return offset == expected_offset;
+	}
+    }
+
+  /* Pattern 3: (set (mem:SI addr) (and:SI (mem:SI addr) (const_int -65536)))
+     This is how clr.w is sometimes represented for 32-bit memory.  */
+  if (MEM_P (dest) && GET_MODE (dest) == SImode
+      && GET_CODE (src) == AND && GET_MODE (src) == SImode)
+    {
+      rtx op0 = XEXP (src, 0);
+      rtx op1 = XEXP (src, 1);
+      if (MEM_P (op0) && rtx_equal_p (XEXP (op0, 0), XEXP (dest, 0))
+	  && CONST_INT_P (op1))
+	{
+	  HOST_WIDE_INT mask = INTVAL (op1);
+	  if ((mask & 0xFFFFFFFF) == 0xFFFF0000)
+	    {
+	      /* The SI-mode clr.w is at the base offset, not offset+2.  */
+	      HOST_WIDE_INT offset = get_sp_offset (XEXP (dest, 0));
+	      return offset == (expected_offset - 2);
+	    }
+	}
+    }
+
+  return false;
+}
+
+/* Scan forward from MEM_ANDI to find clr.w at the low word address.
+   For big-endian m68k, if ANDI is at offset N, clr.w should be at N+2.
+   Returns true if clr.w is found and the ANDI can be eliminated.  */
+
+static bool
+mem_clrw_follows_andi_p (basic_block bb, rtx_insn *andi_insn, rtx mem)
+{
+  HOST_WIDE_INT base_offset = get_sp_offset (XEXP (mem, 0));
+  if (base_offset < 0)
+    return false;  /* Not a simple sp-relative address.  */
+
+  HOST_WIDE_INT low_word_offset = base_offset + 2;
+
+  /* Scan forward from andi to find clr.w.  */
+  rtx_insn *insn;
+  bool past_andi = false;
+
+  FOR_BB_INSNS (bb, insn)
+    {
+      if (insn == andi_insn)
+	{
+	  past_andi = true;
+	  continue;
+	}
+
+      if (!past_andi || !NONDEBUG_INSN_P (insn))
+	continue;
+
+      /* Found clr.w at the expected low word offset.  */
+      if (is_mem_clrw_at_offset_p (insn, low_word_offset))
+	return true;
+
+      /* Check if this instruction clobbers our memory location.  */
+      rtx pat = PATTERN (insn);
+      if (GET_CODE (pat) == SET)
+	{
+	  rtx dest = SET_DEST (pat);
+
+	  /* If writing to the same memory location (not clr.w), stop.  */
+	  if (MEM_P (dest))
+	    {
+	      HOST_WIDE_INT dest_offset = get_sp_offset (XEXP (dest, 0));
+	      /* Check for overlap with our 32-bit location.  */
+	      if (dest_offset >= 0
+		  && dest_offset >= base_offset
+		  && dest_offset < base_offset + 4)
+		{
+		  /* This write overlaps - check if it's the clr.w.  */
+		  if (!is_mem_clrw_at_offset_p (insn, low_word_offset))
+		    return false;
+		}
+	    }
+	}
+
+      /* CALL instructions may clobber stack (be conservative).  */
+      if (CALL_P (insn))
+	return false;
+    }
+
+  return false;
+}
+
 /* Check if INSN is moveq #0 or clr.l on a specific register.  */
 
 static bool
@@ -1200,12 +1405,201 @@ is_clear_insn_p (rtx_insn *insn, unsigned regno)
   rtx dest = SET_DEST (pat);
   rtx src = SET_SRC (pat);
 
-  if (!REG_P (dest)
-      || REGNO (dest) != regno
-      || GET_MODE (dest) != SImode)
+  if (!REG_P (dest))
     return false;
 
-  return src == const0_rtx;
+  /* Direct SImode clear: moveq #0 or clr.l.  */
+  if (REGNO (dest) == regno && GET_MODE (dest) == SImode)
+    return src == const0_rtx;
+
+  /* DImode set on d0 that clears d1 (low 32 bits of DImode are zero).  */
+  if (GET_MODE (dest) == DImode && REGNO (dest) == 0 && regno == 1)
+    {
+      if (CONST_INT_P (src))
+	{
+	  HOST_WIDE_INT val = INTVAL (src);
+	  return (val & 0xFFFFFFFF) == 0;
+	}
+    }
+
+  return false;
+}
+
+/* Check if INSN clears the low word of a specific register.
+   This matches patterns like:
+   - (set (strict_low_part (reg:HI N)) (const_int 0))
+   - (set reg:SI (and:SI reg:SI (const_int -65536)))  ; 0xFFFF0000  */
+
+static bool
+is_clrw_insn_p (rtx_insn *insn, unsigned regno)
+{
+  if (!NONJUMP_INSN_P (insn))
+    return false;
+
+  rtx pat = PATTERN (insn);
+  if (GET_CODE (pat) != SET)
+    return false;
+
+  rtx dest = SET_DEST (pat);
+  rtx src = SET_SRC (pat);
+
+  /* Check for (set (strict_low_part (reg:HI N)) (const_int 0)).  */
+  if (GET_CODE (dest) == STRICT_LOW_PART)
+    {
+      rtx inner = XEXP (dest, 0);
+      if (REG_P (inner)
+	  && REGNO (inner) == regno
+	  && GET_MODE (inner) == HImode
+	  && src == const0_rtx)
+	return true;
+      /* Also handle subreg form.  */
+      if (SUBREG_P (inner))
+	{
+	  rtx subreg_reg = SUBREG_REG (inner);
+	  if (REG_P (subreg_reg)
+	      && REGNO (subreg_reg) == regno
+	      && GET_MODE (inner) == HImode
+	      && src == const0_rtx)
+	    return true;
+	}
+    }
+
+  /* Check for (set reg:SI (and:SI reg:SI (const_int -65536))).
+     This is how clr.w %dn is represented in RTL.  */
+  if (REG_P (dest)
+      && REGNO (dest) == regno
+      && GET_MODE (dest) == SImode
+      && GET_CODE (src) == AND
+      && GET_MODE (src) == SImode)
+    {
+      rtx op0 = XEXP (src, 0);
+      rtx op1 = XEXP (src, 1);
+      if (REG_P (op0) && REGNO (op0) == regno && CONST_INT_P (op1))
+	{
+	  HOST_WIDE_INT mask = INTVAL (op1);
+	  /* Check for 0xFFFF0000 (or sign-extended -65536).  */
+	  if ((mask & 0xFFFFFFFF) == 0xFFFF0000)
+	    return true;
+	}
+    }
+
+  return false;
+}
+
+/* Scan forward from ANDI_IDX in BB_INSNS to see if clr.w follows
+   for the same register.  If so, the AND is redundant since clr.w
+   will clear the bits that AND preserved.
+   Returns true if we found clr.w and the AND can be eliminated.  */
+
+static bool
+clrw_follows_andi_p (const auto_vec<rtx_insn *> &bb_insns,
+		     int andi_idx, unsigned regno)
+{
+  /* Scan forward, looking for clr.w or any instruction that uses
+     the register's low word value (which would invalidate the optimization).  */
+  for (unsigned i = andi_idx + 1; i < bb_insns.length (); i++)
+    {
+      rtx_insn *insn = bb_insns[i];
+
+      /* Found clr.w - the AND is redundant.  */
+      if (is_clrw_insn_p (insn, regno))
+	return true;
+
+      /* Check if this instruction uses the register's value.  */
+      rtx pat = PATTERN (insn);
+      if (GET_CODE (pat) == SET)
+	{
+	  rtx dest = SET_DEST (pat);
+	  rtx src = SET_SRC (pat);
+
+	  /* Special case: (set reg:SI (ior:SI reg:SI (const_int N)))
+	     where the constant only affects upper 16 bits.  This is how
+	     bset #16-31 is represented.  The low word value is not actually
+	     used - the ior just adds bits to the upper word.  */
+	  if (REG_P (dest) && REGNO (dest) == regno
+	      && GET_MODE (dest) == SImode
+	      && GET_CODE (src) == IOR
+	      && GET_MODE (src) == SImode)
+	    {
+	      rtx op0 = XEXP (src, 0);
+	      rtx op1 = XEXP (src, 1);
+	      if (REG_P (op0) && REGNO (op0) == regno && CONST_INT_P (op1))
+		{
+		  HOST_WIDE_INT val = INTVAL (op1);
+		  /* If constant only affects upper 16 bits, continue.  */
+		  if ((val & 0xFFFF) == 0)
+		    continue;
+		}
+	    }
+
+	  /* Special case: (set reg:SI (asm_operands ...)) where the
+	     register is passed through (empty asm with "+d" constraint).
+	     The low bits are preserved but not used for computation.  */
+	  if (REG_P (dest) && REGNO (dest) == regno
+	      && GET_CODE (src) == ASM_OPERANDS)
+	    {
+	      /* Check if this is a pass-through: same register in input.  */
+	      int ninputs = ASM_OPERANDS_INPUT_LENGTH (src);
+	      bool is_passthrough = false;
+	      for (int k = 0; k < ninputs; k++)
+		{
+		  rtx input = ASM_OPERANDS_INPUT (src, k);
+		  if (REG_P (input) && REGNO (input) == regno)
+		    {
+		      is_passthrough = true;
+		      break;
+		    }
+		}
+	      if (is_passthrough)
+		continue;
+	    }
+
+	  /* If source uses the register in SI mode, the low bits matter.  */
+	  if (reg_mentioned_p (gen_rtx_REG (SImode, regno), src))
+	    return false;
+
+	  /* If dest is a strict_low_part write, the low bits will be overwritten
+	     but the upper bits (including what AND preserves) are preserved.
+	     Continue scanning.  */
+	  if (GET_CODE (dest) == STRICT_LOW_PART)
+	    {
+	      rtx inner = XEXP (dest, 0);
+	      if (REG_P (inner) && REGNO (inner) == regno)
+		continue;
+	      if (SUBREG_P (inner))
+		{
+		  rtx subreg_reg = SUBREG_REG (inner);
+		  if (REG_P (subreg_reg) && REGNO (subreg_reg) == regno)
+		    continue;
+		}
+	    }
+
+	  /* If dest is the register in any mode, stop scanning.  */
+	  if (REG_P (dest) && REGNO (dest) == regno)
+	    return false;
+	}
+
+      /* For PARALLEL or other complex patterns, be conservative.  */
+      if (GET_CODE (pat) == PARALLEL)
+	{
+	  for (int j = 0; j < XVECLEN (pat, 0); j++)
+	    {
+	      rtx elem = XVECEXP (pat, 0, j);
+	      if (GET_CODE (elem) == SET)
+		{
+		  rtx src = SET_SRC (elem);
+		  if (reg_mentioned_p (gen_rtx_REG (SImode, regno), src))
+		    return false;
+		}
+	    }
+	}
+
+      /* CALL instructions clobber d0-d1.  */
+      if (CALL_P (insn) && regno <= 1)
+	return false;
+    }
+
+  return false;  /* Didn't find clr.w.  */
 }
 
 /* Classify how an RTL source expression defines a register.
@@ -1458,6 +1852,23 @@ classify_insn_effect (rtx_insn *insn, unsigned regno)
 	      if (GET_MODE (inner) == QImode)
 		return EFFECT_MODIFIES_BYTE;
 	    }
+	}
+
+      /* Check for DImode sets on d0 which also affect d1.
+	 On m68k, DImode values in data registers use d0:d1 pair.
+	 A set to (reg:DI d0) also defines d1.  */
+      if (REG_P (dest) && GET_MODE (dest) == DImode
+	  && REGNO (dest) == 0 && regno == 1)
+	{
+	  /* DImode set on d0 clears/defines d1 (the low 32 bits).
+	     Check if the constant has zeros in the low 32 bits.  */
+	  if (CONST_INT_P (src))
+	    {
+	      HOST_WIDE_INT val = INTVAL (src);
+	      if ((val & 0xFFFFFFFF) == 0)
+		return EFFECT_DEFINES_LONG;  /* d1 is set to 0.  */
+	    }
+	  return EFFECT_DEFINES_LONG;  /* d1 is defined by DImode set.  */
 	}
 
       /* Check if this instruction defines our register.  */
@@ -1799,6 +2210,7 @@ static unsigned int
 m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before)
 {
   auto_vec<andi_candidate> candidates;
+  unsigned int changes = 0;
 
   if (dump_file)
     fprintf (dump_file, "m68k-elim-andi: Processing BB %d\n", bb->index);
@@ -1825,11 +2237,11 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before)
 	}
     }
 
-  if (candidates.is_empty ())
-    return 0;
-
-  /* Pass 2: For each candidate, trace backward to find definition.  */
-  for (andi_candidate &cand : candidates)
+  /* Pass 2-3: For each candidate, trace backward to find definition and transform.
+     Only run if there are register ANDI candidates.  */
+  if (!candidates.is_empty ())
+    {
+      for (andi_candidate &cand : candidates)
     {
       unsigned regno = REGNO (cand.reg);
       bool found_def = false;
@@ -1941,6 +2353,20 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before)
       if (already_cleared && !cand.valid)
 	cand.valid = true;
 
+      /* For EXT_WORD_TO_LONG (and.l #$ffff), check if clr.w follows.
+	 If the low word is about to be cleared, the AND is redundant since
+	 it only preserves the low 16 bits which will be cleared anyway.
+	 This catches patterns like: and.l #$ffff; bset #N; clr.w  */
+      if (!cand.valid && cand.ext_type == EXT_WORD_TO_LONG)
+	{
+	  if (clrw_follows_andi_p (bb_insns, andi_idx, regno))
+	    {
+	      if (dump_file)
+		fprintf (dump_file, "  clr.w follows - AND is redundant!\n");
+	      cand.valid = true;
+	    }
+	}
+
       /* If not found in this block, try cross-basic-block analysis.  */
       if (!found_def && !already_cleared)
 	{
@@ -1961,10 +2387,8 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before)
 		 cand.valid, (int)cand.def_insns.length ());
     }
 
-  /* Pass 3: Apply transformations.  */
-  unsigned int changes = 0;
-
-  for (const andi_candidate &cand : candidates)
+      /* Pass 3: Apply transformations.  */
+      for (const andi_candidate &cand : candidates)
     {
       if (!cand.valid)
 	continue;
@@ -2089,6 +2513,49 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before)
 		 INSN_UID (cand.andi_insn));
       delete_insn (cand.andi_insn);
       changes++;
+	}
+    }  /* End if (!candidates.is_empty()) */
+
+  /* Pass 4: Check for memory ANDI patterns.
+     Pattern: andi.l #$ffff, N(sp) followed by clr.w N+2(sp)
+     The ANDI preserves low 16 bits, but clr.w clears them - redundant.  */
+  if (dump_file)
+    fprintf (dump_file, "  Pass 4: Scanning for memory ANDI patterns\n");
+
+  FOR_BB_INSNS (bb, insn)
+    {
+      if (!NONJUMP_INSN_P (insn))
+	continue;
+
+      rtx pat = PATTERN (insn);
+      if (GET_CODE (pat) == SET && MEM_P (SET_DEST (pat))
+	  && GET_CODE (SET_SRC (pat)) == AND && dump_file)
+	{
+	  fprintf (dump_file, "  Checking mem AND: ");
+	  print_rtl_single (dump_file, insn);
+	}
+
+      rtx mem;
+      if (mem_andi_65535_p (insn, &mem))
+	{
+	  if (dump_file)
+	    {
+	      fprintf (dump_file, "  Found mem andi.l #$ffff: ");
+	      print_rtl_single (dump_file, insn);
+	    }
+
+	  if (mem_clrw_follows_andi_p (bb, insn, mem))
+	    {
+	      if (dump_file)
+		fprintf (dump_file, "  mem clr.w follows - ANDI is redundant!\n");
+
+	      delete_insn (insn);
+	      changes++;
+
+	      if (dump_file)
+		fprintf (dump_file, "  Deleted memory ANDI insn.\n");
+	    }
+	}
     }
 
   if (dump_file)
@@ -2292,88 +2759,6 @@ highword_is_ashift_16_p (rtx_insn *insn)
       || REGNO (shift_reg) != REGNO (dest)
       || !CONST_INT_P (shift_cnt)
       || INTVAL (shift_cnt) != 16)
-    return NULL_RTX;
-
-  return dest;
-}
-
-/* Check if INSN clears the low word of a data register.
-   Patterns:
-     (set (strict_low_part (subreg:HI reg:SI 2)) (const_int 0))
-     (set (subreg:HI reg:SI 2) (const_int 0))
-   Returns the SI register if found, NULL_RTX otherwise.  */
-
-static rtx
-highword_is_clr_low_word_p (rtx_insn *insn)
-{
-  if (!NONJUMP_INSN_P (insn))
-    return NULL_RTX;
-
-  rtx pat = PATTERN (insn);
-  if (GET_CODE (pat) != SET)
-    return NULL_RTX;
-
-  rtx dest = SET_DEST (pat);
-  rtx src = SET_SRC (pat);
-
-  if (src != const0_rtx)
-    return NULL_RTX;
-
-  /* Check for strict_low_part form.  */
-  if (GET_CODE (dest) == STRICT_LOW_PART)
-    {
-      rtx inner = XEXP (dest, 0);
-      if (GET_CODE (inner) == SUBREG
-	  && GET_MODE (inner) == HImode
-	  && SUBREG_BYTE (inner) == 2
-	  && REG_P (SUBREG_REG (inner))
-	  && DATA_REG_P (SUBREG_REG (inner)))
-	return SUBREG_REG (inner);
-    }
-
-  /* Check for direct subreg form.  */
-  if (GET_CODE (dest) == SUBREG
-      && GET_MODE (dest) == HImode
-      && SUBREG_BYTE (dest) == 2
-      && REG_P (SUBREG_REG (dest))
-      && DATA_REG_P (SUBREG_REG (dest)))
-    return SUBREG_REG (dest);
-
-  return NULL_RTX;
-}
-
-/* Check if INSN is a swap (rotate by 16) on a data register.
-   Pattern: (set reg:SI (rotate:SI reg:SI (const_int 16)))
-   Returns the register if found, NULL_RTX otherwise.  */
-
-static rtx
-highword_is_swap_p (rtx_insn *insn)
-{
-  if (!NONJUMP_INSN_P (insn))
-    return NULL_RTX;
-
-  rtx pat = PATTERN (insn);
-  if (GET_CODE (pat) != SET)
-    return NULL_RTX;
-
-  rtx dest = SET_DEST (pat);
-  rtx src = SET_SRC (pat);
-
-  if (!REG_P (dest)
-      || !DATA_REG_P (dest)
-      || GET_MODE (dest) != SImode)
-    return NULL_RTX;
-
-  if (GET_CODE (src) != ROTATE)
-    return NULL_RTX;
-
-  rtx rot_reg = XEXP (src, 0);
-  rtx rot_cnt = XEXP (src, 1);
-
-  if (!REG_P (rot_reg)
-      || REGNO (rot_reg) != REGNO (dest)
-      || !CONST_INT_P (rot_cnt)
-      || INTVAL (rot_cnt) != 16)
     return NULL_RTX;
 
   return dest;
