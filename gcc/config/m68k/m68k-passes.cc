@@ -42,6 +42,7 @@
 #include "ssa.h"
 #include "fold-const.h"
 #include "gimple-range.h"
+#include "cfgloop.h"
 
 namespace {
 
@@ -2458,6 +2459,119 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before)
 		  all_succeeded = false;
 		  break;
 		}
+
+	      /* Check for loop exit pattern: def_bb is in a loop but the
+		 AND instruction (in bb) is on a loop exit path.  In this
+		 case, we should hoist the clr to the loop preheader rather
+		 than inserting it in the hot loop body.  */
+	      if (current_loops
+		  && bb_loop_depth (def_bb) > bb_loop_depth (bb))
+		{
+		  if (dump_file)
+		    fprintf (dump_file, "  Loop exit pattern: def depth %d > "
+			     "use depth %d\n",
+			     bb_loop_depth (def_bb), bb_loop_depth (bb));
+
+		  /* Find the loop containing the definition.  */
+		  class loop *def_loop = def_bb->loop_father;
+
+		  if (def_loop && def_loop != current_loops->tree_root
+		      && def_loop->header && def_loop->latch)
+		    {
+		      /* Manually find the preheader edge - the edge to the
+			 loop header that doesn't come from the latch.  */
+		      edge prehdr_edge = NULL;
+		      edge e;
+		      edge_iterator ei;
+		      int non_latch_preds = 0;
+
+		      FOR_EACH_EDGE (e, ei, def_loop->header->preds)
+			{
+			  if (e->src != def_loop->latch)
+			    {
+			      prehdr_edge = e;
+			      non_latch_preds++;
+			    }
+			}
+
+		      /* Only use preheader if there's exactly one non-latch
+			 predecessor (i.e., a proper preheader exists).  */
+		      if (prehdr_edge && non_latch_preds == 1
+			  && prehdr_edge->src != ENTRY_BLOCK_PTR_FOR_FN (cfun))
+			{
+			  basic_block preheader = prehdr_edge->src;
+
+			  /* Check if we already inserted a clr for this
+			     register in this preheader.  */
+			  unsigned preamble_key = (preheader->index << 4)
+						  | (regno & 0xf);
+			  if (!bitmap_bit_p (already_cleared_before,
+					     preamble_key))
+			    {
+			      /* Find insertion point - before the jump.  */
+			      rtx_insn *insert_pt = BB_END (preheader);
+			      if (JUMP_P (insert_pt))
+				insert_pt = PREV_INSN (insert_pt);
+			      while (insert_pt && NOTE_P (insert_pt))
+				insert_pt = PREV_INSN (insert_pt);
+
+			      /* Determine clear mode based on extension type.  */
+			      machine_mode clr_mode
+				= (cand.ext_type == EXT_BYTE_TO_WORD)
+				  ? HImode : SImode;
+			      rtx clr_reg
+				= gen_rtx_REG (clr_mode, regno);
+			      rtx clr_pat
+				= gen_rtx_SET (clr_reg, const0_rtx);
+			      rtx_insn *prehdr_insn
+				= emit_insn_after (clr_pat, insert_pt);
+
+			      INSN_CODE (prehdr_insn) = -1;
+			      if (recog_memoized (prehdr_insn) >= 0)
+				{
+				  bitmap_set_bit (already_cleared_before,
+						  preamble_key);
+				  if (dump_file)
+				    fprintf (dump_file,
+					     "  Hoisted clr.%c d%d to loop "
+					     "preheader BB %d\n",
+					     clr_mode == HImode ? 'w' : 'l',
+					     regno, preheader->index);
+				  inserted_insns.safe_push (prehdr_insn);
+				  /* Continue to next def_insn - don't insert
+				     in loop body.  */
+				  continue;
+				}
+			      else
+				{
+				  if (dump_file)
+				    fprintf (dump_file,
+					     "  FAILED: preheader clr not "
+					     "recognized\n");
+				  delete_insn (prehdr_insn);
+				}
+			    }
+			  else
+			    {
+			      /* Already have clr in preheader.  */
+			      if (dump_file)
+				fprintf (dump_file,
+					 "  Already have clr in preheader "
+					 "for d%d\n", regno);
+			      /* Continue to next def_insn.  */
+			      continue;
+			    }
+			}
+		    }
+
+		  /* No preheader available - skip this candidate entirely
+		     to avoid hoisting into the hot loop body.  */
+		  if (dump_file)
+		    fprintf (dump_file, "  SKIP: loop exit pattern but no "
+			     "preheader available\n");
+		  all_succeeded = false;
+		  break;
+		}
 	    }
 
 	  if (dump_file)
@@ -2572,10 +2686,21 @@ m68k_elim_andi (function *func)
 {
   unsigned int changes = 0;
 
+  /* Ensure loop info is available for preamble hoisting optimization.
+     This allows us to detect loop exit patterns and hoist clr instructions
+     to loop preheaders instead of into loop bodies.  */
+  bool created_loops = false;
+  if (current_loops == NULL)
+    {
+      loop_optimizer_init (AVOID_CFG_MODIFICATIONS);
+      created_loops = true;
+    }
+
   /* Track def_insns that already have moveq inserted before them.
      Key is (insn UID << 4) | regno to handle different registers.
      This is shared across all BBs to prevent duplicate insertions
-     when multiple BBs reference the same def_insn in a predecessor.  */
+     when multiple BBs reference the same def_insn in a predecessor.
+     Also used for preheader insertions with (bb_index << 4) | regno.  */
   auto_bitmap already_cleared_before;
 
   basic_block bb;
@@ -2587,6 +2712,10 @@ m68k_elim_andi (function *func)
   if (dump_file)
     fprintf (dump_file, "m68k-elim-andi: Pass complete, total changes=%d\n",
 	     changes);
+
+  /* Clean up loop info if we initialized it.  */
+  if (created_loops)
+    loop_optimizer_finalize ();
 
   /* Don't call df_analyze() manually - let TODO_df_finish handle
      dataflow cleanup.  delete_insn() has already notified DF about

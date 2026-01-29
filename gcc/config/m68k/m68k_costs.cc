@@ -93,14 +93,14 @@ struct m68k_cost_table {
 
   /* Division: [word, long] */
   int16_t div[2];
-  int8_t div_speed_divisor;   /* divisor for -Os (1 or 3) */
+  int8_t div_size_divisor;    /* divisor for -Os (1 or 3) */
 
   /* Multiply: [word, long] base cost */
   int16_t mult[2];
   int8_t mult_const_base;     /* base for known-bits calculation */
   int8_t mult_per_bit;        /* cost per bit in multiplier */
   int8_t mult_per_bit_div;    /* divisor for per-bit (68040: 2, others: 1) */
-  int8_t mult_speed_divisor;  /* divisor for -Os */
+  int8_t mult_size_divisor;   /* divisor for -Os */
 
   /* Shifts: base costs [word, long] */
   int8_t shift_base[2];
@@ -216,14 +216,14 @@ static const struct m68k_cost_table m68k_cost_68000 = {
 
   /* div: [word, long] */
   { 136, 410 },
-  /* div_speed_divisor */ 3,
+  /* div_size_divisor */ 3,
 
   /* mult: [word, long] */
   { 50, 150 },
   /* mult_const_base */ 38,
   /* mult_per_bit */ 2,
   /* mult_per_bit_div */ 1,
-  /* mult_speed_divisor */ 3,
+  /* mult_size_divisor */ 3,
 
   /* shift_base: [word, long] */
   { 6, 8 },
@@ -336,14 +336,14 @@ static const struct m68k_cost_table m68k_cost_68020 = {
 
   /* div: [word, long] */
   { 56, 90 },
-  /* div_speed_divisor */ 1,
+  /* div_size_divisor */ 3,
 
   /* mult: [word, long] */
   { 28, 44 },
   /* mult_const_base */ 12,
   /* mult_per_bit */ 1,
   /* mult_per_bit_div */ 1,
-  /* mult_speed_divisor */ 1,
+  /* mult_size_divisor */ 3,
 
   /* shift_base: [word, long] */
   { 4, 4 },
@@ -456,14 +456,14 @@ static const struct m68k_cost_table m68k_cost_68040 = {
 
   /* div: [word, long] */
   { 27, 44 },
-  /* div_speed_divisor */ 1,
+  /* div_size_divisor */ 3,
 
   /* mult: [word, long] */
   { 16, 20 },
   /* mult_const_base */ 4,
   /* mult_per_bit */ 1,
   /* mult_per_bit_div */ 2,
-  /* mult_speed_divisor */ 1,
+  /* mult_size_divisor */ 3,
 
   /* shift_base: [word, long] */
   { 2, 2 },
@@ -601,6 +601,94 @@ mem_cost_speed (rtx addr, const struct m68k_cost_table *costs, int opno)
 
 /* Forward declaration for recursive calls.  */
 bool m68k_rtx_costs_impl (rtx, machine_mode, int, int, int *, bool);
+
+/* Calculate raw multiply cost (before size divisor adjustment).
+   Returns true if cost was calculated, false otherwise.
+   Sets *is_shift to true if power-of-2 multiplication was converted to shift.
+   The caller applies mult_size_divisor for -Os only when !*is_shift.  */
+static bool
+mul_cost (rtx x, machine_mode mode, const struct m68k_cost_table *costs,
+	  int *total, bool *is_shift)
+{
+  rtx op0 = XEXP (x, 0);
+  rtx op1 = XEXP (x, 1);
+  int idx = GET_MODE_SIZE (mode) > 2 ? 1 : 0;
+
+  *is_shift = false;
+
+  if (CONST_INT_P (op1))
+    {
+      unsigned HOST_WIDE_INT val = INTVAL (op1);
+      if ((HOST_WIDE_INT) val < 0)
+	val = -val;
+
+      /* Check for power of 2 - can use shift */
+      if (val && (val & (val - 1)) == 0)
+	{
+	  int shift = 0;
+	  unsigned HOST_WIDE_INT v = val;
+	  while (v > 1)
+	    {
+	      v >>= 1;
+	      shift++;
+	    }
+	  *total = costs->shift_base[idx] + costs->shift_per_count * shift;
+	  *is_shift = true;
+	  return true;
+	}
+
+      /* Count bits for multiply estimation */
+      int bits = __builtin_popcount (val);
+
+      if (costs->cpu == M68K_CPU_68000)
+	{
+	  /* 68000-style: microcoded multiply with variable timing */
+	  if (GET_CODE (op0) == ZERO_EXTEND
+	      || GET_CODE (op0) == SIGN_EXTEND)
+	    {
+	      *total = 0;
+	      mode = HImode;
+	      idx = 0;
+	    }
+	  else if (!m68k_rtx_costs_impl (op0, mode, MULT, 0, total, true))
+	    return false;
+
+	  if (GET_MODE_SIZE (mode) == 2 && INTVAL (op1) > 0)
+	    *total += costs->mult_const_base + costs->mult_per_bit * bits;
+	  else
+	    *total += costs->mult[idx];
+	  return true;
+	}
+
+      /* 68020+ with constant multiplier */
+      if (REG_P (op0) || GET_CODE (op0) == ZERO_EXTEND)
+	{
+	  *total = costs->mult_const_base
+		   + costs->mult_per_bit * bits / costs->mult_per_bit_div;
+	  return true;
+	}
+    }
+
+  if (costs->cpu == M68K_CPU_68000)
+    {
+      /* 68000-style: microcoded multiply */
+      if (GET_CODE (op0) == ZERO_EXTEND
+	  || GET_CODE (op0) == SIGN_EXTEND)
+	{
+	  *total = 0;
+	  mode = HImode;
+	  idx = 0;
+	}
+      else if (!m68k_rtx_costs_impl (op0, mode, MULT, 0, total, true))
+	return false;
+
+      *total += costs->mult[idx];
+      return true;
+    }
+
+  *total = costs->mult[idx];
+  return true;
+}
 
 /* Unified cost calculation - returns cycle-based costs.
    The 'speed' parameter is used selectively: for 68020+, speed is effectively
@@ -833,21 +921,21 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
       {
 	int idx = GET_MODE_SIZE (mode) > 2;
 	int div_cost = costs->div[idx];
-	if (costs->div_speed_divisor > 1)
+
+	if (costs->cpu == M68K_CPU_68000)
 	  {
-	    /* Variable timing - apply divisor for -Os */
-	    if (!speed)
-	      div_cost /= costs->div_speed_divisor;
-	    /* With variable timing, include operand cost */
+	    /* 68000: include operand cost (variable timing) */
 	    rtx op = XEXP (x, 0);
-	    if (m68k_rtx_costs_impl (op, mode, code, 0, total, speed))
-	      {
-		*total += div_cost;
-		return true;
-	      }
-	    return false;
+	    if (!m68k_rtx_costs_impl (op, mode, code, 0, total, speed))
+	      return false;
 	  }
-	*total = div_cost;
+	else
+	  *total = 0;
+
+	if (!speed && costs->div_size_divisor > 1)
+	  div_cost /= costs->div_size_divisor;
+
+	*total += div_cost;
 	return true;
       }
 
@@ -1119,89 +1207,11 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 
     case MULT:
       {
-	rtx op0 = XEXP (x, 0);
-	rtx op1 = XEXP (x, 1);
-	int idx = GET_MODE_SIZE (mode) > 2 ? 1 : 0;
-
-	if (CONST_INT_P (op1))
-	  {
-	    unsigned HOST_WIDE_INT val = INTVAL (op1);
-	    if ((HOST_WIDE_INT) val < 0)
-	      val = -val;
-
-	    /* Check for power of 2 - can use shift */
-	    if (val && (val & (val - 1)) == 0)
-	      {
-		int shift = 0;
-		unsigned HOST_WIDE_INT v = val;
-		while (v > 1)
-		  {
-		    v >>= 1;
-		    shift++;
-		  }
-		int shift_cost = costs->shift_base[idx];
-		shift_cost += costs->shift_per_count * shift;
-		if (costs->shift_speed_divisor > 1 && !speed)
-		  shift_cost /= costs->shift_speed_divisor;
-		*total = shift_cost;
-		return true;
-	      }
-
-	    /* Count bits for multiply estimation */
-	    int bits = __builtin_popcount (val);
-
-	    if (costs->mult_speed_divisor > 1)
-	      {
-		/* 68000-style: microcoded multiply with variable timing */
-		if (GET_CODE (op0) == ZERO_EXTEND
-		    || GET_CODE (op0) == SIGN_EXTEND)
-		  {
-		    *total = 0;
-		    mode = HImode;
-		    idx = 0;
-		  }
-		else if (!m68k_rtx_costs_impl (op0, mode, code, 0,
-						  total, speed))
-		  break;
-
-		int mult_cost;
-		if (GET_MODE_SIZE (mode) == 2 && INTVAL (op1) > 0)
-		  mult_cost = costs->mult_const_base
-			      + costs->mult_per_bit * bits;
-		else
-		  mult_cost = costs->mult[idx];
-		*total += speed ? mult_cost : mult_cost / costs->mult_speed_divisor;
-		return true;
-	      }
-
-	    /* 68020+ with constant multiplier */
-	    if (REG_P (op0) || GET_CODE (op0) == ZERO_EXTEND)
-	      {
-		*total = costs->mult_const_base
-			 + costs->mult_per_bit * bits / costs->mult_per_bit_div;
-		return true;
-	      }
-	  }
-
-	if (costs->mult_speed_divisor > 1)
-	  {
-	    /* 68000-style: microcoded multiply */
-	    if (GET_CODE (op0) == ZERO_EXTEND
-		|| GET_CODE (op0) == SIGN_EXTEND)
-	      {
-		*total = 0;
-		mode = HImode;
-		idx = 0;
-	      }
-	    else if (!m68k_rtx_costs_impl (op0, mode, code, 0, total, speed))
-	      break;
-
-	    int mult_cost = costs->mult[idx];
-	    *total += speed ? mult_cost : mult_cost / costs->mult_speed_divisor;
-	    return true;
-	  }
-
-	*total = costs->mult[idx];
+	bool is_shift;
+	if (!mul_cost (x, mode, costs, total, &is_shift))
+	  break;
+	if (!speed && !is_shift && costs->mult_size_divisor > 1)
+	  *total /= costs->mult_size_divisor;
 	return true;
       }
 
