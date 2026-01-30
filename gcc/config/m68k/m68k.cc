@@ -435,6 +435,9 @@ TARGET_GNU_ATTRIBUTES (m68k_attribute_table,
 #undef TARGET_PREDICT_DOLOOP_P
 #define TARGET_PREDICT_DOLOOP_P m68k_predict_doloop_p
 
+#undef TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS
+#define TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS m68k_ira_change_pseudo_allocno_class
+
 
 /* Base flags for 68k ISAs.  */
 #define FL_FOR_isa_00    FL_ISA_68000
@@ -8467,6 +8470,89 @@ m68k_predict_doloop_p (class loop *loop)
 
   /* Predict doloop will be used - tell IVOPTS to preserve count-based IV.  */
   return true;
+}
+
+/* Helper: Check if REGNO is used as a memory address in INSN.
+   Recursively scans the RTX pattern looking for (mem (... regno ...)).  */
+
+static bool
+regno_used_as_mem_address_in_rtx (rtx x, unsigned int regno)
+{
+  if (x == NULL_RTX)
+    return false;
+
+  if (MEM_P (x))
+    {
+      /* Check if regno appears anywhere in the address.  */
+      rtx addr = XEXP (x, 0);
+      return refers_to_regno_p (regno, addr);
+    }
+
+  const char *fmt = GET_RTX_FORMAT (GET_CODE (x));
+  for (int i = GET_RTX_LENGTH (GET_CODE (x)) - 1; i >= 0; i--)
+    {
+      if (fmt[i] == 'e')
+	{
+	  if (regno_used_as_mem_address_in_rtx (XEXP (x, i), regno))
+	    return true;
+	}
+      else if (fmt[i] == 'E')
+	{
+	  for (int j = XVECLEN (x, i) - 1; j >= 0; j--)
+	    if (regno_used_as_mem_address_in_rtx (XVECEXP (x, i, j), regno))
+	      return true;
+	}
+    }
+  return false;
+}
+
+/* Check if pseudo REGNO is used as a memory address anywhere.  */
+
+static bool
+pseudo_used_as_mem_address_p (unsigned int regno)
+{
+  df_ref ref;
+
+  for (ref = DF_REG_USE_CHAIN (regno); ref; ref = DF_REF_NEXT_REG (ref))
+    {
+      rtx_insn *insn = DF_REF_INSN (ref);
+      if (insn && INSN_P (insn))
+	{
+	  if (regno_used_as_mem_address_in_rtx (PATTERN (insn), regno))
+	    return true;
+	}
+    }
+  return false;
+}
+
+/* Implement TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS.
+   On m68k, memory addressing modes require address registers (An) as bases.
+   There is no (Dn) addressing mode on any 68k CPU.
+
+   Only force ADDR_REGS when the pseudo is actually used as a memory address.
+   Pseudos used only for pointer arithmetic or comparisons can stay in
+   data registers to avoid unnecessary callee-save overhead.  */
+
+static reg_class_t
+m68k_ira_change_pseudo_allocno_class (int regno,
+				      reg_class_t allocno_class,
+				      reg_class_t best_class)
+{
+  /* Only consider forcing ADDR_REGS if that's the best class.  */
+  if (best_class != ADDR_REGS)
+    return allocno_class;
+
+  /* If allocno_class is already ADDR_REGS, no change needed.  */
+  if (allocno_class == ADDR_REGS)
+    return allocno_class;
+
+  /* Check if this pseudo is actually used as a memory address.
+     If so, force ADDR_REGS to avoid reload copies.  */
+  if (pseudo_used_as_mem_address_p (regno))
+    return ADDR_REGS;
+
+  /* Pseudo is only used for arithmetic/comparisons - let IRA decide.  */
+  return allocno_class;
 }
 
 static void
