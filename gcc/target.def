@@ -4690,6 +4690,16 @@ this escpecially for address IV uses.\n\
 The default value is zero.",
  int64_t, 0)
 
+DEFHOOKPOD
+(doloop_cost_for_compare,
+ "Cost adjustment applied when the doloop IV candidate is used for the\n\
+loop exit comparison.  A negative value credits targets where the doloop\n\
+instruction is cheaper than a regular compare and branch sequence.\n\
+For example, on m68k the @code{dbra} instruction replaces both compare\n\
+and branch, saving one instruction, so a value of -4 is appropriate.\n\
+The default value is zero.",
+ int64_t, 0)
+
 DEFHOOK
 (can_use_doloop_p,
  "Return true if it is possible to use low-overhead loops (@code{doloop_end}\n\

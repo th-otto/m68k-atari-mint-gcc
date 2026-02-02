@@ -5592,9 +5592,14 @@ determine_group_iv_cost_cond (struct ivopts_data *data,
       inv_vars = inv_vars_elim;
       inv_vars_elim = NULL;
       inv_expr = inv_expr_elim;
-      /* For doloop candidate/use pair, adjust to zero cost.  */
-      if (group->doloop_p && cand->doloop_p && elim_cost.cost > no_cost.cost)
-	cost = no_cost;
+      /* For doloop candidate/use pair, adjust to zero cost, then apply
+	 target-specific credit for using doloop vs compare+branch.  */
+      if (group->doloop_p && cand->doloop_p)
+	{
+	  if (elim_cost.cost > no_cost.cost)
+	    cost = no_cost;
+	  cost += targetm.doloop_cost_for_compare;
+	}
     }
   else
     {

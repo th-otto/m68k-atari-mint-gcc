@@ -435,6 +435,13 @@ TARGET_GNU_ATTRIBUTES (m68k_attribute_table,
 #undef TARGET_PREDICT_DOLOOP_P
 #define TARGET_PREDICT_DOLOOP_P m68k_predict_doloop_p
 
+/* Credit for using doloop IV for loop exit comparison.
+   dbra is one instruction vs cmp.l + jne (two instructions).
+   TODO: Perhaps this should be COSTS_N_INSNS (-2) to more strongly
+   prefer dbra; more test cases and tuning needed.  */
+#undef TARGET_DOLOOP_COST_FOR_COMPARE
+#define TARGET_DOLOOP_COST_FOR_COMPARE (COSTS_N_INSNS (-1))
+
 #undef TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS
 #define TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS m68k_ira_change_pseudo_allocno_class
 

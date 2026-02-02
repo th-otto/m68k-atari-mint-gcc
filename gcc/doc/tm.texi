@@ -12310,6 +12310,15 @@ this escpecially for address IV uses.
 The default value is zero.
 @end deftypevr
 
+@deftypevr {Target Hook} int64_t TARGET_DOLOOP_COST_FOR_COMPARE
+Cost adjustment applied when the doloop IV candidate is used for the
+loop exit comparison.  A negative value credits targets where the doloop
+instruction is cheaper than a regular compare and branch sequence.
+For example, on m68k the @code{dbra} instruction replaces both compare
+and branch, saving one instruction, so a value of -4 is appropriate.
+The default value is zero.
+@end deftypevr
+
 @deftypefn {Target Hook} bool TARGET_CAN_USE_DOLOOP_P (const widest_int @var{&iterations}, const widest_int @var{&iterations_max}, unsigned int @var{loop_depth}, bool @var{entered_at_top})
 Return true if it is possible to use low-overhead loops (@code{doloop_end}
 and @code{doloop_begin}) for a particular loop.  @var{iterations} gives the
