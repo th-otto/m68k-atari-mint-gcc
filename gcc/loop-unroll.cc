@@ -65,6 +65,10 @@ along with GCC; see the file COPYING3.  If not see
    showed that this choice may affect performance in order of several %.
    */
 
+/* Forward declarations.  */
+static void consolidate_const_loop_counter (class loop *, class niter_desc *,
+					    unsigned);
+
 /* Information about induction variables to split.  */
 
 struct iv_to_split
@@ -648,6 +652,13 @@ unroll_loop_constant_iterations (class loop *loop)
     loop->nb_iterations_likely_upper_bound
       = wi::udiv_trunc (loop->nb_iterations_likely_upper_bound, max_unroll + 1);
   desc->niter_expr = gen_int_mode (desc->niter, desc->mode);
+
+  /* For targets that prefer dbra-style loops (like m68k), consolidate
+     the loop counter.  After unrolling, there are max_unroll+1 copies
+     of the decrement instruction.  We keep only one and adjust the
+     initial counter value to match the new iteration count.  */
+  if (targetm.prefer_runtime_unroll_mod)
+    consolidate_const_loop_counter (loop, desc, max_unroll);
 
   /* Remove the edges.  */
   FOR_EACH_VEC_ELT (remove_edges, i, e)
@@ -2268,4 +2279,168 @@ free_opt_info (struct opt_info *opt_info)
       opt_info->insns_with_var_to_expand = NULL;
     }
   free (opt_info);
+}
+
+/* Consolidate the loop counter for constant iteration unrolled loops.
+
+   After unrolling a loop with constant iterations, there are max_unroll+1
+   copies of the loop counter decrement instruction.  For targets that prefer
+   dbra-style loops (where the counter decrements by 1 per iteration), we
+   want to keep only one decrement and adjust the initial counter value.
+
+   For example, if we unroll 8 times a loop that iterates 16 times:
+   - Before: counter = 16, 8 decrements per iteration, 2 iterations
+   - After:  counter = 2, 1 decrement per iteration, 2 iterations
+
+   This allows the doloop pass to use dbra on m68k.  */
+
+static void
+consolidate_const_loop_counter (class loop *loop, class niter_desc *desc,
+				unsigned max_unroll)
+{
+  basic_block bb;
+  rtx loop_counter_reg = NULL_RTX;
+  auto_vec<rtx_insn *> decrement_insns;
+  rtx_insn *init_insn = NULL;
+  basic_block init_bb = NULL;
+
+  if (dump_file)
+    fprintf (dump_file, ";; Attempting loop counter consolidation\n");
+
+  /* Find the loop counter register from the exit condition.  Look for
+     a comparison of a register against 0 in the exit block.  */
+  basic_block exit_bb = desc->out_edge->src;
+  rtx_insn *exit_insn = BB_END (exit_bb);
+
+  if (JUMP_P (exit_insn))
+    {
+      rtx pattern = PATTERN (exit_insn);
+      if (GET_CODE (pattern) == SET
+	  && GET_CODE (SET_SRC (pattern)) == IF_THEN_ELSE)
+	{
+	  rtx cond = XEXP (SET_SRC (pattern), 0);
+	  if (GET_CODE (cond) == NE || GET_CODE (cond) == EQ
+	      || GET_CODE (cond) == GT || GET_CODE (cond) == GE
+	      || GET_CODE (cond) == LT || GET_CODE (cond) == LE)
+	    {
+	      rtx op0 = XEXP (cond, 0);
+	      if (REG_P (op0))
+		loop_counter_reg = op0;
+	    }
+	}
+    }
+
+  if (!loop_counter_reg)
+    {
+      if (dump_file)
+	fprintf (dump_file, ";; Could not identify loop counter register\n");
+      return;
+    }
+
+  if (dump_file)
+    fprintf (dump_file, ";; Loop counter is reg %d\n",
+	     REGNO (loop_counter_reg));
+
+  /* Scan all basic blocks in the function that are part of this loop
+     to find decrements of the loop counter.  After unrolling, the loop
+     body includes many new blocks.  */
+  FOR_EACH_BB_FN (bb, cfun)
+    {
+      if (!flow_bb_inside_loop_p (loop, bb))
+	continue;
+
+      rtx_insn *insn;
+      FOR_BB_INSNS (bb, insn)
+	{
+	  if (!INSN_P (insn))
+	    continue;
+
+	  rtx set = single_set (insn);
+	  if (!set)
+	    continue;
+
+	  rtx dest = SET_DEST (set);
+	  rtx src = SET_SRC (set);
+
+	  /* Look for: reg = reg + -1 (or reg = reg - 1).  */
+	  if (!REG_P (dest) || REGNO (dest) != REGNO (loop_counter_reg))
+	    continue;
+
+	  if (GET_CODE (src) == PLUS
+	      && REG_P (XEXP (src, 0))
+	      && REGNO (XEXP (src, 0)) == REGNO (loop_counter_reg)
+	      && CONST_INT_P (XEXP (src, 1))
+	      && INTVAL (XEXP (src, 1)) == -1)
+	    {
+	      decrement_insns.safe_push (insn);
+	    }
+	}
+    }
+
+  /* If we found fewer than 2 decrements, nothing to consolidate.  */
+  if (decrement_insns.length () < 2 || !loop_counter_reg)
+    {
+      if (dump_file)
+	fprintf (dump_file, ";; No consolidation needed: found %u decrements\n",
+		 decrement_insns.length ());
+      return;
+    }
+
+  if (dump_file)
+    fprintf (dump_file,
+	     ";; Consolidating %u loop counter decrements to 1\n",
+	     decrement_insns.length ());
+
+  /* Keep the last decrement (which is in the main loop body), delete the rest.
+     The last one is the one that will be used for the exit condition.  */
+  for (unsigned i = 0; i < decrement_insns.length () - 1; i++)
+    {
+      if (dump_file)
+	fprintf (dump_file, ";; Deleting decrement insn %d\n",
+		 INSN_UID (decrement_insns[i]));
+      delete_insn (decrement_insns[i]);
+    }
+
+  /* Find the initialization instruction in the preheader.
+     Look for a SET of the loop counter register to a constant.  */
+  init_bb = loop_preheader_edge (loop)->src;
+  FOR_BB_INSNS (init_bb, init_insn)
+    {
+      if (!INSN_P (init_insn))
+	continue;
+
+      rtx set = single_set (init_insn);
+      if (!set)
+	continue;
+
+      if (REG_P (SET_DEST (set))
+	  && REGNO (SET_DEST (set)) == REGNO (loop_counter_reg)
+	  && CONST_INT_P (SET_SRC (set)))
+	{
+	  /* Found the initialization.  Modify it to the new value.
+	     The old value is the original iteration count.  We divide
+	     by (max_unroll + 1) to get the new iteration count.  */
+	  HOST_WIDE_INT old_val = INTVAL (SET_SRC (set));
+	  HOST_WIDE_INT new_val = old_val / (max_unroll + 1);
+
+	  if (dump_file)
+	    fprintf (dump_file,
+		     ";; Changing loop counter init from %ld to %ld\n",
+		     (long) old_val, (long) new_val);
+
+	  rtx new_src = gen_int_mode (new_val, GET_MODE (loop_counter_reg));
+	  if (!validate_change (init_insn, &SET_SRC (set), new_src, 0))
+	    {
+	      /* If validate_change fails, try replacing the whole insn.  */
+	      rtx_insn *seq;
+	      start_sequence ();
+	      emit_move_insn (loop_counter_reg, new_src);
+	      seq = get_insns ();
+	      end_sequence ();
+	      emit_insn_after (seq, init_insn);
+	      delete_insn (init_insn);
+	    }
+	  break;
+	}
+    }
 }

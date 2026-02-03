@@ -12319,6 +12319,15 @@ and branch, saving one instruction, so a value of -4 is appropriate.
 The default value is zero.
 @end deftypevr
 
+@deftypevr {Target Hook} int TARGET_DOLOOP_MIN_ITERATIONS
+Minimum number of estimated iterations for doloop optimization
+to be considered profitable.  The doloop pass will reject loops
+with fewer estimated iterations than this value.  Set this to a
+lower value (e.g., 1) for targets like m68k where the dbra
+instruction is always beneficial regardless of iteration count.
+The default value is 3.
+@end deftypevr
+
 @deftypefn {Target Hook} bool TARGET_CAN_USE_DOLOOP_P (const widest_int @var{&iterations}, const widest_int @var{&iterations_max}, unsigned int @var{loop_depth}, bool @var{entered_at_top})
 Return true if it is possible to use low-overhead loops (@code{doloop_end}
 and @code{doloop_begin}) for a particular loop.  @var{iterations} gives the

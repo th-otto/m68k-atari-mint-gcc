@@ -4710,6 +4710,16 @@ and branch, saving one instruction, so a value of -4 is appropriate.\n\
 The default value is zero.",
  int64_t, 0)
 
+DEFHOOKPOD
+(doloop_min_iterations,
+ "Minimum number of estimated iterations for doloop optimization\n\
+to be considered profitable.  The doloop pass will reject loops\n\
+with fewer estimated iterations than this value.  Set this to a\n\
+lower value (e.g., 1) for targets like m68k where the dbra\n\
+instruction is always beneficial regardless of iteration count.\n\
+The default value is 3.",
+ int, 3)
+
 DEFHOOK
 (can_use_doloop_p,
  "Return true if it is possible to use low-overhead loops (@code{doloop_end}\n\

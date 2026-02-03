@@ -442,6 +442,11 @@ TARGET_GNU_ATTRIBUTES (m68k_attribute_table,
 #undef TARGET_DOLOOP_COST_FOR_COMPARE
 #define TARGET_DOLOOP_COST_FOR_COMPARE (COSTS_N_INSNS (-1))
 
+/* Enable doloop for loops with 1+ iterations (default is 3).
+   The dbra instruction is always beneficial on m68k.  */
+#undef TARGET_DOLOOP_MIN_ITERATIONS
+#define TARGET_DOLOOP_MIN_ITERATIONS 1
+
 /* Prefer modulo-based runtime loop unrolling over Duff's device.
    The Duff's device style switch cascade generates expensive compare
    chains on m68k.  A cleanup loop is more efficient.  */
@@ -853,6 +858,14 @@ m68k_option_override_internal (bool main_args_p)
    * Introduced by commit 04c9cf5c786b94fbe3f6f21f06cae73a7575ff7a
    */
   flag_fold_mem_offsets = 0;
+
+  /* Disable IV splitting in the loop unroller.  When enabled, the unroller
+     generates base+offset addressing for each unrolled iteration, which
+     prevents efficient post-increment addressing.  With this disabled,
+     the unroller chains increments, enabling move.l (%a0)+,(%a1)+ patterns
+     that are much more efficient on m68k.  */
+  if (!OPTION_SET_P (flag_split_ivs_in_unroller))
+    flag_split_ivs_in_unroller = 0;
 }
 
 /* Implement the TARGET_OPTION_OVERRIDE hook.  */
