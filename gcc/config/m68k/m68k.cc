@@ -299,6 +299,9 @@ static void m68k_file_end (void);
 #undef TARGET_ADDRESS_COST
 #define TARGET_ADDRESS_COST m68k_address_cost
 
+#undef TARGET_NEW_ADDRESS_PROFITABLE_P
+#define TARGET_NEW_ADDRESS_PROFITABLE_P m68k_new_address_profitable_p
+
 #undef TARGET_ATTRIBUTE_TABLE
 #define TARGET_ATTRIBUTE_TABLE m68k_attribute_table
 
@@ -3559,6 +3562,20 @@ m68k_address_cost (rtx x, machine_mode mode,
   int total = 0;
   m68k_rtx_costs_impl (&mem, mode, SET, 0, &total, speed);
   return total;
+}
+
+/* Implement TARGET_NEW_ADDRESS_PROFITABLE_P.
+   Prevent the scheduler from replacing auto-increment addressing with
+   base + offset addressing unless it's actually cheaper.  */
+
+static bool
+m68k_new_address_profitable_p (rtx memref, rtx_insn *insn, rtx new_addr)
+{
+  addr_space_t as = MEM_ADDR_SPACE (memref);
+  bool speed = optimize_bb_for_speed_p (BLOCK_FOR_INSN (insn));
+  int old_cost = address_cost (XEXP (memref, 0), GET_MODE (memref), as, speed);
+  int new_cost = address_cost (new_addr, GET_MODE (memref), as, speed);
+  return new_cost <= old_cost;
 }
 
 /* Return an instruction to move CONST_INT OPERANDS[1] into data register
