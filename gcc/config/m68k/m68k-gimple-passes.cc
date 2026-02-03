@@ -822,7 +822,7 @@ m68k_narrow_index_mult (function *fun)
 	}
     }
 
-  if (changes && get_range_query (fun) != get_global_range_query ())
+  if (get_range_query (fun) != get_global_range_query ())
     disable_ranger (fun);
 
   return changes ? TODO_update_ssa : 0;
