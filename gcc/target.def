@@ -2822,6 +2822,16 @@ number of memory accesses.",
  unsigned, (unsigned nunroll, class loop *loop),
  NULL)
 
+/* Prefer modulo-based runtime loop unrolling over Duff's device.  */
+DEFHOOKPOD
+(prefer_runtime_unroll_mod,
+ "Return true if the target prefers modulo-based runtime loop unrolling.\n\
+When true, runtime loop unrolling creates a cleanup loop that executes\n\
+@code{n % unroll_factor} iterations before the main unrolled loop, instead\n\
+of using a Duff's device style switch cascade.  This is more efficient on\n\
+targets where compare cascades are expensive.",
+ bool, false)
+
 /* True if X is a legitimate MODE-mode immediate operand.  */
 DEFHOOK
 (legitimate_constant_p,

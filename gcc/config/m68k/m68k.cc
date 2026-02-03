@@ -442,6 +442,12 @@ TARGET_GNU_ATTRIBUTES (m68k_attribute_table,
 #undef TARGET_DOLOOP_COST_FOR_COMPARE
 #define TARGET_DOLOOP_COST_FOR_COMPARE (COSTS_N_INSNS (-1))
 
+/* Prefer modulo-based runtime loop unrolling over Duff's device.
+   The Duff's device style switch cascade generates expensive compare
+   chains on m68k.  A cleanup loop is more efficient.  */
+#undef TARGET_PREFER_RUNTIME_UNROLL_MOD
+#define TARGET_PREFER_RUNTIME_UNROLL_MOD true
+
 #undef TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS
 #define TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS m68k_ira_change_pseudo_allocno_class
 

@@ -12507,6 +12507,14 @@ is required only when the target has special constraints like maximum
 number of memory accesses.
 @end deftypefn
 
+@deftypevr {Target Hook} bool TARGET_PREFER_RUNTIME_UNROLL_MOD
+Return true if the target prefers modulo-based runtime loop unrolling.
+When true, runtime loop unrolling creates a cleanup loop that executes
+@code{n % unroll_factor} iterations before the main unrolled loop, instead
+of using a Duff's device style switch cascade.  This is more efficient on
+targets where compare cascades are expensive.
+@end deftypevr
+
 @defmac POWI_MAX_MULTS
 If defined, this macro is interpreted as a signed integer C expression
 that specifies the maximum number of floating point multiplications

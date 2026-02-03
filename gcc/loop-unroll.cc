@@ -950,9 +950,22 @@ unroll_loop_runtime_iterations (class loop *loop)
   /* Count modulo by ANDing it with max_unroll; we use the fact that
      the number of unrollings is a power of two, and thus this is correct
      even if there is overflow in the computation.  */
-  niter = expand_simple_binop (desc->mode, AND,
-			       niter, gen_int_mode (max_unroll, desc->mode),
-			       NULL_RTX, 0, OPTAB_LIB_WIDEN);
+  rtx mod_niter = expand_simple_binop (desc->mode, AND,
+				       niter, gen_int_mode (max_unroll, desc->mode),
+				       NULL_RTX, 0, OPTAB_LIB_WIDEN);
+
+  /* For modulo-based unrolling, also compute div = niter / (max_unroll + 1).  */
+  rtx div_niter = NULL_RTX;
+  if (targetm.prefer_runtime_unroll_mod)
+    {
+      int shift = exact_log2 (max_unroll + 1);
+      div_niter = expand_simple_binop (desc->mode, LSHIFTRT,
+				       niter, gen_int_mode (shift, QImode),
+				       NULL_RTX, 0, OPTAB_LIB_WIDEN);
+    }
+
+  /* For the switch cascade approach, niter is the mod value.  */
+  niter = mod_niter;
 
   init_code = get_insns ();
   end_sequence ();
@@ -965,90 +978,207 @@ unroll_loop_runtime_iterations (class loop *loop)
 
   auto_sbitmap wont_exit (max_unroll + 2);
 
-  if (extra_zero_check || desc->noloop_assumptions)
+  if (targetm.prefer_runtime_unroll_mod)
     {
-      /* Peel the first copy of loop body.  Leave the exit test if the number
-	 of iterations is not reliable.  Also record the place of the extra zero
-	 check.  */
-      bitmap_clear (wont_exit);
-      if (!desc->noloop_assumptions)
-	bitmap_set_bit (wont_exit, 1);
-      ezc_swtch = loop_preheader_edge (loop)->src;
-      ok = duplicate_loop_body_to_header_edge (loop, loop_preheader_edge (loop),
-					       1, wont_exit, desc->out_edge,
-					       &remove_edges,
-					       DLTHE_FLAG_UPDATE_FREQ);
-      gcc_assert (ok);
-    }
+      /* Modulo-based approach: create a cleanup loop that runs (n % unroll_factor)
+	 times before the main unrolled loop.  This avoids the Duff's device style
+	 switch cascade which generates expensive compare chains on some targets.
 
-  /* Record the place where switch will be built for preconditioning.  */
-  swtch = split_edge (loop_preheader_edge (loop));
+	 CFG structure:
+	   preheader -> [if niter==0 skip] -> [if mod==0 skip] -> cleanup_loop
+	             -> [if div==0 skip] -> main_loop -> exit
 
-  /* Compute count increments for each switch block and initialize
-     innermost switch block.  Switch blocks and peeled loop copies are built
-     from innermost outward.  */
-  iter_count = new_count = swtch->count / (max_unroll + 1);
-  swtch->count = new_count;
+	 The cleanup loop uses a simple countdown:
+	   do { body; } while (--mod != 0);
 
-  for (i = 0; i < n_peel; i++)
-    {
-      /* Peel the copy.  */
-      bitmap_clear (wont_exit);
-      if (i != n_peel - 1 || !last_may_exit)
-	bitmap_set_bit (wont_exit, 1);
-      ok = duplicate_loop_body_to_header_edge (loop, loop_preheader_edge (loop),
-					       1, wont_exit, desc->out_edge,
-					       &remove_edges,
-					       DLTHE_FLAG_UPDATE_FREQ);
-      gcc_assert (ok);
+	 Note: This creates a do-while style loop which is simpler for CFG.
+      */
+      basic_block cleanup_header, cleanup_latch;
+      rtx cleanup_counter;
 
-      /* Create item for switch.  */
-      unsigned j = n_peel - i - (extra_zero_check ? 0 : 1);
-      p = profile_probability::always () / (i + 2);
+      /* The skip-to-end jumps target the loop's exit block.  */
+      rtx_code_label *loop_done_label = block_label (desc->out_edge->dest);
 
+      /* Create a pseudo register to serve as the cleanup loop counter.  */
+      cleanup_counter = gen_reg_rtx (desc->mode);
+
+      /* Initialize cleanup counter from mod_niter.  */
+      start_sequence ();
+      emit_move_insn (cleanup_counter, copy_rtx (mod_niter));
+      rtx_insn *counter_init = get_insns ();
+      end_sequence ();
+      split_edge_and_insert (loop_preheader_edge (loop), counter_init);
+
+      /* Handle the case where total iterations is 0.  */
+      if (extra_zero_check || desc->noloop_assumptions)
+	{
+	  /* Branch to skip everything if original niter is 0.  */
+	  p = profile_probability::always () / (max_unroll + 1);
+	  preheader = split_edge (loop_preheader_edge (loop));
+	  branch_code = compare_and_jump_seq (copy_rtx (old_niter), const0_rtx, EQ,
+					      loop_done_label, p, NULL);
+	  gcc_assert (branch_code != NULL_RTX);
+	  split_edge_and_insert (loop_preheader_edge (loop), branch_code);
+	}
+
+      /* Skip cleanup if mod == 0 - jump directly to main loop check.  */
       preheader = split_edge (loop_preheader_edge (loop));
-      /* Add in count of edge from switch block.  */
-      preheader->count += iter_count;
-      branch_code = compare_and_jump_seq (copy_rtx (niter),
-					  gen_int_mode (j, desc->mode), EQ,
-					  block_label (preheader), p, NULL);
 
-      /* We rely on the fact that the compare and jump cannot be optimized out,
-	 and hence the cfg we create is correct.  */
+      /* Create cleanup loop header (this is where the back edge will go).  */
+      cleanup_header = split_edge (loop_preheader_edge (loop));
+
+      /* Peel one copy of the loop body for cleanup.  */
+      bitmap_clear (wont_exit);
+      bitmap_set_bit (wont_exit, 1);  /* Won't exit via the normal exit.  */
+      ok = duplicate_loop_body_to_header_edge (loop, loop_preheader_edge (loop),
+					       1, wont_exit, desc->out_edge,
+					       &remove_edges,
+					       DLTHE_FLAG_UPDATE_FREQ);
+      gcc_assert (ok);
+
+      /* Create cleanup loop latch with decrement and back branch.  */
+      cleanup_latch = split_edge (loop_preheader_edge (loop));
+
+      /* Add decrement and conditional back branch.  */
+      p = profile_probability::likely ();
+      start_sequence ();
+      rtx new_count = expand_simple_binop (desc->mode, MINUS,
+					   cleanup_counter, const1_rtx,
+					   cleanup_counter, 0, OPTAB_LIB_WIDEN);
+      if (new_count != cleanup_counter)
+	emit_move_insn (cleanup_counter, new_count);
+      rtx_insn *dec_insn = get_insns ();
+      end_sequence ();
+      emit_insn_after (dec_insn, BB_END (cleanup_latch));
+
+      /* Create the conditional back branch using compare_and_jump_seq.  */
+      branch_code = compare_and_jump_seq (cleanup_counter, const0_rtx, NE,
+					  block_label (cleanup_header), p, NULL);
       gcc_assert (branch_code != NULL_RTX);
 
-      swtch = split_edge_and_insert (single_pred_edge (swtch), branch_code);
-      set_immediate_dominator (CDI_DOMINATORS, preheader, swtch);
-      single_succ_edge (swtch)->probability = p.invert ();
-      new_count += iter_count;
-      swtch->count = new_count;
-      e = make_edge (swtch, preheader,
-		     single_succ_edge (swtch)->flags & EDGE_IRREDUCIBLE_LOOP);
-      e->probability = p;
-    }
+      /* Insert the branch and create the back edge.  */
+      emit_insn_after (branch_code, BB_END (cleanup_latch));
+      edge back_edge = make_edge (cleanup_latch, cleanup_header, 0);
+      back_edge->probability = p;
 
-  if (extra_zero_check)
-    {
-      /* Add branch for zero iterations.  */
+      /* The fallthrough edge goes to the next block (main loop check).  */
+      edge fall_edge = single_succ_edge (cleanup_latch);
+      if (fall_edge)
+	fall_edge->probability = p.invert ();
+
+      /* Now add the skip-cleanup branch at the preheader.
+	 If mod == 0, skip to after the cleanup loop.  */
+      basic_block after_cleanup = single_succ (cleanup_latch);
+      p = profile_probability::always () / 2;
+      branch_code = compare_and_jump_seq (copy_rtx (mod_niter), const0_rtx, EQ,
+					  block_label (after_cleanup), p, NULL);
+      gcc_assert (branch_code != NULL_RTX);
+      split_edge_and_insert (single_pred_edge (cleanup_header), branch_code);
+      /* Create edge for the skip branch.  */
+      edge skip_edge = make_edge (single_pred (cleanup_header), after_cleanup, 0);
+      skip_edge->probability = p;
+      single_succ_edge (single_pred (cleanup_header))->probability = p.invert ();
+
+      /* Skip main loop if div == 0.  */
+      preheader = split_edge (loop_preheader_edge (loop));
       p = profile_probability::always () / (max_unroll + 1);
-      swtch = ezc_swtch;
-      preheader = split_edge (loop_preheader_edge (loop));
-      /* Recompute count adjustments since initial peel copy may
-	 have exited and reduced those values that were computed above.  */
-      iter_count = swtch->count / (max_unroll + 1);
-      /* Add in count of edge from switch block.  */
-      preheader->count += iter_count;
-      branch_code = compare_and_jump_seq (copy_rtx (niter), const0_rtx, EQ,
-					  block_label (preheader), p,
-					  NULL);
+      branch_code = compare_and_jump_seq (copy_rtx (div_niter), const0_rtx, EQ,
+					  loop_done_label, p, NULL);
       gcc_assert (branch_code != NULL_RTX);
+      split_edge_and_insert (loop_preheader_edge (loop), branch_code);
 
-      swtch = split_edge_and_insert (single_succ_edge (swtch), branch_code);
-      set_immediate_dominator (CDI_DOMINATORS, preheader, swtch);
-      single_succ_edge (swtch)->probability = p.invert ();
-      e = make_edge (swtch, preheader,
-		     single_succ_edge (swtch)->flags & EDGE_IRREDUCIBLE_LOOP);
-      e->probability = p;
+      /* Store for later use.  */
+      ezc_swtch = NULL;
+      swtch = NULL;
+    }
+  else
+    {
+      /* Original Duff's device approach with switch cascade.  */
+      if (extra_zero_check || desc->noloop_assumptions)
+	{
+	  /* Peel the first copy of loop body.  Leave the exit test if the number
+	     of iterations is not reliable.  Also record the place of the extra zero
+	     check.  */
+	  bitmap_clear (wont_exit);
+	  if (!desc->noloop_assumptions)
+	    bitmap_set_bit (wont_exit, 1);
+	  ezc_swtch = loop_preheader_edge (loop)->src;
+	  ok = duplicate_loop_body_to_header_edge (loop, loop_preheader_edge (loop),
+						   1, wont_exit, desc->out_edge,
+						   &remove_edges,
+						   DLTHE_FLAG_UPDATE_FREQ);
+	  gcc_assert (ok);
+	}
+
+      /* Record the place where switch will be built for preconditioning.  */
+      swtch = split_edge (loop_preheader_edge (loop));
+
+      /* Compute count increments for each switch block and initialize
+	 innermost switch block.  Switch blocks and peeled loop copies are built
+	 from innermost outward.  */
+      iter_count = new_count = swtch->count / (max_unroll + 1);
+      swtch->count = new_count;
+
+      for (i = 0; i < n_peel; i++)
+	{
+	  /* Peel the copy.  */
+	  bitmap_clear (wont_exit);
+	  if (i != n_peel - 1 || !last_may_exit)
+	    bitmap_set_bit (wont_exit, 1);
+	  ok = duplicate_loop_body_to_header_edge (loop, loop_preheader_edge (loop),
+						   1, wont_exit, desc->out_edge,
+						   &remove_edges,
+						   DLTHE_FLAG_UPDATE_FREQ);
+	  gcc_assert (ok);
+
+	  /* Create item for switch.  */
+	  unsigned j = n_peel - i - (extra_zero_check ? 0 : 1);
+	  p = profile_probability::always () / (i + 2);
+
+	  preheader = split_edge (loop_preheader_edge (loop));
+	  /* Add in count of edge from switch block.  */
+	  preheader->count += iter_count;
+	  branch_code = compare_and_jump_seq (copy_rtx (niter),
+					      gen_int_mode (j, desc->mode), EQ,
+					      block_label (preheader), p, NULL);
+
+	  /* We rely on the fact that the compare and jump cannot be optimized out,
+	     and hence the cfg we create is correct.  */
+	  gcc_assert (branch_code != NULL_RTX);
+
+	  swtch = split_edge_and_insert (single_pred_edge (swtch), branch_code);
+	  set_immediate_dominator (CDI_DOMINATORS, preheader, swtch);
+	  single_succ_edge (swtch)->probability = p.invert ();
+	  new_count += iter_count;
+	  swtch->count = new_count;
+	  e = make_edge (swtch, preheader,
+			 single_succ_edge (swtch)->flags & EDGE_IRREDUCIBLE_LOOP);
+	  e->probability = p;
+	}
+
+      if (extra_zero_check)
+	{
+	  /* Add branch for zero iterations.  */
+	  p = profile_probability::always () / (max_unroll + 1);
+	  swtch = ezc_swtch;
+	  preheader = split_edge (loop_preheader_edge (loop));
+	  /* Recompute count adjustments since initial peel copy may
+	     have exited and reduced those values that were computed above.  */
+	  iter_count = swtch->count / (max_unroll + 1);
+	  /* Add in count of edge from switch block.  */
+	  preheader->count += iter_count;
+	  branch_code = compare_and_jump_seq (copy_rtx (niter), const0_rtx, EQ,
+					      block_label (preheader), p,
+					      NULL);
+	  gcc_assert (branch_code != NULL_RTX);
+
+	  swtch = split_edge_and_insert (single_succ_edge (swtch), branch_code);
+	  set_immediate_dominator (CDI_DOMINATORS, preheader, swtch);
+	  single_succ_edge (swtch)->probability = p.invert ();
+	  e = make_edge (swtch, preheader,
+			 single_succ_edge (swtch)->flags & EDGE_IRREDUCIBLE_LOOP);
+	  e->probability = p;
+	}
     }
 
   /* Recount dominators for outer blocks.  */
