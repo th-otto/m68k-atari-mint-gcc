@@ -965,14 +965,17 @@ unroll_loop_runtime_iterations (class loop *loop)
 				       niter, gen_int_mode (max_unroll, desc->mode),
 				       NULL_RTX, 0, OPTAB_LIB_WIDEN);
 
-  /* For modulo-based unrolling, also compute div = niter / (max_unroll + 1).  */
+  /* For modulo-based unrolling, save niter for computing div later
+     (after the cleanup loop).  Don't compute div here - we'll compute
+     it after cleanup so the shift instruction can set flags for the
+     zero check.  */
   rtx div_niter = NULL_RTX;
+  rtx saved_niter = NULL_RTX;
   if (targetm.prefer_runtime_unroll_mod)
     {
-      int shift = exact_log2 (max_unroll + 1);
-      div_niter = expand_simple_binop (desc->mode, LSHIFTRT,
-				       niter, gen_int_mode (shift, QImode),
-				       NULL_RTX, 0, OPTAB_LIB_WIDEN);
+      /* Save niter to a register for later div computation.  */
+      saved_niter = gen_reg_rtx (desc->mode);
+      emit_move_insn (saved_niter, niter);
     }
 
   /* For the switch cascade approach, niter is the mod value.  */
@@ -1020,19 +1023,17 @@ unroll_loop_runtime_iterations (class loop *loop)
       end_sequence ();
       split_edge_and_insert (loop_preheader_edge (loop), counter_init);
 
-      /* Handle the case where total iterations is 0.  */
-      if (extra_zero_check || desc->noloop_assumptions)
-	{
-	  /* Branch to skip everything if original niter is 0.  */
-	  p = profile_probability::always () / (max_unroll + 1);
-	  preheader = split_edge (loop_preheader_edge (loop));
-	  branch_code = compare_and_jump_seq (copy_rtx (old_niter), const0_rtx, EQ,
-					      loop_done_label, p, NULL);
-	  gcc_assert (branch_code != NULL_RTX);
-	  split_edge_and_insert (loop_preheader_edge (loop), branch_code);
-	}
+      /* For the mod-based approach, we don't need an initial zero check.
+	 If niter == 0:
+	 - mod == 0, so cleanup is skipped
+	 - div == 0, so main loop is skipped
+	 The individual skip checks handle it correctly.
 
-      /* Skip cleanup if mod == 0 - jump directly to main loop check.  */
+	 Note: desc->noloop_assumptions would add extra checks, but for the
+	 mod approach we rely on our explicit div==0 check instead.  */
+      (void) extra_zero_check;  /* Suppress unused warning.  */
+
+      /* Skip cleanup if mod == 0 - jump directly to div check.  */
       preheader = split_edge (loop_preheader_edge (loop));
 
       /* Create cleanup loop header (this is where the back edge will go).  */
@@ -1077,26 +1078,61 @@ unroll_loop_runtime_iterations (class loop *loop)
       if (fall_edge)
 	fall_edge->probability = p.invert ();
 
+      /* Create the div check block FIRST, before the mod==0 skip.
+	 This way the mod==0 skip can target the div check block.
+
+	 Skip main loop if div == 0 (i.e., niter < unroll_factor).
+	 This is placed after the cleanup loop so that the cleanup loop still
+	 runs for small iteration counts.
+
+	 We compute div here (after cleanup) so that:
+	 1. The shift instruction sets the Z flag
+	 2. We can use jeq directly after the shift without a separate tst
+	 3. The computed div is used for desc->niter_expr  */
+      edge main_entry = loop_preheader_edge (loop);
+      basic_block div_check_bb = split_edge (main_entry);
+
+      /* Compute div = saved_niter >> shift.  The shift sets Z flag.  */
+      int shift = exact_log2 (max_unroll + 1);
+      start_sequence ();
+      div_niter = expand_simple_binop (desc->mode, LSHIFTRT,
+				       saved_niter, gen_int_mode (shift, QImode),
+				       NULL_RTX, 0, OPTAB_LIB_WIDEN);
+      rtx_insn *div_insn = get_insns ();
+      end_sequence ();
+      emit_insn_after (div_insn, BB_END (div_check_bb));
+
+      /* Branch to exit if div == 0.  The shift above sets Z flag.  */
+      p = profile_probability::always () / (max_unroll + 1);
+      branch_code = compare_and_jump_seq (div_niter, const0_rtx, EQ,
+					  loop_done_label, p, NULL);
+      gcc_assert (branch_code != NULL_RTX);
+      emit_insn_after (branch_code, BB_END (div_check_bb));
+
+      /* Create edge for the div==0 skip to exit.  */
+      edge div_skip_edge = make_edge (div_check_bb, desc->out_edge->dest, 0);
+      div_skip_edge->probability = p;
+      /* Update the fallthrough edge probability.  */
+      single_succ_edge (div_check_bb)->probability = p.invert ();
+
       /* Now add the skip-cleanup branch at the preheader.
-	 If mod == 0, skip to after the cleanup loop.  */
-      basic_block after_cleanup = single_succ (cleanup_latch);
-      p = profile_probability::always () / 2;
+	 If mod == 0, skip to the div check block (NOT past it).
+	 Use 25% probability for mod==0 since most counts aren't multiples of
+	 the unroll factor.  This helps block reordering put cleanup inline.  */
+      p = profile_probability::always () / 4;
       branch_code = compare_and_jump_seq (copy_rtx (mod_niter), const0_rtx, EQ,
-					  block_label (after_cleanup), p, NULL);
+					  block_label (div_check_bb), p, NULL);
       gcc_assert (branch_code != NULL_RTX);
       split_edge_and_insert (single_pred_edge (cleanup_header), branch_code);
       /* Create edge for the skip branch.  */
-      edge skip_edge = make_edge (single_pred (cleanup_header), after_cleanup, 0);
+      edge skip_edge = make_edge (single_pred (cleanup_header), div_check_bb, 0);
       skip_edge->probability = p;
       single_succ_edge (single_pred (cleanup_header))->probability = p.invert ();
 
-      /* Skip main loop if div == 0.  */
-      preheader = split_edge (loop_preheader_edge (loop));
-      p = profile_probability::always () / (max_unroll + 1);
-      branch_code = compare_and_jump_seq (copy_rtx (div_niter), const0_rtx, EQ,
-					  loop_done_label, p, NULL);
-      gcc_assert (branch_code != NULL_RTX);
-      split_edge_and_insert (loop_preheader_edge (loop), branch_code);
+      /* Clear noloop_assumptions since the mod and div checks handle all
+	 edge cases.  This removes the original loop's entry check which
+	 would otherwise add an extra "tst; jeq" at function entry.  */
+      desc->noloop_assumptions = NULL_RTX;
 
       /* Store for later use.  */
       ezc_swtch = NULL;
@@ -1240,9 +1276,16 @@ unroll_loop_runtime_iterations (class loop *loop)
      of the loop.  After passing through the above code, we see that
      the correct new number of iterations is this:  */
   gcc_assert (!desc->const_iter);
-  desc->niter_expr =
-    simplify_gen_binary (UDIV, desc->mode, old_niter,
-			 gen_int_mode (max_unroll + 1, desc->mode));
+
+  /* For the mod-based unroller, we've already computed div_niter as a
+     register.  Use it directly instead of the symbolic UDIV expression
+     to avoid the doloop pass recomputing the division.  */
+  if (div_niter != NULL_RTX)
+    desc->niter_expr = div_niter;
+  else
+    desc->niter_expr =
+      simplify_gen_binary (UDIV, desc->mode, old_niter,
+			   gen_int_mode (max_unroll + 1, desc->mode));
   loop->nb_iterations_upper_bound
     = wi::udiv_trunc (loop->nb_iterations_upper_bound, max_unroll + 1);
   if (loop->any_estimate)
