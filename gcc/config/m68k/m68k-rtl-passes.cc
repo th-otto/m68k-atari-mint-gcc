@@ -2211,13 +2211,6 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before)
 			  if (!bitmap_bit_p (already_cleared_before,
 					     preamble_key))
 			    {
-			      /* Find insertion point - before the jump.  */
-			      rtx_insn *insert_pt = BB_END (preheader);
-			      if (JUMP_P (insert_pt))
-				insert_pt = PREV_INSN (insert_pt);
-			      while (insert_pt && NOTE_P (insert_pt))
-				insert_pt = PREV_INSN (insert_pt);
-
 			      /* Determine clear mode based on extension type.  */
 			      machine_mode clr_mode
 				= (cand.ext_type == EXT_BYTE_TO_WORD)
@@ -2226,8 +2219,20 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before)
 				= gen_rtx_REG (clr_mode, regno);
 			      rtx clr_pat
 				= gen_rtx_SET (clr_reg, const0_rtx);
-			      rtx_insn *prehdr_insn
-				= emit_insn_after (clr_pat, insert_pt);
+
+			      /* Insert before the jump (if any), otherwise
+				 after the last insn.  Using emit_insn_before
+				 avoids walking past NOTE_INSN_BASIC_BLOCK
+				 and corrupting the CFG.  */
+			      rtx_insn *prehdr_insn;
+			      if (JUMP_P (BB_END (preheader)))
+				prehdr_insn
+				  = emit_insn_before (clr_pat,
+						      BB_END (preheader));
+			      else
+				prehdr_insn
+				  = emit_insn_after (clr_pat,
+						     BB_END (preheader));
 
 			      INSN_CODE (prehdr_insn) = -1;
 			      if (recog_memoized (prehdr_insn) >= 0)
