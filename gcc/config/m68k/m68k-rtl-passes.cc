@@ -310,6 +310,21 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
   if (regno < 8 || regno > 15)
     return false;
 
+  /* POST_INC modifies the address register.  We cannot use POST_INC if the
+     other operand of the first instruction is the same register, because
+     that would create conflicting uses (e.g., loading into %a0 from
+     memory addressed by %a0 with post-increment).  */
+  rtx first_set = single_set (first_insn);
+  if (first_set)
+    {
+      rtx other_op = is_dest ? SET_SRC (first_set) : SET_DEST (first_set);
+      if (REG_P (other_op) && (int) REGNO (other_op) == regno)
+	return false;
+      /* Also check for the register appearing in the other operand.  */
+      if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), other_op))
+	return false;
+    }
+
   machine_mode mode = GET_MODE (mem);
   int size = GET_MODE_SIZE (mode);
 
@@ -574,6 +589,7 @@ m68k_normalize_autoinc (function *func)
       basic_block bb;
       FOR_EACH_BB_FN (bb, func)
 	{
+	  bool bb_changed = false;
 	  rtx_insn *insn, *next;
 	  for (insn = BB_HEAD (bb); insn != BB_END (bb); insn = next)
 	    {
@@ -589,6 +605,7 @@ m68k_normalize_autoinc (function *func)
 		    {
 		      changes++;
 		      made_changes = true;
+		      bb_changed = true;
 		    }
 		}
 	    }
@@ -603,9 +620,14 @@ m68k_normalize_autoinc (function *func)
 		    {
 		      changes++;
 		      made_changes = true;
+		      bb_changed = true;
 		    }
 		}
 	    }
+
+	  /* Recompute LUIDs after modifying the basic block.  */
+	  if (bb_changed)
+	    df_recompute_luids (bb);
 	}
     }
   while (made_changes);
@@ -624,6 +646,7 @@ m68k_opt_autoinc (function *func)
   basic_block bb;
   FOR_EACH_BB_FN (bb, func)
     {
+      bool bb_changed = false;
       rtx_insn *insn;
       FOR_BB_INSNS (bb, insn)
 	{
@@ -642,16 +665,27 @@ m68k_opt_autoinc (function *func)
 	  if (MEM_P (src) && mem_reg_p (src, &regno))
 	    {
 	      if (try_convert_to_postinc (bb, insn, src, 0))
-		changes++;
+		{
+		  changes++;
+		  bb_changed = true;
+		}
 	    }
 
 	  /* Check destination for memory with zero offset.  */
 	  if (MEM_P (dest) && mem_reg_p (dest, &regno))
 	    {
 	      if (try_convert_to_postinc (bb, insn, dest, 1))
-		changes++;
+		{
+		  changes++;
+		  bb_changed = true;
+		}
 	    }
 	}
+
+      /* Recompute LUIDs after modifying the basic block, similar to
+	 what the upstream auto-inc-dec pass does.  */
+      if (bb_changed)
+	df_recompute_luids (bb);
     }
 
   return changes;
