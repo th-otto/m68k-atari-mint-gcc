@@ -40,6 +40,27 @@ INSERT_PASS_AFTER (pass_iv_optimize, 1, m68k_pass_autoinc_split);
 
 INSERT_PASS_AFTER (pass_vrp, 1, m68k_pass_narrow_index_mult);
 
+/* Reorder memory accesses to enable sequential access patterns.
+
+   When source code accesses struct fields or array elements through a base
+   pointer in non-sequential order, store merging and auto-increment cannot
+   optimize the pattern.  This pass reorders accesses by memory offset when
+   safe (no dependency violations), enabling subsequent optimizations.
+
+   Example:
+     s->d = 0; s->b = 0; s->c = 0; s->a = 0;  // scattered
+   Becomes:
+     s->a = 0; s->b = 0; s->c = 0; s->d = 0;  // sequential
+
+   The sequential pattern enables store merging (two clr.l instead of
+   three clr.w) and post-increment addressing (clr.l (%a0)+).
+
+   Runs before store-merging so merged stores benefit from the pattern.  */
+
+/* DISABLED: ICE in verify_ssa when compiling libgcc __muldi3.
+   TODO: Fix the virtual SSA dependency tracking.  */
+/* INSERT_PASS_BEFORE (pass_store_merging, 1, m68k_pass_reorder_mem); */
+
 /* Normalize increment positions for auto-increment optimization.
 
    When GCC's IVOPTS pass places pointer increments in the middle of a

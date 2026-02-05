@@ -138,3 +138,4 @@ extern rtl_opt_pass *make_m68k_pass_highword_opt (gcc::context *);
 class gimple_opt_pass;
 extern gimple_opt_pass *make_m68k_pass_autoinc_split (gcc::context *);
 extern gimple_opt_pass *make_m68k_pass_narrow_index_mult (gcc::context *);
+extern gimple_opt_pass *make_m68k_pass_reorder_mem (gcc::context *);
