@@ -57,9 +57,7 @@ INSERT_PASS_AFTER (pass_vrp, 1, m68k_pass_narrow_index_mult);
 
    Runs before store-merging so merged stores benefit from the pattern.  */
 
-/* DISABLED: ICE in verify_ssa when compiling libgcc __muldi3.
-   TODO: Fix the virtual SSA dependency tracking.  */
-/* INSERT_PASS_BEFORE (pass_store_merging, 1, m68k_pass_reorder_mem); */
+INSERT_PASS_BEFORE (pass_store_merging, 1, m68k_pass_reorder_mem);
 
 /* Normalize increment positions for auto-increment optimization.
 

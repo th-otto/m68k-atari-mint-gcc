@@ -715,11 +715,14 @@ public:
     : rtl_opt_pass (m68k_pass_data_normalize_autoinc, ctxt)
   {}
 
+  bool gate (function *) final override
+  {
+    return optimize > 0 && flag_m68k_autoinc;
+  }
+
   unsigned int execute (function *func) final override
   {
-    if (optimize)
-      return m68k_normalize_autoinc (func);
-    return 0;
+    return m68k_normalize_autoinc (func);
   }
 
 }; /* class m68k_pass_normalize_autoinc */
@@ -748,11 +751,14 @@ public:
     : rtl_opt_pass (m68k_pass_data_opt_autoinc, ctxt)
   {}
 
+  bool gate (function *) final override
+  {
+    return optimize > 0 && flag_m68k_autoinc;
+  }
+
   unsigned int execute (function *func) final override
   {
-    if (optimize)
-      return m68k_opt_autoinc (func);
-    return 0;
+    return m68k_opt_autoinc (func);
   }
 
 }; /* class m68k_pass_opt_autoinc */
@@ -2461,11 +2467,14 @@ public:
     : rtl_opt_pass (m68k_pass_data_elim_andi, ctxt)
   {}
 
+  bool gate (function *) final override
+  {
+    return optimize > 0 && flag_m68k_elim_andi;
+  }
+
   unsigned int execute (function *func) final override
   {
-    if (optimize)
-      return m68k_elim_andi (func);
-    return 0;
+    return m68k_elim_andi (func);
   }
 
 }; /* class m68k_pass_elim_andi */
@@ -3388,11 +3397,14 @@ public:
     : rtl_opt_pass (m68k_pass_data_highword_opt, ctxt)
   {}
 
+  bool gate (function *) final override
+  {
+    return optimize > 0 && flag_m68k_highword_opt;
+  }
+
   unsigned int execute (function *func) final override
   {
-    if (optimize)
-      return m68k_highword_opt (func);
-    return 0;
+    return m68k_highword_opt (func);
   }
 
 }; /* class m68k_pass_highword_opt */

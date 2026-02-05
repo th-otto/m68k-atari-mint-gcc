@@ -8004,6 +8004,9 @@ m68k_can_use_doloop_p (const widest_int &iterations,
 		       unsigned int loop_depth,
 		       bool entered_at_top ATTRIBUTE_UNUSED)
 {
+  if (!flag_m68k_doloop)
+    return false;
+
   /* ColdFire doesn't have dbra.  */
   if (TARGET_COLDFIRE)
     return false;
@@ -8052,6 +8055,9 @@ m68k_preferred_doloop_mode (machine_mode mode ATTRIBUTE_UNUSED)
 static bool
 m68k_predict_doloop_p (class loop *loop)
 {
+  if (!flag_m68k_doloop)
+    return false;
+
   /* ColdFire doesn't have dbra.  */
   if (TARGET_COLDFIRE)
     return false;
@@ -8167,6 +8173,9 @@ m68k_ira_change_pseudo_allocno_class (int regno,
 				      reg_class_t allocno_class,
 				      reg_class_t best_class)
 {
+  if (!flag_m68k_ira_promote)
+    return allocno_class;
+
   /* Only consider forcing ADDR_REGS if that's the best class.  */
   if (best_class != ADDR_REGS)
     return allocno_class;

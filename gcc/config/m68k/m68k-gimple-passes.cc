@@ -46,6 +46,7 @@
 #include "tree-ssa-alias.h"
 #include "tree-cfg.h"
 #include "tree-dfa.h"
+#include "tree-into-ssa.h"
 
 namespace {
 
@@ -536,7 +537,7 @@ public:
   /* opt_pass methods: */
   bool gate (function *) final override
   {
-    return optimize > 0 && flag_ivopts != 0;
+    return optimize > 0 && flag_ivopts != 0 && flag_m68k_autoinc;
   }
 
   unsigned int execute (function *) final override
@@ -855,11 +856,14 @@ public:
     : gimple_opt_pass (m68k_pass_data_narrow_index_mult, ctxt)
   {}
 
+  bool gate (function *) final override
+  {
+    return optimize > 0 && flag_m68k_narrow_index_mult;
+  }
+
   unsigned int execute (function *func) final override
   {
-    if (optimize)
-      return m68k_narrow_index_mult (func);
-    return 0;
+    return m68k_narrow_index_mult (func);
   }
 
 }; /* class m68k_pass_narrow_index_mult */
@@ -1201,6 +1205,71 @@ has_vssa_dependency (const reorder_mem_info &a, const reorder_mem_info &b)
   return false;
 }
 
+/* Check if a group member being moved past an intervening (non-group)
+   statement would violate a dependency.  Returns true if unsafe.  */
+
+static bool
+has_intervening_dependency (const reorder_mem_info &moved, gimple *inter)
+{
+  /* Check SSA def-use first: does the intervening stmt define a value
+     used by the moved stmt?  This must be checked even for non-memory
+     statements (e.g., pure computations like casts or shifts).  */
+  {
+    ssa_op_iter iter;
+    use_operand_p use_p;
+    FOR_EACH_SSA_USE_OPERAND (use_p, moved.stmt, iter, SSA_OP_USE)
+      {
+	tree use = USE_FROM_PTR (use_p);
+	if (TREE_CODE (use) == SSA_NAME
+	    && SSA_NAME_DEF_STMT (use) == inter)
+	  return true;
+      }
+  }
+
+  /* Check reverse SSA: does the moved stmt define a value used by
+     the intervening stmt?  */
+  if (!moved.is_store && moved.load_lhs
+      && TREE_CODE (moved.load_lhs) == SSA_NAME)
+    {
+      ssa_op_iter iter;
+      use_operand_p use_p;
+      FOR_EACH_SSA_USE_OPERAND (use_p, inter, iter, SSA_OP_USE)
+	{
+	  if (USE_FROM_PTR (use_p) == moved.load_lhs)
+	    return true;
+	}
+    }
+
+  /* If the intervening statement doesn't touch memory, no further
+     checks needed (SSA deps already handled above).  */
+  if (!gimple_vuse (inter))
+    return false;
+
+  /* Calls, asm, etc. are conservatively treated as barriers.  */
+  if (!is_gimple_assign (inter))
+    return true;
+
+  /* Check memory aliasing.  */
+  if (moved.is_store)
+    {
+      /* Moved stmt writes.  Intervening reads or writes same loc?  */
+      if (ref_maybe_used_by_stmt_p (inter, moved.mem_ref))
+	return true;
+      if (gimple_vdef (inter)
+	  && stmt_may_clobber_ref_p (inter, moved.mem_ref))
+	return true;
+    }
+  else
+    {
+      /* Moved stmt reads.  Intervening writes same loc?  */
+      if (gimple_vdef (inter)
+	  && stmt_may_clobber_ref_p (inter, moved.mem_ref))
+	return true;
+    }
+
+  return false;
+}
+
 /* Check if the given accesses can be safely reordered by offset.
    Returns true if reordering is both safe and beneficial.  */
 
@@ -1232,58 +1301,66 @@ can_reorder_accesses (auto_vec<reorder_mem_info> &accesses)
   if (!needs_reorder)
     return false;
 
-  /* Find the range of statements in the BB.  */
-  unsigned min_order = UINT_MAX, max_order = 0;
-  for (unsigned i = 0; i < n; i++)
-    {
-      if (accesses[i].orig_order < min_order)
-	min_order = accesses[i].orig_order;
-      if (accesses[i].orig_order > max_order)
-	max_order = accesses[i].orig_order;
-    }
-
-  /* Check if there are intervening statements (not in our group) between
-     the first and last statement of our group.  If any of those have VDEFs,
-     we can't safely reorder because moving our statements would push those
-     VDEF-defining statements past their dependents.
-
-     Count how many positions are in our group vs the range.  */
-  if (max_order - min_order + 1 != n)
-    {
-      /* There are gaps - statements not in our group.  For safety, check
-	 if reordering would move any statement past another that has a VDEF.
-	 The simplest safe approach: only reorder if the statements are
-	 already contiguous (no gaps).  */
-      return false;
-    }
-
-  /* Check all pairs for dependencies that would be violated by reordering.
-     For each pair (i, j) where i < j in sorted order:
-     If in original order j came before i, we're moving j after i.
-     Check if j -> i has a dependency (j must execute before i).  */
+  /* Check all pairs within the group for dependencies that would be
+     violated by reordering.  */
   for (unsigned i = 0; i < n; i++)
     {
       for (unsigned j = i + 1; j < n; j++)
 	{
-	  /* In sorted order, i comes before j.
-	     Check original order.  */
 	  if (sorted[j].orig_order < sorted[i].orig_order)
 	    {
-	      /* j originally came first, will now come after i.
-		 Check if j must execute before i (j -> i dependency).  */
+	      /* j originally came first, will now come after i.  */
 	      if (has_mem_dependency (sorted[j], sorted[i]))
 		return false;
 	      if (has_ssa_dependency (sorted[j], sorted[i]))
 		return false;
-	      if (has_vssa_dependency (sorted[j], sorted[i]))
-		return false;
 	    }
-	  else
-	    {
-	      /* i originally came first, will stay before j.
-		 Check if i must execute before j (i -> j dependency).
-		 This shouldn't block reordering since order is preserved.  */
-	    }
+	}
+    }
+
+  /* Find the first and last group members by position.  */
+  gimple *first_stmt = accesses[0].stmt;
+  gimple *last_stmt = accesses[0].stmt;
+  unsigned min_order = accesses[0].orig_order;
+  unsigned max_order = accesses[0].orig_order;
+  for (unsigned i = 1; i < n; i++)
+    {
+      if (accesses[i].orig_order < min_order)
+	{
+	  min_order = accesses[i].orig_order;
+	  first_stmt = accesses[i].stmt;
+	}
+      if (accesses[i].orig_order > max_order)
+	{
+	  max_order = accesses[i].orig_order;
+	  last_stmt = accesses[i].stmt;
+	}
+    }
+
+  /* If contiguous, no intervening statements to worry about.  */
+  if (max_order - min_order + 1 == n)
+    return true;
+
+  /* Non-contiguous: check each intervening (non-group) statement
+     for dependencies with any group member.  */
+  hash_set<gimple *> group_stmts;
+  for (unsigned i = 0; i < n; i++)
+    group_stmts.add (accesses[i].stmt);
+
+  gimple_stmt_iterator gsi = gsi_for_stmt (first_stmt);
+  for (gsi_next (&gsi); gsi_stmt (gsi) != last_stmt; gsi_next (&gsi))
+    {
+      gimple *inter = gsi_stmt (gsi);
+
+      if (group_stmts.contains (inter) || is_gimple_debug (inter))
+	continue;
+
+      /* Conservative: check every group member against this
+	 intervening statement.  */
+      for (unsigned i = 0; i < n; i++)
+	{
+	  if (has_intervening_dependency (accesses[i], inter))
+	    return false;
 	}
     }
 
@@ -1385,7 +1462,15 @@ m68k_reorder_mem (function *fun)
 	}
     }
 
-  return changed ? TODO_update_ssa : 0;
+  if (changed)
+    {
+      /* Force a complete rebuild of virtual SSA, since we moved
+	 statements and their VDEF/VUSE chains are now stale.  */
+      mark_virtual_operands_for_renaming (fun);
+      return TODO_update_ssa_only_virtuals;
+    }
+
+  return 0;
 }
 
 /* Pass data for m68k_pass_reorder_mem.  */
@@ -1415,7 +1500,7 @@ public:
   bool gate (function *) final override
   {
     /* Only run at -O2 or higher, not at -Os.  */
-    return optimize >= 2 && !optimize_size;
+    return optimize >= 2 && !optimize_size && flag_m68k_reorder_mem;
   }
 
   unsigned int execute (function *func) final override
