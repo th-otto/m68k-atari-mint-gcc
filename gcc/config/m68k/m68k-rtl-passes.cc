@@ -228,6 +228,18 @@ try_normalize_increment_position (basic_block bb, rtx_insn *add_insn,
 
       if (src_neg < 0 || dest_neg < 0)
 	{
+	  /* Check for read-modify-write patterns like XOR where the register
+	     appears in both operands.  get_negative_offset only finds direct
+	     MEMs, so if the register is mentioned but we didn't find a
+	     negative offset, there's a nested MEM we can't handle.  */
+	  rtx reg = gen_rtx_REG (Pmode, regno);
+	  bool src_uses_reg = reg_mentioned_p (reg, src);
+	  bool dest_uses_reg = reg_mentioned_p (reg, dest);
+	  if (src_uses_reg && src_neg == 0)
+	    break;  /* Nested MEM in src we can't update */
+	  if (dest_uses_reg && dest_neg == 0)
+	    break;  /* Nested MEM in dest we can't update */
+
 	  insn_to_fix fix;
 	  fix.insn = insn;
 	  fix.src_offset = src_neg;
