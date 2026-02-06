@@ -298,11 +298,13 @@ try_normalize_increment_position (basic_block bb, rtx_insn *add_insn,
       INSN_CODE (fix.insn) = -1;
       if (recog_memoized (fix.insn) < 0)
 	return false;
+      df_insn_rescan (fix.insn);
     }
 
   /* Move the increment instruction to after the last fixup instruction.  */
   remove_insn (add_insn);
   add_insn_after (add_insn, last_fixup_insn, bb);
+  df_insn_rescan (add_insn);
 
   return true;
 }
@@ -478,8 +480,9 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
       return false;
     }
 
-  /* Add REG_INC note.  */
+  /* Add REG_INC note and notify DF about the change.  */
   add_reg_note (first_insn, REG_INC, reg);
+  df_insn_rescan (first_insn);
 
   /* 2. Fix up subsequent instructions - reduce their offsets.  */
   HOST_WIDE_INT current_adj = size;
@@ -536,6 +539,7 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
 
       if (new_offset == 0)
 	add_reg_note (insn, REG_INC, reg);
+      df_insn_rescan (insn);
     }
 
   /* 3. Adjust or delete the add instruction (if present).  */
@@ -545,7 +549,7 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
       if (remaining == 0)
 	{
 	  /* Delete the add instruction entirely.  */
-	  SET_INSN_DELETED (add_insn);
+	  delete_insn (add_insn);
 	}
       else if (remaining > 0)
 	{
@@ -555,6 +559,7 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
 	  XEXP (src, 1) = GEN_INT (remaining);
 	  INSN_CODE (add_insn) = -1;
 	  recog_memoized (add_insn);
+	  df_insn_rescan (add_insn);
 	}
     }
 
