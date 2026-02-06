@@ -6022,6 +6022,27 @@ determine_iv_cost (struct ivopts_data *data, struct iv_cand *cand)
   /* Doloop decrement should be considered as zero cost.  */
   if (cand->doloop_p)
     cost_step = 0;
+  /* If the target supports auto-increment addressing and the IV step
+     matches a memory access size, the step can be absorbed into the
+     addressing mode (e.g., move.l (%a0)+,...) at no extra cost.  */
+  else if (flag_ivopts_autoinc_step
+	   && data->speed
+	   && tree_fits_shwi_p (cand->iv->step))
+    {
+      HOST_WIDE_INT step_val = tree_to_shwi (cand->iv->step);
+      if (step_val < 0)
+	step_val = -step_val;
+      opt_scalar_int_mode mem_mode
+	= int_mode_for_size (step_val * BITS_PER_UNIT, 0);
+      if (mem_mode.exists ()
+	  && (USE_LOAD_POST_INCREMENT (*mem_mode)
+	      || USE_STORE_POST_INCREMENT (*mem_mode)
+	      || USE_LOAD_PRE_DECREMENT (*mem_mode)
+	      || USE_STORE_PRE_DECREMENT (*mem_mode)))
+	cost_step = 0;
+      else
+	cost_step = add_cost (data->speed, TYPE_MODE (TREE_TYPE (base)));
+    }
   else
     cost_step = add_cost (data->speed, TYPE_MODE (TREE_TYPE (base)));
   cost = cost_step + adjust_setup_cost (data, cost_base.cost);
