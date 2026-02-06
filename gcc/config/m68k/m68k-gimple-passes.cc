@@ -639,26 +639,20 @@ m68k_product_fits_16bit (wide_int min_val, wide_int max_val, wide_int cst_val,
 
 static void
 m68k_emit_narrow_mult (gimple_stmt_iterator *gsi, tree lhs, tree input,
-		       tree cst, unsigned input_prec)
+		       tree cst, unsigned input_prec ATTRIBUTE_UNUSED)
 {
   tree hi_type = build_nonstandard_integer_type (16, false);
   tree mult_input = input;
 
-  /* If input is 8-bit, first extend to 16-bit.  */
-  if (input_prec == 8)
+  /* Convert input to hi_type (signed 16-bit) if needed.
+     This handles 8-bit extension, 32-bit narrowing, and signedness
+     conversion for 16-bit unsigned inputs.  */
+  if (!useless_type_conversion_p (hi_type, TREE_TYPE (input)))
     {
-      tree ext_tmp = make_ssa_name (hi_type);
-      gimple *ext_stmt = gimple_build_assign (ext_tmp, NOP_EXPR, input);
-      gsi_insert_before (gsi, ext_stmt, GSI_SAME_STMT);
-      mult_input = ext_tmp;
-    }
-  else if (input_prec > 16)
-    {
-      /* Narrow 32-bit input to 16-bit.  */
-      tree narrow_tmp = make_ssa_name (hi_type);
-      gimple *narrow_stmt = gimple_build_assign (narrow_tmp, NOP_EXPR, input);
-      gsi_insert_before (gsi, narrow_stmt, GSI_SAME_STMT);
-      mult_input = narrow_tmp;
+      tree conv_tmp = make_ssa_name (hi_type);
+      gimple *conv_stmt = gimple_build_assign (conv_tmp, NOP_EXPR, input);
+      gsi_insert_before (gsi, conv_stmt, GSI_SAME_STMT);
+      mult_input = conv_tmp;
     }
 
   /* Create: tmp = mult_input * (short)CST  */
