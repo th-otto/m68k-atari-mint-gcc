@@ -599,8 +599,12 @@ mem_cost_speed (rtx addr, const struct m68k_cost_table *costs, int opno)
   return costs->mem[MEM_DEFAULT][opno];
 }
 
-/* Forward declaration for recursive calls.  */
-bool m68k_rtx_costs_impl (rtx, machine_mode, int, int, int *, bool);
+/* Forward declaration for recursive calls.  Internal callers must use
+   m68k_rtx_costs_unified (raw costs) rather than m68k_rtx_costs_impl
+   (which applies COSTS_N_INSNS scaling), to avoid double-scaling.  */
+static bool m68k_rtx_costs_unified (rtx, machine_mode, int, int,
+				    int *, const struct m68k_cost_table *,
+				    bool);
 
 /* Calculate raw multiply cost (before size divisor adjustment).
    Returns true if cost was calculated, false otherwise.
@@ -650,7 +654,8 @@ mul_cost (rtx x, machine_mode mode, const struct m68k_cost_table *costs,
 	      mode = HImode;
 	      idx = 0;
 	    }
-	  else if (!m68k_rtx_costs_impl (op0, mode, MULT, 0, total, true))
+	  else if (!m68k_rtx_costs_unified (op0, mode, MULT, 0, total,
+					    costs, true))
 	    return false;
 
 	  if (GET_MODE_SIZE (mode) == 2 && INTVAL (op1) > 0)
@@ -679,7 +684,8 @@ mul_cost (rtx x, machine_mode mode, const struct m68k_cost_table *costs,
 	  mode = HImode;
 	  idx = 0;
 	}
-      else if (!m68k_rtx_costs_impl (op0, mode, MULT, 0, total, true))
+      else if (!m68k_rtx_costs_unified (op0, mode, MULT, 0, total,
+					costs, true))
 	return false;
 
       *total += costs->mult[idx];
@@ -741,7 +747,7 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
     case LEU:
     case LTU:
       /* Cost the operand being compared */
-      return m68k_rtx_costs_impl (XEXP (x, 0), mode, code, 0, total, speed);
+      return m68k_rtx_costs_unified (XEXP (x, 0), mode, code, 0, total, costs, speed);
 
     case CONST_INT:
       {
@@ -835,8 +841,8 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
       if (costs->extend_recurse)
 	{
 	  /* 68000: no MVZ, needs AND instruction - recurse and add cost */
-	  if (m68k_rtx_costs_impl (XEXP (x, 0), GET_MODE (XEXP (x, 0)),
-				   code, 0, total, speed))
+	  if (m68k_rtx_costs_unified (XEXP (x, 0), GET_MODE (XEXP (x, 0)),
+				   code, 0, total, costs, speed))
 	    {
 	      *total += costs->extend_op_add;
 	      return true;
@@ -850,8 +856,8 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
       if (costs->extend_recurse)
 	{
 	  /* 68000: limited EXT instruction - recurse and add cost */
-	  if (m68k_rtx_costs_impl (XEXP (x, 0), GET_MODE (XEXP (x, 0)),
-				   code, 0, total, speed))
+	  if (m68k_rtx_costs_unified (XEXP (x, 0), GET_MODE (XEXP (x, 0)),
+				   code, 0, total, costs, speed))
 	    {
 	      *total += costs->extend_op_add;
 	      return true;
@@ -906,7 +912,7 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	    *total = costs->not_neg_reg[idx];
 	    return true;
 	  }
-	if (m68k_rtx_costs_impl (op, mode, code, 0, total, speed))
+	if (m68k_rtx_costs_unified (op, mode, code, 0, total, costs, speed))
 	  {
 	    *total += costs->not_neg_mem_add[idx];
 	    return true;
@@ -926,7 +932,7 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	  {
 	    /* 68000: include operand cost (variable timing) */
 	    rtx op = XEXP (x, 0);
-	    if (!m68k_rtx_costs_impl (op, mode, code, 0, total, speed))
+	    if (!m68k_rtx_costs_unified (op, mode, code, 0, total, costs, speed))
 	      return false;
 	  }
 	else
@@ -960,11 +966,11 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 
 	if (REG_P (dst))
 	  {
-	    if (m68k_rtx_costs_impl (src, mode, code, 1, total, speed))
+	    if (m68k_rtx_costs_unified (src, mode, code, 1, total, costs, speed))
 	      return true;
 	  }
-	else if (m68k_rtx_costs_impl (dst, mode, code, 0, total, speed)
-		 && m68k_rtx_costs_impl (src, mode, code, 1, &total2, speed))
+	else if (m68k_rtx_costs_unified (dst, mode, code, 0, total, costs, speed)
+		 && m68k_rtx_costs_unified (src, mode, code, 1, &total2, costs, speed))
 	  {
 	    *total += total2;
 
@@ -1068,8 +1074,8 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	  }
 
 	/* General case: cost both operands and add */
-	if (m68k_rtx_costs_impl (op0, mode, code, 0, total, speed)
-	    && m68k_rtx_costs_impl (op1, mode, code, 1, &total2, speed))
+	if (m68k_rtx_costs_unified (op0, mode, code, 0, total, costs, speed)
+	    && m68k_rtx_costs_unified (op1, mode, code, 1, &total2, costs, speed))
 	  {
 	    *total += total2;
 	    if (costs->plus.base_cost)
@@ -1116,7 +1122,7 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 			     : costs->logic.reg_const_other[idx];
 		    return true;
 		  }
-		if (m68k_rtx_costs_impl (op0, mode, code, 0, total, speed))
+		if (m68k_rtx_costs_unified (op0, mode, code, 0, total, costs, speed))
 		  {
 		    *total += costs->logic.mem_const_add[idx];
 		    return true;
@@ -1124,7 +1130,7 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	      }
 	    else if (REG_P (op0))
 	      {
-		if (m68k_rtx_costs_impl (op1, mode, code, 1, total, speed))
+		if (m68k_rtx_costs_unified (op1, mode, code, 1, total, costs, speed))
 		  {
 		    *total += costs->logic.reg_op_ea[idx] + xor_add;
 		    return true;
@@ -1132,7 +1138,7 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	      }
 	    else if (REG_P (op1))
 	      {
-		if (m68k_rtx_costs_impl (op0, mode, code, 0, total, speed))
+		if (m68k_rtx_costs_unified (op0, mode, code, 0, total, costs, speed))
 		  {
 		    *total += costs->logic.ea_op_reg[idx];
 		    return true;
@@ -1140,8 +1146,8 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	      }
 
 	    /* General fallback for pattern-specific mode */
-	    if (m68k_rtx_costs_impl (op0, mode, code, 0, total, speed)
-		&& m68k_rtx_costs_impl (op1, mode, code, 1, &total2, speed))
+	    if (m68k_rtx_costs_unified (op0, mode, code, 0, total, costs, speed)
+		&& m68k_rtx_costs_unified (op1, mode, code, 1, &total2, costs, speed))
 	      {
 		*total += total2 + costs->logic.op_add[idx] + xor_add;
 		return true;
@@ -1150,8 +1156,8 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	  }
 
 	/* General mode with base_cost */
-	if (m68k_rtx_costs_impl (op0, mode, code, 0, total, speed)
-	    && m68k_rtx_costs_impl (op1, mode, code, 1, &total2, speed))
+	if (m68k_rtx_costs_unified (op0, mode, code, 0, total, costs, speed)
+	    && m68k_rtx_costs_unified (op1, mode, code, 1, &total2, costs, speed))
 	  {
 	    *total += total2 + costs->logic.base_cost;
 	    if (REG_P (op0))
@@ -1187,7 +1193,7 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	if (costs->shift_per_count)
 	  {
 	    /* No barrel shifter: recurse into operand */
-	    if (m68k_rtx_costs_impl (op0, mode, code, 0, total, speed))
+	    if (m68k_rtx_costs_unified (op0, mode, code, 0, total, costs, speed))
 	      {
 		int shift_cost = costs->shift_mem;
 		if (costs->shift_speed_divisor > 1 && !speed)
@@ -1232,7 +1238,7 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 		    *total = costs->compare.reg_imm[idx];
 		    return true;
 		  }
-		if (m68k_rtx_costs_impl (op0, mode, code, 0, total, speed))
+		if (m68k_rtx_costs_unified (op0, mode, code, 0, total, costs, speed))
 		  {
 		    *total += costs->compare.mem_imm_add[idx];
 		    return true;
@@ -1248,7 +1254,7 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	      }
 	    else if (REG_P (op0))
 	      {
-		if (m68k_rtx_costs_impl (op1, mode, code, 1, total, speed))
+		if (m68k_rtx_costs_unified (op1, mode, code, 1, total, costs, speed))
 		  {
 		    /* CMP ea,Dn */
 		    *total += costs->compare.reg_ea_add[idx];
@@ -1257,15 +1263,15 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	      }
 	    else if (REG_P (op1))
 	      {
-		if (m68k_rtx_costs_impl (op0, mode, code, 0, total, speed))
+		if (m68k_rtx_costs_unified (op0, mode, code, 0, total, costs, speed))
 		  {
 		    *total += costs->compare.ea_reg_add[idx];
 		    return true;
 		  }
 	      }
 
-	    if (m68k_rtx_costs_impl (op0, mode, code, 0, total, speed)
-		&& m68k_rtx_costs_impl (op1, mode, code, 1, &total2, speed))
+	    if (m68k_rtx_costs_unified (op0, mode, code, 0, total, costs, speed)
+		&& m68k_rtx_costs_unified (op1, mode, code, 1, &total2, costs, speed))
 	      {
 		*total += total2 + costs->compare.op_add[idx];
 		return true;
@@ -1282,16 +1288,16 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 					   : costs->cmp[1];
 		return true;
 	      }
-	    m68k_rtx_costs_impl (op1, mode, code, 1, total, speed);
+	    m68k_rtx_costs_unified (op1, mode, code, 1, total, costs, speed);
 	    *total += costs->cmp[2];
 	    return true;
 	  }
-	if (m68k_rtx_costs_impl (op0, mode, code, 0, total, speed))
+	if (m68k_rtx_costs_unified (op0, mode, code, 0, total, costs, speed))
 	  {
 	    if (CONST_INT_P (op1) && INTVAL (op1) == 0)
 	      return true;
 
-	    if (m68k_rtx_costs_impl (op1, mode, code, 1, &total2, speed))
+	    if (m68k_rtx_costs_unified (op1, mode, code, 1, &total2, costs, speed))
 	      {
 		*total += total2 + costs->cmp[2];
 		return true;
@@ -1342,4 +1348,61 @@ m68k_rtx_costs_impl (rtx x, machine_mode mode, int outer_code, int opno,
         *total = COSTS_N_INSNS (*total) / costs->cost_scale;
     }
   return result;
+}
+
+/* Implement TARGET_INSN_COST.
+
+   The m68k cost table treats rtx_cost values as sub-expression costs:
+   - MEM costs are EA-only (e.g. MEM_DISP=8 for d(An), not including the
+     base 4-cycle instruction cost)
+   - Compound operations (AND, OR, ADD with MEM operands) build up full
+     instruction costs additively (e.g. AND(MEM,const) = MEM(8) +
+     mem_const_add(12) = 20)
+
+   pattern_cost() only evaluates SET_SRC, so stores like "move.b Dn,d(An)"
+   get costed at just COSTS_N_INSNS(1)=4 instead of 12.  We fix both
+   stores and loads by using max(src, dst) to capture the dominant EA cost,
+   then adding COSTS_N_INSNS(1) as the base instruction cost for plain
+   moves (where the source is a simple operand like MEM, REG, or CONST).
+   Compound operations already embed the full cost in src_cost.  */
+
+int
+m68k_insn_cost_impl (rtx_insn *insn, bool speed)
+{
+  if (flag_m68k_insn_cost)
+    {
+      rtx set = single_set (insn);
+      if (set)
+	{
+	  rtx src = SET_SRC (set);
+	  machine_mode mode = GET_MODE (SET_DEST (set));
+	  int src_cost = rtx_cost (src, mode, SET, 1, speed);
+	  int dst_cost = rtx_cost (SET_DEST (set), mode, SET, 0, speed);
+	  int cost = MAX (src_cost, dst_cost);
+	  /* For plain move instructions (SET_SRC is MEM, REG, or CONST),
+	     rtx_cost returns only the operand/EA cost.  Add COSTS_N_INSNS(1)
+	     for the base instruction cycle cost when a MEM is involved,
+	     since MEM EA costs don't include the base timing.
+	     Compound operations (AND, OR, etc.) already build up full
+	     instruction costs additively in their rtx_cost handlers.  */
+	  if (OBJECT_P (src) && (MEM_P (src) || MEM_P (SET_DEST (set))))
+	    cost += COSTS_N_INSNS (1);
+	  return MAX (COSTS_N_INSNS (1), cost);
+	}
+    }
+  return pattern_cost (PATTERN (insn), speed);
+}
+
+/* Return cost of address X based on addressing mode complexity.
+   Uses m68k_rtx_costs_impl on a synthetic MEM to get addressing mode cost.  */
+
+int
+m68k_address_cost_impl (rtx x, machine_mode mode, bool speed)
+{
+  static class rtx_def mem;
+  mem.code = MEM;
+  mem.u.fld[0].rt_rtx = x;
+  int total = 0;
+  m68k_rtx_costs_impl (&mem, mode, SET, 0, &total, speed);
+  return total;
 }

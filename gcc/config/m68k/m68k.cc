@@ -188,10 +188,13 @@ static bool m68k_ok_for_sibcall_p (tree, tree);
 static bool m68k_tls_symbol_p (rtx);
 static rtx m68k_legitimize_address (rtx, rtx, machine_mode);
 static bool m68k_rtx_costs (rtx, machine_mode, int, int, int *, bool);
+static int m68k_insn_cost (rtx_insn *, bool);
 static int m68k_address_cost (rtx, machine_mode, addr_space_t, bool);
 
-/* Cost calculation function - implementation in m68k_costs.cc.  */
+/* Cost calculation functions - implementations in m68k_costs.cc.  */
 extern bool m68k_rtx_costs_impl (rtx, machine_mode, int, int, int *, bool);
+extern int m68k_insn_cost_impl (rtx_insn *, bool);
+extern int m68k_address_cost_impl (rtx, machine_mode, bool);
 #if M68K_HONOR_TARGET_STRICT_ALIGNMENT
 static bool m68k_return_in_memory (const_tree, const_tree);
 #endif
@@ -295,6 +298,9 @@ static void m68k_file_end (void);
 
 #undef TARGET_RTX_COSTS
 #define TARGET_RTX_COSTS m68k_rtx_costs
+
+#undef TARGET_INSN_COST
+#define TARGET_INSN_COST m68k_insn_cost
 
 #undef TARGET_ADDRESS_COST
 #define TARGET_ADDRESS_COST m68k_address_cost
@@ -3548,20 +3554,22 @@ m68k_rtx_costs (rtx x, machine_mode mode, int outer_code,
   return m68k_rtx_costs_impl (x, mode, outer_code, opno, total, speed);
 }
 
-/* Return cost of address X based on addressing mode complexity.
-   Uses m68k_rtx_costs_impl on a synthetic MEM to get addressing mode cost.  */
+/* Wrapper for m68k_insn_cost_impl in m68k_costs.cc.  */
+
+static int
+m68k_insn_cost (rtx_insn *insn, bool speed)
+{
+  return m68k_insn_cost_impl (insn, speed);
+}
+
+/* Wrapper for m68k_address_cost_impl in m68k_costs.cc.  */
 
 static int
 m68k_address_cost (rtx x, machine_mode mode,
 		   addr_space_t as ATTRIBUTE_UNUSED,
 		   bool speed)
 {
-  static class rtx_def mem;
-  mem.code = MEM;
-  mem.u.fld[0].rt_rtx = x;
-  int total = 0;
-  m68k_rtx_costs_impl (&mem, mode, SET, 0, &total, speed);
-  return total;
+  return m68k_address_cost_impl (x, mode, speed);
 }
 
 /* Implement TARGET_NEW_ADDRESS_PROFITABLE_P.
