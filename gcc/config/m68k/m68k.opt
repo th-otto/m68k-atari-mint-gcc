@@ -258,3 +258,7 @@ Enable the m68k instruction cost hook that includes destination cost.
 mm68k-bitfield-xor
 Target Var(flag_m68k_bitfield_xor) Init(1) Optimization
 Enable the bitfield XOR optimization for BIT_NOT on bitfields.
+
+mm68k-btst-extract
+Target Var(flag_m68k_btst_extract) Init(1) Optimization
+Enable the btst+sne peephole for single-bit extraction on 68000/68010.
