@@ -286,6 +286,17 @@ check_sequential_accesses (vec<mem_access_info> &accesses, HOST_WIDE_INT step)
   if (n < 2)
     return 0;
 
+  /* All accesses must be in the same basic block.  The transformation
+     chains SSA names across accesses, so they must be in a single block
+     to guarantee SSA dominance.  (With sjlj exceptions, loop bodies can
+     have multiple blocks with edges that break dominance.)  */
+  basic_block first_bb = gimple_bb (accesses[0].stmt);
+  for (unsigned i = 1; i < n; i++)
+    {
+      if (gimple_bb (accesses[i].stmt) != first_bb)
+	return 0;
+    }
+
   /* Sort accesses by offset.  */
   accesses.qsort (compare_access_offset);
 
@@ -457,6 +468,18 @@ process_loop (class loop *loop)
           iv_info.accesses.release ();
           continue;
         }
+
+      /* The transformation rewrites the increment statement to use an SSA
+	 name defined after the last access.  The increment must be in the
+	 same BB as the accesses (which are already verified to be in a
+	 single BB by check_sequential_accesses) so the new SSA name
+	 dominates its use.  */
+      if (gimple_bb (iv_info.increment_stmt)
+	  != gimple_bb (iv_info.accesses[0].stmt))
+	{
+	  iv_info.accesses.release ();
+	  continue;
+	}
 
       if (dump_file)
         {

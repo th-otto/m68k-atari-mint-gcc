@@ -649,7 +649,7 @@ m68k_normalize_autoinc (function *func)
     }
   while (made_changes);
 
-  return changes;
+  return 0;
 }
 
 /* Main function for the opt_autoinc pass.  */
@@ -705,7 +705,7 @@ m68k_opt_autoinc (function *func)
 	df_recompute_luids (bb);
     }
 
-  return changes;
+  return 0;
 }
 
 /* Pass data for m68k_pass_normalize_autoinc.  */
