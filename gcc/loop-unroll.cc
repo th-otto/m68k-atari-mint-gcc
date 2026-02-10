@@ -22,6 +22,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "coretypes.h"
 #include "backend.h"
 #include "target.h"
+#include "common/common-target.h"
 #include "rtl.h"
 #include "tree.h"
 #include "cfghooks.h"
@@ -971,7 +972,10 @@ unroll_loop_runtime_iterations (class loop *loop)
      zero check.  */
   rtx div_niter = NULL_RTX;
   rtx saved_niter = NULL_RTX;
-  if (targetm.prefer_runtime_unroll_mod)
+  bool use_mod_unroll = (targetm.prefer_runtime_unroll_mod
+			&& targetm_common.except_unwind_info (&global_options)
+			   != UI_SJLJ);
+  if (use_mod_unroll)
     {
       /* Save niter to a register for later div computation.  */
       saved_niter = gen_reg_rtx (desc->mode);
@@ -992,11 +996,13 @@ unroll_loop_runtime_iterations (class loop *loop)
 
   auto_sbitmap wont_exit (max_unroll + 2);
 
-  if (targetm.prefer_runtime_unroll_mod)
+  if (use_mod_unroll)
     {
       /* Modulo-based approach: create a cleanup loop that runs (n % unroll_factor)
 	 times before the main unrolled loop.  This avoids the Duff's device style
 	 switch cascade which generates expensive compare chains on some targets.
+	 Disabled for sjlj exceptions because the extra EH edges create a more
+	 complex CFG that this code does not handle.
 
 	 CFG structure:
 	   preheader -> [if niter==0 skip] -> [if mod==0 skip] -> cleanup_loop
@@ -1068,15 +1074,19 @@ unroll_loop_runtime_iterations (class loop *loop)
 					  block_label (cleanup_header), p, NULL);
       gcc_assert (branch_code != NULL_RTX);
 
+      /* Save edges before adding the back edge (which adds a second
+	 successor to cleanup_latch and a second predecessor to
+	 cleanup_header).  */
+      edge fall_edge = single_succ_edge (cleanup_latch);
+      edge cleanup_entry_edge = single_pred_edge (cleanup_header);
+
       /* Insert the branch and create the back edge.  */
       emit_insn_after (branch_code, BB_END (cleanup_latch));
       edge back_edge = make_edge (cleanup_latch, cleanup_header, 0);
       back_edge->probability = p;
 
-      /* The fallthrough edge goes to the next block (main loop check).  */
-      edge fall_edge = single_succ_edge (cleanup_latch);
-      if (fall_edge)
-	fall_edge->probability = p.invert ();
+      /* Update the fallthrough edge probability.  */
+      fall_edge->probability = p.invert ();
 
       /* Create the div check block FIRST, before the mod==0 skip.
 	 This way the mod==0 skip can target the div check block.
@@ -1109,11 +1119,13 @@ unroll_loop_runtime_iterations (class loop *loop)
       gcc_assert (branch_code != NULL_RTX);
       emit_insn_after (branch_code, BB_END (div_check_bb));
 
+      /* Save the fallthrough edge before adding the skip edge.  */
+      edge div_fall_edge = single_succ_edge (div_check_bb);
       /* Create edge for the div==0 skip to exit.  */
       edge div_skip_edge = make_edge (div_check_bb, desc->out_edge->dest, 0);
       div_skip_edge->probability = p;
       /* Update the fallthrough edge probability.  */
-      single_succ_edge (div_check_bb)->probability = p.invert ();
+      div_fall_edge->probability = p.invert ();
 
       /* Now add the skip-cleanup branch at the preheader.
 	 If mod == 0, skip to the div check block (NOT past it).
@@ -1123,11 +1135,14 @@ unroll_loop_runtime_iterations (class loop *loop)
       branch_code = compare_and_jump_seq (copy_rtx (mod_niter), const0_rtx, EQ,
 					  block_label (div_check_bb), p, NULL);
       gcc_assert (branch_code != NULL_RTX);
-      split_edge_and_insert (single_pred_edge (cleanup_header), branch_code);
+      basic_block mod_check_bb
+	= split_edge_and_insert (cleanup_entry_edge, branch_code);
+      /* Save the fallthrough edge before adding the skip edge.  */
+      edge mod_fall_edge = single_succ_edge (mod_check_bb);
       /* Create edge for the skip branch.  */
-      edge skip_edge = make_edge (single_pred (cleanup_header), div_check_bb, 0);
+      edge skip_edge = make_edge (mod_check_bb, div_check_bb, 0);
       skip_edge->probability = p;
-      single_succ_edge (single_pred (cleanup_header))->probability = p.invert ();
+      mod_fall_edge->probability = p.invert ();
 
       /* Clear noloop_assumptions since the mod and div checks handle all
 	 edge cases.  This removes the original loop's entry check which
