@@ -22,7 +22,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "coretypes.h"
 #include "backend.h"
 #include "target.h"
-#include "common/common-target.h"
 #include "rtl.h"
 #include "tree.h"
 #include "cfghooks.h"
@@ -36,6 +35,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "dojump.h"
 #include "expr.h"
 #include "dumpfile.h"
+#include "explow.h"
 
 /* This pass performs loop unrolling.  We only perform this
    optimization on innermost loops (with single exception) because
@@ -65,10 +65,6 @@ along with GCC; see the file COPYING3.  If not see
    how many times we should unroll the loop; the experiments I have made
    showed that this choice may affect performance in order of several %.
    */
-
-/* Forward declarations.  */
-static void consolidate_const_loop_counter (class loop *, class niter_desc *,
-					    unsigned);
 
 /* Information about induction variables to split.  */
 
@@ -654,13 +650,6 @@ unroll_loop_constant_iterations (class loop *loop)
       = wi::udiv_trunc (loop->nb_iterations_likely_upper_bound, max_unroll + 1);
   desc->niter_expr = gen_int_mode (desc->niter, desc->mode);
 
-  /* For targets that prefer dbra-style loops (like m68k), consolidate
-     the loop counter.  After unrolling, there are max_unroll+1 copies
-     of the decrement instruction.  We keep only one and adjust the
-     initial counter value to match the new iteration count.  */
-  if (targetm.prefer_runtime_unroll_mod)
-    consolidate_const_loop_counter (loop, desc, max_unroll);
-
   /* Remove the edges.  */
   FOR_EACH_VEC_ELT (remove_edges, i, e)
     remove_path (e);
@@ -906,6 +895,12 @@ unroll_loop_runtime_iterations (class loop *loop)
   struct opt_info *opt_info = NULL;
   bool ok;
 
+  bool use_tablejump = (targetm.prefer_runtime_unroll_tablejump
+			&& targetm.have_tablejump ());
+  rtx precomputed_trip_count = NULL_RTX;
+  auto_vec<basic_block> peel_preheaders;
+  auto_vec<unsigned> peel_jvals;
+
   if (flag_split_ivs_in_unroller
       || flag_variable_expansion_in_unroller)
     opt_info = analyze_insns_in_loop (loop);
@@ -962,28 +957,9 @@ unroll_loop_runtime_iterations (class loop *loop)
   /* Count modulo by ANDing it with max_unroll; we use the fact that
      the number of unrollings is a power of two, and thus this is correct
      even if there is overflow in the computation.  */
-  rtx mod_niter = expand_simple_binop (desc->mode, AND,
-				       niter, gen_int_mode (max_unroll, desc->mode),
-				       NULL_RTX, 0, OPTAB_LIB_WIDEN);
-
-  /* For modulo-based unrolling, save niter for computing div later
-     (after the cleanup loop).  Don't compute div here - we'll compute
-     it after cleanup so the shift instruction can set flags for the
-     zero check.  */
-  rtx div_niter = NULL_RTX;
-  rtx saved_niter = NULL_RTX;
-  bool use_mod_unroll = (targetm.prefer_runtime_unroll_mod
-			&& targetm_common.except_unwind_info (&global_options)
-			   != UI_SJLJ);
-  if (use_mod_unroll)
-    {
-      /* Save niter to a register for later div computation.  */
-      saved_niter = gen_reg_rtx (desc->mode);
-      emit_move_insn (saved_niter, niter);
-    }
-
-  /* For the switch cascade approach, niter is the mod value.  */
-  niter = mod_niter;
+  niter = expand_simple_binop (desc->mode, AND,
+			       niter, gen_int_mode (max_unroll, desc->mode),
+			       NULL_RTX, 0, OPTAB_LIB_WIDEN);
 
   init_code = get_insns ();
   end_sequence ();
@@ -996,251 +972,290 @@ unroll_loop_runtime_iterations (class loop *loop)
 
   auto_sbitmap wont_exit (max_unroll + 2);
 
-  if (use_mod_unroll)
+  if (extra_zero_check || desc->noloop_assumptions)
     {
-      /* Modulo-based approach: create a cleanup loop that runs (n % unroll_factor)
-	 times before the main unrolled loop.  This avoids the Duff's device style
-	 switch cascade which generates expensive compare chains on some targets.
-	 Disabled for sjlj exceptions because the extra EH edges create a more
-	 complex CFG that this code does not handle.
-
-	 CFG structure:
-	   preheader -> [if niter==0 skip] -> [if mod==0 skip] -> cleanup_loop
-	             -> [if div==0 skip] -> main_loop -> exit
-
-	 The cleanup loop uses a simple countdown:
-	   do { body; } while (--mod != 0);
-
-	 Note: This creates a do-while style loop which is simpler for CFG.
-      */
-      basic_block cleanup_header, cleanup_latch;
-      rtx cleanup_counter;
-
-      /* The skip-to-end jumps target the loop's exit block.  */
-      rtx_code_label *loop_done_label = block_label (desc->out_edge->dest);
-
-      /* Create a pseudo register to serve as the cleanup loop counter.  */
-      cleanup_counter = gen_reg_rtx (desc->mode);
-
-      /* Initialize cleanup counter from mod_niter.  */
-      start_sequence ();
-      emit_move_insn (cleanup_counter, copy_rtx (mod_niter));
-      rtx_insn *counter_init = get_insns ();
-      end_sequence ();
-      split_edge_and_insert (loop_preheader_edge (loop), counter_init);
-
-      /* For the mod-based approach, we don't need an initial zero check.
-	 If niter == 0:
-	 - mod == 0, so cleanup is skipped
-	 - div == 0, so main loop is skipped
-	 The individual skip checks handle it correctly.
-
-	 Note: desc->noloop_assumptions would add extra checks, but for the
-	 mod approach we rely on our explicit div==0 check instead.  */
-      (void) extra_zero_check;  /* Suppress unused warning.  */
-
-      /* Skip cleanup if mod == 0 - jump directly to div check.  */
-      preheader = split_edge (loop_preheader_edge (loop));
-
-      /* Create cleanup loop header (this is where the back edge will go).  */
-      cleanup_header = split_edge (loop_preheader_edge (loop));
-
-      /* Peel one copy of the loop body for cleanup.  */
+      /* Peel the first copy of loop body.  Leave the exit test if the number
+	 of iterations is not reliable.  Also record the place of the extra zero
+	 check.  */
       bitmap_clear (wont_exit);
-      bitmap_set_bit (wont_exit, 1);  /* Won't exit via the normal exit.  */
+      if (!desc->noloop_assumptions)
+	bitmap_set_bit (wont_exit, 1);
+      ezc_swtch = loop_preheader_edge (loop)->src;
+      ok = duplicate_loop_body_to_header_edge (loop, loop_preheader_edge (loop),
+					       1, wont_exit, desc->out_edge,
+					       &remove_edges,
+					       DLTHE_FLAG_UPDATE_FREQ);
+      gcc_assert (ok);
+    }
+
+  /* Record the place where switch will be built for preconditioning.  */
+  swtch = split_edge (loop_preheader_edge (loop));
+
+  /* Compute count increments for each switch block and initialize
+     innermost switch block.  Switch blocks and peeled loop copies are built
+     from innermost outward.  */
+  iter_count = new_count = swtch->count / (max_unroll + 1);
+  swtch->count = new_count;
+
+  for (i = 0; i < n_peel; i++)
+    {
+      /* Peel the copy.  */
+      bitmap_clear (wont_exit);
+      if (use_tablejump || i != n_peel - 1 || !last_may_exit)
+	bitmap_set_bit (wont_exit, 1);
       ok = duplicate_loop_body_to_header_edge (loop, loop_preheader_edge (loop),
 					       1, wont_exit, desc->out_edge,
 					       &remove_edges,
 					       DLTHE_FLAG_UPDATE_FREQ);
       gcc_assert (ok);
 
-      /* Create cleanup loop latch with decrement and back branch.  */
-      cleanup_latch = split_edge (loop_preheader_edge (loop));
+      /* Create item for switch.  */
+      unsigned j = n_peel - i - (extra_zero_check ? 0 : 1);
+      p = profile_probability::always () / (i + 2);
 
-      /* Add decrement and conditional back branch.  */
-      p = profile_probability::likely ();
-      start_sequence ();
-      rtx new_count = expand_simple_binop (desc->mode, MINUS,
-					   cleanup_counter, const1_rtx,
-					   cleanup_counter, 0, OPTAB_LIB_WIDEN);
-      if (new_count != cleanup_counter)
-	emit_move_insn (cleanup_counter, new_count);
-      rtx_insn *dec_insn = get_insns ();
-      end_sequence ();
-      emit_insn_after (dec_insn, BB_END (cleanup_latch));
+      preheader = split_edge (loop_preheader_edge (loop));
+      /* Add in count of edge from switch block.  */
+      preheader->count += iter_count;
 
-      /* Create the conditional back branch using compare_and_jump_seq.  */
-      branch_code = compare_and_jump_seq (cleanup_counter, const0_rtx, NE,
-					  block_label (cleanup_header), p, NULL);
-      gcc_assert (branch_code != NULL_RTX);
-
-      /* Save edges before adding the back edge (which adds a second
-	 successor to cleanup_latch and a second predecessor to
-	 cleanup_header).  */
-      edge fall_edge = single_succ_edge (cleanup_latch);
-      edge cleanup_entry_edge = single_pred_edge (cleanup_header);
-
-      /* Insert the branch and create the back edge.  */
-      emit_insn_after (branch_code, BB_END (cleanup_latch));
-      edge back_edge = make_edge (cleanup_latch, cleanup_header, 0);
-      back_edge->probability = p;
-
-      /* Update the fallthrough edge probability.  */
-      fall_edge->probability = p.invert ();
-
-      /* Create the div check block FIRST, before the mod==0 skip.
-	 This way the mod==0 skip can target the div check block.
-
-	 Skip main loop if div == 0 (i.e., niter < unroll_factor).
-	 This is placed after the cleanup loop so that the cleanup loop still
-	 runs for small iteration counts.
-
-	 We compute div here (after cleanup) so that:
-	 1. The shift instruction sets the Z flag
-	 2. We can use jeq directly after the shift without a separate tst
-	 3. The computed div is used for desc->niter_expr  */
-      edge main_entry = loop_preheader_edge (loop);
-      basic_block div_check_bb = split_edge (main_entry);
-
-      /* Compute div = saved_niter >> shift.  The shift sets Z flag.  */
-      int shift = exact_log2 (max_unroll + 1);
-      start_sequence ();
-      div_niter = expand_simple_binop (desc->mode, LSHIFTRT,
-				       saved_niter, gen_int_mode (shift, QImode),
-				       NULL_RTX, 0, OPTAB_LIB_WIDEN);
-      rtx_insn *div_insn = get_insns ();
-      end_sequence ();
-      emit_insn_after (div_insn, BB_END (div_check_bb));
-
-      /* Branch to exit if div == 0.  The shift above sets Z flag.  */
-      p = profile_probability::always () / (max_unroll + 1);
-      branch_code = compare_and_jump_seq (div_niter, const0_rtx, EQ,
-					  loop_done_label, p, NULL);
-      gcc_assert (branch_code != NULL_RTX);
-      emit_insn_after (branch_code, BB_END (div_check_bb));
-
-      /* Save the fallthrough edge before adding the skip edge.  */
-      edge div_fall_edge = single_succ_edge (div_check_bb);
-      /* Create edge for the div==0 skip to exit.  */
-      edge div_skip_edge = make_edge (div_check_bb, desc->out_edge->dest, 0);
-      div_skip_edge->probability = p;
-      /* Update the fallthrough edge probability.  */
-      div_fall_edge->probability = p.invert ();
-
-      /* Now add the skip-cleanup branch at the preheader.
-	 If mod == 0, skip to the div check block (NOT past it).
-	 Use 25% probability for mod==0 since most counts aren't multiples of
-	 the unroll factor.  This helps block reordering put cleanup inline.  */
-      p = profile_probability::always () / 4;
-      branch_code = compare_and_jump_seq (copy_rtx (mod_niter), const0_rtx, EQ,
-					  block_label (div_check_bb), p, NULL);
-      gcc_assert (branch_code != NULL_RTX);
-      basic_block mod_check_bb
-	= split_edge_and_insert (cleanup_entry_edge, branch_code);
-      /* Save the fallthrough edge before adding the skip edge.  */
-      edge mod_fall_edge = single_succ_edge (mod_check_bb);
-      /* Create edge for the skip branch.  */
-      edge skip_edge = make_edge (mod_check_bb, div_check_bb, 0);
-      skip_edge->probability = p;
-      mod_fall_edge->probability = p.invert ();
-
-      /* Clear noloop_assumptions since the mod and div checks handle all
-	 edge cases.  This removes the original loop's entry check which
-	 would otherwise add an extra "tst; jeq" at function entry.  */
-      desc->noloop_assumptions = NULL_RTX;
-
-      /* Store for later use.  */
-      ezc_swtch = NULL;
-      swtch = NULL;
-    }
-  else
-    {
-      /* Original Duff's device approach with switch cascade.  */
-      if (extra_zero_check || desc->noloop_assumptions)
+      if (use_tablejump)
 	{
-	  /* Peel the first copy of loop body.  Leave the exit test if the number
-	     of iterations is not reliable.  Also record the place of the extra zero
-	     check.  */
-	  bitmap_clear (wont_exit);
-	  if (!desc->noloop_assumptions)
-	    bitmap_set_bit (wont_exit, 1);
-	  ezc_swtch = loop_preheader_edge (loop)->src;
-	  ok = duplicate_loop_body_to_header_edge (loop, loop_preheader_edge (loop),
-						   1, wont_exit, desc->out_edge,
-						   &remove_edges,
-						   DLTHE_FLAG_UPDATE_FREQ);
-	  gcc_assert (ok);
+	  peel_preheaders.safe_push (preheader);
+	  peel_jvals.safe_push (j);
 	}
-
-      /* Record the place where switch will be built for preconditioning.  */
-      swtch = split_edge (loop_preheader_edge (loop));
-
-      /* Compute count increments for each switch block and initialize
-	 innermost switch block.  Switch blocks and peeled loop copies are built
-	 from innermost outward.  */
-      iter_count = new_count = swtch->count / (max_unroll + 1);
-      swtch->count = new_count;
-
-      for (i = 0; i < n_peel; i++)
+      else
 	{
-	  /* Peel the copy.  */
-	  bitmap_clear (wont_exit);
-	  if (i != n_peel - 1 || !last_may_exit)
-	    bitmap_set_bit (wont_exit, 1);
-	  ok = duplicate_loop_body_to_header_edge (loop, loop_preheader_edge (loop),
-						   1, wont_exit, desc->out_edge,
-						   &remove_edges,
-						   DLTHE_FLAG_UPDATE_FREQ);
-	  gcc_assert (ok);
-
-	  /* Create item for switch.  */
-	  unsigned j = n_peel - i - (extra_zero_check ? 0 : 1);
-	  p = profile_probability::always () / (i + 2);
-
-	  preheader = split_edge (loop_preheader_edge (loop));
-	  /* Add in count of edge from switch block.  */
-	  preheader->count += iter_count;
 	  branch_code = compare_and_jump_seq (copy_rtx (niter),
 					      gen_int_mode (j, desc->mode), EQ,
-					      block_label (preheader), p, NULL);
+					      block_label (preheader), p,
+					      NULL);
 
-	  /* We rely on the fact that the compare and jump cannot be optimized out,
-	     and hence the cfg we create is correct.  */
+	  /* We rely on the fact that the compare and jump cannot be
+	     optimized out, and hence the cfg we create is correct.  */
 	  gcc_assert (branch_code != NULL_RTX);
 
-	  swtch = split_edge_and_insert (single_pred_edge (swtch), branch_code);
+	  swtch = split_edge_and_insert (single_pred_edge (swtch),
+					 branch_code);
 	  set_immediate_dominator (CDI_DOMINATORS, preheader, swtch);
 	  single_succ_edge (swtch)->probability = p.invert ();
 	  new_count += iter_count;
 	  swtch->count = new_count;
 	  e = make_edge (swtch, preheader,
-			 single_succ_edge (swtch)->flags & EDGE_IRREDUCIBLE_LOOP);
+			 single_succ_edge (swtch)->flags
+			   & EDGE_IRREDUCIBLE_LOOP);
 	  e->probability = p;
 	}
+    }
 
-      if (extra_zero_check)
+  if (extra_zero_check)
+    {
+      /* Add branch for zero iterations.  */
+      preheader = split_edge (loop_preheader_edge (loop));
+
+      if (use_tablejump)
 	{
-	  /* Add branch for zero iterations.  */
+	  iter_count = ezc_swtch->count / (max_unroll + 1);
+	  preheader->count += iter_count;
+	  peel_preheaders.safe_push (preheader);
+	  peel_jvals.safe_push (0);
+	}
+      else
+	{
 	  p = profile_probability::always () / (max_unroll + 1);
 	  swtch = ezc_swtch;
-	  preheader = split_edge (loop_preheader_edge (loop));
 	  /* Recompute count adjustments since initial peel copy may
-	     have exited and reduced those values that were computed above.  */
+	     have exited and reduced those values that were computed
+	     above.  */
 	  iter_count = swtch->count / (max_unroll + 1);
 	  /* Add in count of edge from switch block.  */
 	  preheader->count += iter_count;
-	  branch_code = compare_and_jump_seq (copy_rtx (niter), const0_rtx, EQ,
-					      block_label (preheader), p,
-					      NULL);
+	  branch_code = compare_and_jump_seq (copy_rtx (niter), const0_rtx,
+					      EQ, block_label (preheader),
+					      p, NULL);
 	  gcc_assert (branch_code != NULL_RTX);
 
-	  swtch = split_edge_and_insert (single_succ_edge (swtch), branch_code);
+	  swtch = split_edge_and_insert (single_succ_edge (swtch),
+					 branch_code);
 	  set_immediate_dominator (CDI_DOMINATORS, preheader, swtch);
 	  single_succ_edge (swtch)->probability = p.invert ();
 	  e = make_edge (swtch, preheader,
-			 single_succ_edge (swtch)->flags & EDGE_IRREDUCIBLE_LOOP);
+			 single_succ_edge (swtch)->flags
+			   & EDGE_IRREDUCIBLE_LOOP);
 	  e->probability = p;
 	}
+    }
+
+  if (use_tablejump)
+    {
+      /* Build a single jump-table block that dispatches to the correct
+	 peel entry point, replacing the O(n) compare-and-branch cascade.
+
+	 swtch's current successor is the "all peels" target — the entry
+	 point when niter % (max_unroll+1) == max_unroll, meaning all
+	 peeled copies should execute.  The table covers indices
+	 0..max_unroll; uncollected indices map to all_peels_bb.  */
+      basic_block all_peels_bb = single_succ (swtch);
+      int ncases = max_unroll + 1;
+      rtx_code_label *table_label = gen_label_rtx ();
+
+      /* Build label vector: default all to all_peels_bb, then override
+	 with collected peel preheaders.  */
+      auto_vec<rtx> labelvec (ncases);
+      for (int k = 0; k < ncases; k++)
+	labelvec.quick_push (gen_rtx_LABEL_REF (Pmode,
+						 block_label (all_peels_bb)));
+      for (unsigned k = 0; k < peel_preheaders.length (); k++)
+	labelvec[peel_jvals[k]]
+	  = gen_rtx_LABEL_REF (Pmode, block_label (peel_preheaders[k]));
+
+      /* Bump LABEL_NUSES for each target label so they survive until
+	 rebuild_jump_labels properly accounts for the table.  */
+      for (int k = 0; k < ncases; k++)
+	++LABEL_NUSES (XEXP (labelvec[k], 0));
+
+      /* Emit the tablejump RTL (mirrors do_tablejump in expr.cc).
+	 The jump_insn sequence goes into the block; the table label
+	 and ADDR_DIFF_VEC are placed after BB_END as inter-block
+	 insns (required for cfglayout mode).  */
+      start_sequence ();
+
+      /* Scale niter by the table entry size.  Perform the multiply in
+	 niter's native mode (e.g. HImode for -mshort) so the AND mask
+	 from the modulo computation stays in the narrower mode.  */
+      int entry_size = GET_MODE_SIZE (CASE_VECTOR_MODE);
+      machine_mode niter_mode = GET_MODE (niter);
+      rtx scaled_niter = expand_simple_binop (niter_mode, MULT,
+	  copy_rtx (niter),
+	  gen_int_mode (entry_size, niter_mode),
+	  NULL_RTX, 0, OPTAB_LIB_WIDEN);
+
+      /* Build tablejump address: (PLUS (SIGN_EXTEND scaled_niter) label).
+	 Using SIGN_EXTEND as part of the address expression (not a
+	 separate insn) keeps the AND+MULT chain in the narrow mode.
+	 On m68k, m68k_decompose_index strips SIGN_EXTEND of HImode,
+	 producing a .w index suffix.  Other targets legitimize the
+	 address normally via memory_address().  */
+      rtx index_reg;
+      if (GET_MODE (scaled_niter) != Pmode)
+	index_reg = gen_rtx_SIGN_EXTEND (Pmode, scaled_niter);
+      else
+	index_reg = scaled_niter;
+
+      rtx index = gen_rtx_PLUS (Pmode, index_reg,
+	  gen_rtx_LABEL_REF (Pmode, table_label));
+
+#ifdef PIC_CASE_VECTOR_ADDRESS
+      if (flag_pic)
+	index = PIC_CASE_VECTOR_ADDRESS (index);
+      else
+#endif
+	index = memory_address (CASE_VECTOR_MODE, index);
+
+      rtx temp = gen_reg_rtx (CASE_VECTOR_MODE);
+      convert_move (temp, gen_const_mem (CASE_VECTOR_MODE, index), 0);
+      rtx_insn *tj_insn
+	= emit_jump_insn (targetm.gen_tablejump (temp, table_label));
+
+      /* Set JUMP_LABEL so tablejump_p() recognizes this insn before
+	 rebuild_jump_labels runs (needed by fixup_reorder_chain).  */
+      JUMP_LABEL (tj_insn) = table_label;
+      ++LABEL_NUSES (table_label);
+
+      rtx_insn *seq = get_insns ();
+      end_sequence ();
+
+      /* Insert the tablejump computation as a new block before swtch.  */
+      basic_block tj_bb
+	= split_edge_and_insert (single_pred_edge (swtch), seq);
+
+      /* Build the table label + ADDR_DIFF_VEC as a separate sequence
+	 and attach it as BB_FOOTER of the tablejump block.  In
+	 cfglayout mode, BB_FOOTER holds inter-block insns that belong
+	 to a block but come after BB_END; fixup_reorder_chain will
+	 splice them into the insn chain when leaving cfglayout mode.  */
+      start_sequence ();
+      emit_label (table_label);
+      emit_jump_table_data (gen_rtx_ADDR_DIFF_VEC (CASE_VECTOR_MODE,
+	  gen_rtx_LABEL_REF (Pmode, table_label),
+	  gen_rtvec_v (ncases, labelvec.address ()),
+	  const0_rtx, const0_rtx));
+      emit_barrier ();
+      rtx_insn *table_seq = get_insns ();
+      end_sequence ();
+
+      BB_FOOTER (tj_bb) = table_seq;
+      SET_PREV_INSN (table_seq) = NULL;
+
+      /* Fix up CFG: tj_bb currently has one fallthrough edge to swtch.
+	 The tablejump doesn't fall through — clear the flag and set
+	 uniform probability.  Then add edges to each peel preheader.  */
+      edge swtch_edge = single_succ_edge (tj_bb);
+      swtch_edge->flags &= ~EDGE_FALLTHRU;
+      p = profile_probability::always () / ncases;
+      swtch_edge->probability = p;
+
+      unsigned irr = swtch_edge->flags & EDGE_IRREDUCIBLE_LOOP;
+      for (unsigned k = 0; k < peel_preheaders.length (); k++)
+	{
+	  e = make_edge (tj_bb, peel_preheaders[k], irr);
+	  e->probability = p;
+	  dom_bbs.safe_push (peel_preheaders[k]);
+	}
+      dom_bbs.safe_push (all_peels_bb);
+      dom_bbs.safe_push (swtch);
+      dom_bbs.safe_push (tj_bb);
+    }
+
+  if (use_tablejump && last_may_exit)
+    {
+      /* The tablejump dispatches to the correct peel entry, so the
+	 exit check in the last peel is redundant (suppressed above).
+	 Guard the main loop: skip it when all iterations were handled
+	 by the peels (old_niter < max_unroll + 1).
+
+	 Compute the main-loop trip count (old_niter / (max_unroll+1))
+	 here and branch to exit if zero.  This folds the guard
+	 comparison into the shift: on m68k, lsr sets Z, so the branch
+	 can use the flags directly without a separate compare.  The
+	 result is reused as niter_expr, avoiding a redundant division
+	 in the loop preheader.  */
+      int shift = exact_log2 (max_unroll + 1);
+      gcc_assert (shift > 0);
+
+      p = profile_probability::always () / (max_unroll + 1);
+      rtx_code_label *exit_label = block_label (desc->out_edge->dest);
+
+      start_sequence ();
+      precomputed_trip_count = expand_simple_binop (
+	  desc->mode, LSHIFTRT, copy_rtx (old_niter),
+	  gen_int_mode (shift, desc->mode),
+	  NULL_RTX, 1, OPTAB_LIB_WIDEN);
+      do_compare_rtx_and_jump (precomputed_trip_count, const0_rtx,
+			       EQ, 0, desc->mode, NULL_RTX, NULL,
+			       exit_label,
+			       profile_probability::uninitialized ());
+      rtx_jump_insn *jump = as_a<rtx_jump_insn *> (get_last_insn ());
+      jump->set_jump_target (exit_label);
+      LABEL_NUSES (exit_label)++;
+      add_reg_br_prob_note (jump, p);
+      rtx_insn *guard_seq = get_insns ();
+      end_sequence ();
+
+      /* expand_simple_binop for DImode LSHIFTRT on targets without a
+	 DImode shift pattern (e.g. ColdFire) expands via
+	 expand_subword_shift, which can produce insns with shared
+	 subreg RTX between SET_DEST and SET_SRC (the same subreg
+	 object used as both input and output of a PLUS).  Fix this
+	 to satisfy verify_rtl_sharing.  */
+      unshare_all_rtl_in_chain (guard_seq);
+
+      basic_block guard_bb = split_edge_and_insert (
+	  loop_preheader_edge (loop), guard_seq);
+      single_succ_edge (guard_bb)->probability = p.invert ();
+      unsigned irr
+	= single_succ_edge (guard_bb)->flags & EDGE_IRREDUCIBLE_LOOP;
+      edge guard_exit = make_edge (guard_bb, desc->out_edge->dest, irr);
+      guard_exit->probability = p;
+      dom_bbs.safe_push (guard_bb);
     }
 
   /* Recount dominators for outer blocks.  */
@@ -1291,12 +1306,8 @@ unroll_loop_runtime_iterations (class loop *loop)
      of the loop.  After passing through the above code, we see that
      the correct new number of iterations is this:  */
   gcc_assert (!desc->const_iter);
-
-  /* For the mod-based unroller, we've already computed div_niter as a
-     register.  Use it directly instead of the symbolic UDIV expression
-     to avoid the doloop pass recomputing the division.  */
-  if (div_niter != NULL_RTX)
-    desc->niter_expr = div_niter;
+  if (precomputed_trip_count)
+    desc->niter_expr = precomputed_trip_count;
   else
     desc->niter_expr =
       simplify_gen_binary (UDIV, desc->mode, old_niter,
@@ -2337,168 +2348,4 @@ free_opt_info (struct opt_info *opt_info)
       opt_info->insns_with_var_to_expand = NULL;
     }
   free (opt_info);
-}
-
-/* Consolidate the loop counter for constant iteration unrolled loops.
-
-   After unrolling a loop with constant iterations, there are max_unroll+1
-   copies of the loop counter decrement instruction.  For targets that prefer
-   dbra-style loops (where the counter decrements by 1 per iteration), we
-   want to keep only one decrement and adjust the initial counter value.
-
-   For example, if we unroll 8 times a loop that iterates 16 times:
-   - Before: counter = 16, 8 decrements per iteration, 2 iterations
-   - After:  counter = 2, 1 decrement per iteration, 2 iterations
-
-   This allows the doloop pass to use dbra on m68k.  */
-
-static void
-consolidate_const_loop_counter (class loop *loop, class niter_desc *desc,
-				unsigned max_unroll)
-{
-  basic_block bb;
-  rtx loop_counter_reg = NULL_RTX;
-  auto_vec<rtx_insn *> decrement_insns;
-  rtx_insn *init_insn = NULL;
-  basic_block init_bb = NULL;
-
-  if (dump_file)
-    fprintf (dump_file, ";; Attempting loop counter consolidation\n");
-
-  /* Find the loop counter register from the exit condition.  Look for
-     a comparison of a register against 0 in the exit block.  */
-  basic_block exit_bb = desc->out_edge->src;
-  rtx_insn *exit_insn = BB_END (exit_bb);
-
-  if (JUMP_P (exit_insn))
-    {
-      rtx pattern = PATTERN (exit_insn);
-      if (GET_CODE (pattern) == SET
-	  && GET_CODE (SET_SRC (pattern)) == IF_THEN_ELSE)
-	{
-	  rtx cond = XEXP (SET_SRC (pattern), 0);
-	  if (GET_CODE (cond) == NE || GET_CODE (cond) == EQ
-	      || GET_CODE (cond) == GT || GET_CODE (cond) == GE
-	      || GET_CODE (cond) == LT || GET_CODE (cond) == LE)
-	    {
-	      rtx op0 = XEXP (cond, 0);
-	      if (REG_P (op0))
-		loop_counter_reg = op0;
-	    }
-	}
-    }
-
-  if (!loop_counter_reg)
-    {
-      if (dump_file)
-	fprintf (dump_file, ";; Could not identify loop counter register\n");
-      return;
-    }
-
-  if (dump_file)
-    fprintf (dump_file, ";; Loop counter is reg %d\n",
-	     REGNO (loop_counter_reg));
-
-  /* Scan all basic blocks in the function that are part of this loop
-     to find decrements of the loop counter.  After unrolling, the loop
-     body includes many new blocks.  */
-  FOR_EACH_BB_FN (bb, cfun)
-    {
-      if (!flow_bb_inside_loop_p (loop, bb))
-	continue;
-
-      rtx_insn *insn;
-      FOR_BB_INSNS (bb, insn)
-	{
-	  if (!INSN_P (insn))
-	    continue;
-
-	  rtx set = single_set (insn);
-	  if (!set)
-	    continue;
-
-	  rtx dest = SET_DEST (set);
-	  rtx src = SET_SRC (set);
-
-	  /* Look for: reg = reg + -1 (or reg = reg - 1).  */
-	  if (!REG_P (dest) || REGNO (dest) != REGNO (loop_counter_reg))
-	    continue;
-
-	  if (GET_CODE (src) == PLUS
-	      && REG_P (XEXP (src, 0))
-	      && REGNO (XEXP (src, 0)) == REGNO (loop_counter_reg)
-	      && CONST_INT_P (XEXP (src, 1))
-	      && INTVAL (XEXP (src, 1)) == -1)
-	    {
-	      decrement_insns.safe_push (insn);
-	    }
-	}
-    }
-
-  /* If we found fewer than 2 decrements, nothing to consolidate.  */
-  if (decrement_insns.length () < 2 || !loop_counter_reg)
-    {
-      if (dump_file)
-	fprintf (dump_file, ";; No consolidation needed: found %u decrements\n",
-		 decrement_insns.length ());
-      return;
-    }
-
-  if (dump_file)
-    fprintf (dump_file,
-	     ";; Consolidating %u loop counter decrements to 1\n",
-	     decrement_insns.length ());
-
-  /* Keep the last decrement (which is in the main loop body), delete the rest.
-     The last one is the one that will be used for the exit condition.  */
-  for (unsigned i = 0; i < decrement_insns.length () - 1; i++)
-    {
-      if (dump_file)
-	fprintf (dump_file, ";; Deleting decrement insn %d\n",
-		 INSN_UID (decrement_insns[i]));
-      delete_insn (decrement_insns[i]);
-    }
-
-  /* Find the initialization instruction in the preheader.
-     Look for a SET of the loop counter register to a constant.  */
-  init_bb = loop_preheader_edge (loop)->src;
-  FOR_BB_INSNS (init_bb, init_insn)
-    {
-      if (!INSN_P (init_insn))
-	continue;
-
-      rtx set = single_set (init_insn);
-      if (!set)
-	continue;
-
-      if (REG_P (SET_DEST (set))
-	  && REGNO (SET_DEST (set)) == REGNO (loop_counter_reg)
-	  && CONST_INT_P (SET_SRC (set)))
-	{
-	  /* Found the initialization.  Modify it to the new value.
-	     The old value is the original iteration count.  We divide
-	     by (max_unroll + 1) to get the new iteration count.  */
-	  HOST_WIDE_INT old_val = INTVAL (SET_SRC (set));
-	  HOST_WIDE_INT new_val = old_val / (max_unroll + 1);
-
-	  if (dump_file)
-	    fprintf (dump_file,
-		     ";; Changing loop counter init from %ld to %ld\n",
-		     (long) old_val, (long) new_val);
-
-	  rtx new_src = gen_int_mode (new_val, GET_MODE (loop_counter_reg));
-	  if (!validate_change (init_insn, &SET_SRC (set), new_src, 0))
-	    {
-	      /* If validate_change fails, try replacing the whole insn.  */
-	      rtx_insn *seq;
-	      start_sequence ();
-	      emit_move_insn (loop_counter_reg, new_src);
-	      seq = get_insns ();
-	      end_sequence ();
-	      emit_insn_after (seq, init_insn);
-	      delete_insn (init_insn);
-	    }
-	  break;
-	}
-    }
 }

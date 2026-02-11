@@ -12516,12 +12516,12 @@ is required only when the target has special constraints like maximum
 number of memory accesses.
 @end deftypefn
 
-@deftypevr {Target Hook} bool TARGET_PREFER_RUNTIME_UNROLL_MOD
-Return true if the target prefers modulo-based runtime loop unrolling.
-When true, runtime loop unrolling creates a cleanup loop that executes
-@code{n % unroll_factor} iterations before the main unrolled loop, instead
-of using a Duff's device style switch cascade.  This is more efficient on
-targets where compare cascades are expensive.
+@deftypevr {Target Hook} bool TARGET_PREFER_RUNTIME_UNROLL_TABLEJUMP
+Return true if the target prefers a jump table dispatch for the
+remainder iterations of runtime-unrolled loops, instead of a serial
+compare-and-branch cascade.  The jump table is constant-time whereas
+the compare cascade is O(unroll_factor).  Only effective when the
+target also supports @code{tablejump}.
 @end deftypevr
 
 @defmac POWI_MAX_MULTS

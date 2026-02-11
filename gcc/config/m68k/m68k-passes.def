@@ -59,6 +59,12 @@ INSERT_PASS_AFTER (pass_vrp, 1, m68k_pass_narrow_index_mult);
 
 INSERT_PASS_BEFORE (pass_store_merging, 1, m68k_pass_reorder_mem);
 
+/* Eliminate redundant register copies that are already available on all
+   incoming paths.  Runs after inc_dec to clean up copies it reintroduces
+   in unrolled loop peels, before IRA to enable register coalescing.  */
+
+INSERT_PASS_AFTER (pass_inc_dec, 1, m68k_pass_avail_copy_elim);
+
 /* Normalize increment positions for auto-increment optimization.
 
    When GCC's IVOPTS pass places pointer increments in the middle of a

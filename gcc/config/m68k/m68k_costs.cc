@@ -1375,9 +1375,10 @@ m68k_insn_cost_impl (rtx_insn *insn, bool speed)
       if (set)
 	{
 	  rtx src = SET_SRC (set);
-	  machine_mode mode = GET_MODE (SET_DEST (set));
+	  rtx dst = SET_DEST (set);
+	  machine_mode mode = GET_MODE (dst);
 	  int src_cost = rtx_cost (src, mode, SET, 1, speed);
-	  int dst_cost = rtx_cost (SET_DEST (set), mode, SET, 0, speed);
+	  int dst_cost = rtx_cost (dst, mode, SET, 0, speed);
 	  int cost = MAX (src_cost, dst_cost);
 	  /* For plain move instructions (SET_SRC is MEM, REG, or CONST),
 	     rtx_cost returns only the operand/EA cost.  Add COSTS_N_INSNS(1)
@@ -1385,8 +1386,25 @@ m68k_insn_cost_impl (rtx_insn *insn, bool speed)
 	     since MEM EA costs don't include the base timing.
 	     Compound operations (AND, OR, etc.) already build up full
 	     instruction costs additively in their rtx_cost handlers.  */
-	  if (OBJECT_P (src) && (MEM_P (src) || MEM_P (SET_DEST (set))))
+	  if (OBJECT_P (src) && (MEM_P (src) || MEM_P (dst)))
 	    cost += COSTS_N_INSNS (1);
+	  /* Compound operation (PLUS, AND, etc.) writing to memory where no
+	     source operand matches the destination.  This is NOT a
+	     read-modify-write (like add.w #1,(a0)) and cannot be a single
+	     m68k instruction.  Reload will insert a register copy, making
+	     it 3 instructions: copy src->temp, op temp, store temp->mem.
+	     Use additive costs instead of max to reflect the true cost.  */
+	  else if (MEM_P (dst) && !OBJECT_P (src))
+	    {
+	      bool is_rmw = false;
+	      if (BINARY_P (src))
+		is_rmw = (rtx_equal_p (XEXP (src, 0), dst)
+			  || rtx_equal_p (XEXP (src, 1), dst));
+	      else if (UNARY_P (src))
+		is_rmw = rtx_equal_p (XEXP (src, 0), dst);
+	      if (!is_rmw)
+		cost = src_cost + dst_cost + COSTS_N_INSNS (2);
+	    }
 	  return MAX (COSTS_N_INSNS (1), cost);
 	}
     }

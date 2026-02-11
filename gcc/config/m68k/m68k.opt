@@ -262,3 +262,7 @@ Enable the bitfield XOR optimization for BIT_NOT on bitfields.
 mm68k-btst-extract
 Target Var(flag_m68k_btst_extract) Init(1) Optimization
 Enable the btst+sne peephole for single-bit extraction on 68000/68010.
+
+mm68k-avail-copy-elim
+Target Var(flag_m68k_avail_copy_elim) Init(1) Optimization
+Enable the m68k available copy elimination pass.

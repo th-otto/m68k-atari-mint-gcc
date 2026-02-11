@@ -133,6 +133,7 @@ extern rtl_opt_pass *make_m68k_pass_normalize_autoinc (gcc::context *);
 extern rtl_opt_pass *make_m68k_pass_opt_autoinc (gcc::context *);
 extern rtl_opt_pass *make_m68k_pass_elim_andi (gcc::context *);
 extern rtl_opt_pass *make_m68k_pass_highword_opt (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_avail_copy_elim (gcc::context *);
 
 /* Functions from m68k-gimple-passes.cc.  */
 class gimple_opt_pass;

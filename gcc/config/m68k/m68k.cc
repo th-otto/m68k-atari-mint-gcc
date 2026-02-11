@@ -456,11 +456,11 @@ TARGET_GNU_ATTRIBUTES (m68k_attribute_table,
 #undef TARGET_DOLOOP_MIN_ITERATIONS
 #define TARGET_DOLOOP_MIN_ITERATIONS 1
 
-/* Prefer modulo-based runtime loop unrolling over Duff's device.
-   The Duff's device style switch cascade generates expensive compare
-   chains on m68k.  A cleanup loop is more efficient.  */
-#undef TARGET_PREFER_RUNTIME_UNROLL_MOD
-#define TARGET_PREFER_RUNTIME_UNROLL_MOD true
+/* Prefer jump table dispatch for runtime loop unrolling.
+   The serial compare cascade generates 12+ instructions on m68k for
+   unroll factor 8.  A jump table is 3 instructions + 16 bytes of data.  */
+#undef TARGET_PREFER_RUNTIME_UNROLL_TABLEJUMP
+#define TARGET_PREFER_RUNTIME_UNROLL_TABLEJUMP true
 
 #undef TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS
 #define TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS m68k_ira_change_pseudo_allocno_class
@@ -875,6 +875,14 @@ m68k_option_override_internal (bool main_args_p)
      that are much more efficient on m68k.  */
   if (!OPTION_SET_P (flag_split_ivs_in_unroller))
     flag_split_ivs_in_unroller = 0;
+
+  /* Enable register renaming at -O2+ to eliminate dead register copies
+     left by IRA, e.g. function argument copies where the original
+     register could be reused directly.  The m68k ISA has no encoding
+     differences between registers (unlike x86 REX), so renaming has
+     no code-size downside.  */
+  if (optimize >= 2 && !OPTION_SET_P (flag_rename_registers))
+    flag_rename_registers = 1;
 }
 
 /* Implement the TARGET_OPTION_OVERRIDE hook.  */

@@ -3426,6 +3426,165 @@ public:
 
 }; /* class m68k_pass_highword_opt */
 
+/* -----------------------------------------------------------------------
+   Available Copy Elimination Pass
+
+   After inc_dec converts forward-propagated copies back into reg-reg copies
+   (e.g., in unrolled loop peels), some copies are redundant because the
+   same value is already established on all incoming paths.  This pass
+   detects and deletes such copies before IRA, allowing the allocator to
+   coalesce the registers and avoid unnecessary move instructions.
+   ----------------------------------------------------------------------- */
+
+/* Check if (set DEST SRC) is available at the entry of BB by walking
+   predecessors backwards.  DEPTH limits the search to avoid unbounded
+   recursion.  Returns true if all predecessor paths establish DEST == SRC
+   without any intervening modification of either register.  */
+
+static bool
+copy_available_at_entry (basic_block bb, rtx dest, rtx src, int depth)
+{
+  if (depth <= 0)
+    return false;
+
+  edge e;
+  edge_iterator ei;
+
+  /* Must have at least one predecessor.  */
+  if (EDGE_COUNT (bb->preds) == 0)
+    return false;
+
+  FOR_EACH_EDGE (e, ei, bb->preds)
+    {
+      basic_block pred = e->src;
+      bool found = false;
+
+      /* Walk backwards through predecessor's insns.  */
+      rtx_insn *insn;
+      FOR_BB_INSNS_REVERSE (pred, insn)
+	{
+	  if (!NONDEBUG_INSN_P (insn))
+	    continue;
+
+	  rtx set = single_set (insn);
+	  if (set && rtx_equal_p (SET_DEST (set), dest)
+	      && rtx_equal_p (SET_SRC (set), src))
+	    {
+	      /* Found the copy — available on this path.  */
+	      found = true;
+	      break;
+	    }
+
+	  /* If either register is modified, the copy is not available.  */
+	  if (reg_set_p (dest, insn) || reg_set_p (src, insn))
+	    return false;
+	}
+
+      if (!found)
+	{
+	  /* Reached start of predecessor without finding copy.
+	     Recurse into predecessor's predecessors.  */
+	  if (!copy_available_at_entry (pred, dest, src, depth - 1))
+	    return false;
+	}
+    }
+
+  return true;
+}
+
+/* Main function for the available copy elimination pass.  */
+
+static unsigned int
+m68k_avail_copy_elim (function *func)
+{
+  unsigned int changes = 0;
+
+  if (dump_file)
+    fprintf (dump_file, "m68k-avail-copy-elim: Starting pass\n");
+
+  basic_block bb;
+  FOR_EACH_BB_FN (bb, func)
+    {
+      /* Find the first non-debug insn in this BB.  */
+      rtx_insn *insn;
+      FOR_BB_INSNS (bb, insn)
+	{
+	  if (NONDEBUG_INSN_P (insn))
+	    break;
+	}
+
+      if (!insn || !NONDEBUG_INSN_P (insn))
+	continue;
+
+      rtx set = single_set (insn);
+      if (!set)
+	continue;
+
+      rtx dest = SET_DEST (set);
+      rtx src = SET_SRC (set);
+
+      /* Only handle simple reg-to-reg copies.  */
+      if (!REG_P (dest) || !REG_P (src))
+	continue;
+
+      if (copy_available_at_entry (bb, dest, src, 5))
+	{
+	  if (dump_file)
+	    {
+	      fprintf (dump_file,
+		       "m68k-avail-copy-elim: BB %d: deleting redundant copy "
+		       "r%d = r%d\n",
+		       bb->index, REGNO (dest), REGNO (src));
+	    }
+
+	  delete_insn (insn);
+	  changes++;
+	}
+    }
+
+  if (dump_file)
+    fprintf (dump_file,
+	     "m68k-avail-copy-elim: Pass complete, %d changes\n", changes);
+
+  return 0;
+}
+
+/* Pass data for m68k_pass_avail_copy_elim.  */
+
+const pass_data m68k_pass_data_avail_copy_elim =
+{
+  RTL_PASS,		       /* type */
+  "m68k-avail-copy-elim",     /* name */
+  OPTGROUP_NONE,	       /* optinfo_flags */
+  TV_MACH_DEP,		       /* tv_id */
+  0,			       /* properties_required */
+  0,			       /* properties_provided */
+  0,			       /* properties_destroyed */
+  0,			       /* todo_flags_start */
+  0			       /* todo_flags_finish */
+};
+
+/* The pass class for avail_copy_elim.  */
+
+class m68k_pass_avail_copy_elim : public rtl_opt_pass
+{
+public:
+  m68k_pass_avail_copy_elim (gcc::context *ctxt)
+    : rtl_opt_pass (m68k_pass_data_avail_copy_elim, ctxt)
+  {}
+
+  bool gate (function *) final override
+  {
+    return optimize > 0 && flag_m68k_avail_copy_elim;
+  }
+
+  unsigned int execute (function *func) final override
+  {
+    return m68k_avail_copy_elim (func);
+  }
+
+}; /* class m68k_pass_avail_copy_elim */
+
 } /* anonymous namespace */
 
 /* Factory function for m68k_pass_normalize_autoinc.  */
@@ -3458,4 +3617,12 @@ rtl_opt_pass *
 make_m68k_pass_highword_opt (gcc::context *ctxt)
 {
   return new m68k_pass_highword_opt (ctxt);
+}
+
+/* Factory function for m68k_pass_avail_copy_elim.  */
+
+rtl_opt_pass *
+make_m68k_pass_avail_copy_elim (gcc::context *ctxt)
+{
+  return new m68k_pass_avail_copy_elim (ctxt);
 }

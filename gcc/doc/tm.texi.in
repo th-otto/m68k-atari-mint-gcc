@@ -7948,7 +7948,7 @@ lists.
 
 @hook TARGET_LOOP_UNROLL_ADJUST
 
-@hook TARGET_PREFER_RUNTIME_UNROLL_MOD
+@hook TARGET_PREFER_RUNTIME_UNROLL_TABLEJUMP
 
 @defmac POWI_MAX_MULTS
 If defined, this macro is interpreted as a signed integer C expression
