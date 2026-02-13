@@ -1277,6 +1277,15 @@ has_intervening_dependency (const reorder_mem_info &moved, gimple *inter)
       if (gimple_vdef (inter)
 	  && stmt_may_clobber_ref_p (inter, moved.mem_ref))
 	return true;
+      /* For stores whose RHS is also a memory reference (e.g.
+	 auth->field = au->field), check if the intervening statement
+	 clobbers the source.  Without this, a store to the source
+	 can be reordered past the read, reading uninitialized data.  */
+      if (moved.store_rhs && gimple_vdef (inter)
+	  && TREE_CODE (moved.store_rhs) != SSA_NAME
+	  && is_mem_ref_p (moved.store_rhs)
+	  && stmt_may_clobber_ref_p (inter, moved.store_rhs))
+	return true;
     }
   else
     {
