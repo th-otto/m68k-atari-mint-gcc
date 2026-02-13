@@ -883,6 +883,13 @@ m68k_option_override_internal (bool main_args_p)
      no code-size downside.  */
   if (optimize >= 2 && !OPTION_SET_P (flag_rename_registers))
     flag_rename_registers = 1;
+
+  /* Prevent PRE from splitting self-loop edges.  On m68k, tight self-loops
+     with mem[reg+offset] + reg+=N can be converted to post-increment
+     addressing by auto_inc_dec, but only when both insns are in the same BB.
+     PRE sometimes splits such loops, preventing post-increment formation.  */
+  if (!OPTION_SET_P (param_gcse_no_selfloop_split))
+    param_gcse_no_selfloop_split = 1;
 }
 
 /* Implement the TARGET_OPTION_OVERRIDE hook.  */

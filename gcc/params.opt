@@ -572,6 +572,10 @@ The maximum ratio of insertions to deletions of expressions in GCSE.
 Common Joined UInteger Var(param_max_gcse_memory) Init(131072) Param Optimization
 The maximum amount of memory to be allocated by GCSE, in kilobytes.
 
+-param=gcse-no-selfloop-split=
+Common Joined UInteger Var(param_gcse_no_selfloop_split) Init(0) IntegerRange(0, 1) Param Optimization
+When non-zero, prevent PRE from inserting expressions on self-loop back edges which would split single-BB loops into header+latch.
+
 -param=max-goto-duplication-insns=
 Common Joined UInteger Var(param_max_goto_duplication_insns) Init(8) Param Optimization
 The maximum number of insns to duplicate when unfactoring computed gotos.
