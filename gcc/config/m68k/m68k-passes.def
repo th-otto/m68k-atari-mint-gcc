@@ -114,6 +114,16 @@ INSERT_PASS_BEFORE (pass_peephole2, 1, m68k_pass_normalize_autoinc);
 
 INSERT_PASS_AFTER (pass_peephole2, 1, m68k_pass_opt_autoinc);
 
+/* Reorder loads so the register tested by a conditional branch is set
+   by the immediately preceding instruction.  m68k moves set CC, so the
+   final pass can then elide the tst instruction.
+
+   Runs between peephole2 and opt_autoinc.  Due to INSERT_PASS_AFTER
+   ordering, this line (inserted after opt_autoinc's anchor) places
+   reorder_for_cc before opt_autoinc in the pipeline.  */
+
+INSERT_PASS_AFTER (pass_peephole2, 1, m68k_pass_reorder_for_cc);
+
 /* Eliminate redundant andi.l #65535 zero-extension instructions.
 
    On M68K, word (.w) operations only modify the lower 16 bits, leaving
