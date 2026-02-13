@@ -652,6 +652,274 @@ m68k_normalize_autoinc (function *func)
   return 0;
 }
 
+/* Check whether REGNO is dead on all successor edges of PRED except
+   the edge to BB.  Returns true if dead on all other edges.  This
+   handles EH edges and other multi-successor scenarios.  */
+
+static bool
+reg_dead_on_other_edges (basic_block pred, basic_block bb, int regno)
+{
+  edge e;
+  edge_iterator ei;
+  FOR_EACH_EDGE (e, ei, pred->succs)
+    {
+      if (e->dest == bb)
+	continue;
+      if (bitmap_bit_p (df_get_live_in (e->dest), regno))
+	return false;
+    }
+  return true;
+}
+
+/* Try to convert a load in a predecessor BB followed by an increment at the
+   top of this BB into a post-increment load.  This handles the cross-BB
+   pattern seen in strcmp-like loops:
+
+     BB_pred:
+       move.b (%a0),%d0       ; load
+       jeq .Lexit              ; conditional branch (ends BB_pred)
+     BB:
+       addq.l #1,%a0           ; increment
+
+   Converts to:
+     BB_pred:
+       move.b (%a0)+,%d0      ; load + increment
+       jeq .Lexit
+     BB:
+       ; addq deleted
+
+   This is safe when the address register is dead on the exit path.  */
+
+static bool
+try_cross_bb_postinc (basic_block bb)
+{
+  bool changed = false;
+
+  /* Process increments near the start of BB.  */
+  for (rtx_insn *insn = BB_HEAD (bb); insn; insn = NEXT_INSN (insn))
+    {
+      if (!NONDEBUG_INSN_P (insn))
+	{
+	  if (insn == BB_END (bb))
+	    break;
+	  continue;
+	}
+
+      int regno;
+      HOST_WIDE_INT incr;
+      if (!is_reg_increment (insn, &regno, &incr))
+	break;  /* Stop at first non-increment instruction.  */
+
+      /* Remember if this is the last insn so we don't escape the BB.  */
+      bool is_last = (insn == BB_END (bb));
+
+      /* Must be an address register (a0-a7 = regs 8-15).  */
+      if (regno < 8 || regno > 15)
+	{
+	  if (is_last) break;
+	  continue;
+	}
+
+      /* Increment must be positive (post-increment only).  */
+      if (incr <= 0)
+	{
+	  if (is_last) break;
+	  continue;
+	}
+
+      /* No prior reads of this register in BB before the increment.
+	 Check from BB_HEAD to this insn.  */
+      bool prior_use = false;
+      for (rtx_insn *scan = BB_HEAD (bb); scan != insn;
+	   scan = NEXT_INSN (scan))
+	{
+	  if (!NONDEBUG_INSN_P (scan))
+	    continue;
+	  if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (scan)))
+	    {
+	      prior_use = true;
+	      break;
+	    }
+	}
+      if (prior_use)
+	{
+	  if (is_last) break;
+	  continue;
+	}
+
+      /* Single predecessor.  */
+      if (!single_pred_p (bb))
+	{
+	  if (is_last) break;
+	  continue;
+	}
+
+      basic_block pred = single_pred (bb);
+
+      /* Skip ENTRY/EXIT pseudo-blocks (they have no real insns).  */
+      if (pred->index < NUM_FIXED_BLOCKS)
+	{
+	  if (is_last) break;
+	  continue;
+	}
+
+      /* Predecessor must end with a conditional branch.  */
+      rtx_insn *branch = BB_END (pred);
+      if (!JUMP_P (branch) || !any_condjump_p (branch))
+	{
+	  if (is_last) break;
+	  continue;
+	}
+
+      /* Predecessor must have exactly 2 successors (no EH edges etc.).  */
+      if (EDGE_COUNT (pred->succs) != 2)
+	{
+	  if (is_last) break;
+	  continue;
+	}
+
+      /* Register must be dead on all other successor edges.  */
+      if (!reg_dead_on_other_edges (pred, bb, regno))
+	{
+	  if (is_last) break;
+	  continue;
+	}
+
+      /* Scan backward from the branch in the predecessor to find a matching
+	 load: (set (reg:M dN) (mem:M (reg:SI aX))) where the MEM's mode
+	 size equals the increment.  */
+      rtx_insn *load_insn = nullptr;
+      rtx load_mem = nullptr;
+      int is_dest = 0;
+
+      for (rtx_insn *scan = PREV_INSN (branch); scan;
+	   scan = PREV_INSN (scan))
+	{
+	  if (BLOCK_FOR_INSN (scan) != pred)
+	    break;
+	  if (!NONDEBUG_INSN_P (scan))
+	    continue;
+
+	  rtx set = single_set (scan);
+	  if (!set)
+	    break;  /* Complex insn, stop.  */
+
+	  rtx dest = SET_DEST (set);
+	  rtx src = SET_SRC (set);
+
+	  /* Check if this instruction defines or clobbers the address
+	     register — if so, stop scanning.  */
+	  if (REG_P (dest) && (int) REGNO (dest) == regno)
+	    break;
+
+	  /* Check for load: (set (reg:M) (mem:M (reg aX))).  */
+	  int mem_regno;
+	  if (MEM_P (src) && mem_reg_p (src, &mem_regno)
+	      && mem_regno == regno)
+	    {
+	      if (GET_MODE_SIZE (GET_MODE (src)) == incr)
+		{
+		  load_insn = scan;
+		  load_mem = src;
+		  is_dest = 0;
+		}
+	      break;  /* Found a use, stop regardless.  */
+	    }
+
+	  /* Check for store: (set (mem:M (reg aX)) (reg:M)).  */
+	  if (MEM_P (dest) && mem_reg_p (dest, &mem_regno)
+	      && mem_regno == regno)
+	    {
+	      if (GET_MODE_SIZE (GET_MODE (dest)) == incr)
+		{
+		  load_insn = scan;
+		  load_mem = dest;
+		  is_dest = 1;
+		}
+	      break;
+	    }
+
+	  /* If the register is referenced otherwise, stop.  */
+	  if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (scan)))
+	    break;
+	}
+
+      if (!load_insn)
+	continue;
+
+      /* Verify no other use of the address register between load and
+	 branch end.  */
+      bool intervening_use = false;
+      for (rtx_insn *scan = NEXT_INSN (load_insn); scan != branch;
+	   scan = NEXT_INSN (scan))
+	{
+	  if (!NONDEBUG_INSN_P (scan))
+	    continue;
+	  if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (scan)))
+	    {
+	      intervening_use = true;
+	      break;
+	    }
+	}
+      if (intervening_use)
+	continue;
+
+      /* Also check the branch itself doesn't use the address register.  */
+      if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (branch)))
+	continue;
+
+      /* POST_INC destination != source: can't do move.l (%a0)+,%a0.  */
+      rtx set = single_set (load_insn);
+      if (!set)
+	continue;
+      rtx other_op = is_dest ? SET_SRC (set) : SET_DEST (set);
+      if (REG_P (other_op) && (int) REGNO (other_op) == regno)
+	continue;
+      if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), other_op))
+	continue;
+
+      /* Build the POST_INC form and validate via recog.  */
+      rtx reg = gen_rtx_REG (Pmode, regno);
+      machine_mode mode = GET_MODE (load_mem);
+      rtx postinc_addr = gen_rtx_POST_INC (Pmode, reg);
+      rtx postinc_mem = gen_rtx_MEM (mode, postinc_addr);
+      MEM_COPY_ATTRIBUTES (postinc_mem, load_mem);
+
+      if (is_dest)
+	SET_DEST (set) = postinc_mem;
+      else
+	SET_SRC (set) = postinc_mem;
+
+      INSN_CODE (load_insn) = -1;
+      if (recog_memoized (load_insn) < 0)
+	{
+	  /* Restore original.  */
+	  if (is_dest)
+	    SET_DEST (set) = load_mem;
+	  else
+	    SET_SRC (set) = load_mem;
+	  INSN_CODE (load_insn) = -1;
+	  recog_memoized (load_insn);
+	  continue;
+	}
+
+      /* Success — apply the transformation.  */
+      add_reg_note (load_insn, REG_INC, reg);
+      df_insn_rescan (load_insn);
+
+      /* Delete the increment instruction.  */
+      delete_insn (insn);
+
+      changed = true;
+
+      /* The insn we just deleted may have been the only instruction
+	 or the last — restart scan from BB_HEAD.  */
+      break;
+    }
+
+  return changed;
+}
+
 /* Main function for the opt_autoinc pass.  */
 
 static unsigned int
@@ -659,7 +927,30 @@ m68k_opt_autoinc (function *func)
 {
   unsigned int changes = 0;
 
-  /* Convert memory accesses to POST_INC.  */
+  /* Phase 1: Cross-BB post-increment conversion.  Repeat until stable
+     because each BB may have multiple increments (e.g. both a0 and a1),
+     and we break after each successful conversion.  */
+  {
+    bool made_changes;
+    do
+      {
+	/* (Re-)compute liveness before each iteration.  */
+	df_analyze ();
+	made_changes = false;
+	basic_block bb;
+	FOR_EACH_BB_FN (bb, func)
+	  {
+	    if (try_cross_bb_postinc (bb))
+	      {
+		changes++;
+		made_changes = true;
+	      }
+	  }
+      }
+    while (made_changes);
+  }
+
+  /* Phase 2: Within-BB post-increment conversion.  */
   basic_block bb;
   FOR_EACH_BB_FN (bb, func)
     {
