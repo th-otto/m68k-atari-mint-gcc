@@ -3219,7 +3219,7 @@ highword_optimize_computation (basic_block bb)
       rtx_insn *next = insn;
       while ((next = NEXT_INSN (next)) != NULL
 	     && next != NEXT_INSN (BB_END (bb))
-	     && DEBUG_INSN_P (next))
+	     && !NONDEBUG_INSN_P (next))
 	;
 
       if (next == NULL || next == NEXT_INSN (BB_END (bb)))
