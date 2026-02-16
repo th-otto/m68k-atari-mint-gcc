@@ -1977,9 +1977,11 @@ struct andi_candidate {
   vec<rtx_insn *> def_insns;  /* Appropriately-sized definitions.  */
   enum extension_type ext_type;  /* Type of extension being eliminated.  */
   bool valid;               /* Still a valid candidate.  */
+  rtx_insn *widen_and_insn; /* Widenable and.w for WORD_TO_LONG.  */
 
   andi_candidate () : andi_insn (nullptr), reg (nullptr),
-		      def_insns (vNULL), ext_type (EXT_NONE), valid (false) {}
+		      def_insns (vNULL), ext_type (EXT_NONE), valid (false),
+		      widen_and_insn (nullptr) {}
 };
 
 /* Check if an effect is compatible with the extension type being optimized.
@@ -2320,8 +2322,17 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before)
 		{
 		  cand.def_insns.safe_push (scan);
 		  cand.valid = true;
+		  found_def = true;
 		}
-	      found_def = true;
+	      else if (cand.ext_type == EXT_WORD_TO_LONG)
+		{
+		  /* Byte definition only affects bits 0-7.  Continue scanning
+		     backward to find a word-level definition (e.g. clr.w)
+		     that can be widened to clear bits 16-31.  */
+		  continue;
+		}
+	      else
+		found_def = true;
 	      break;
 
 	    case EFFECT_DEFINES_WORD:
@@ -2348,7 +2359,30 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before)
 
 	    case EFFECT_MODIFIES_WORD:
 	      if (cand.ext_type == EXT_WORD_TO_LONG)
-		continue;
+		{
+		  /* Check if this is and.w #N with N >= 0, which could be
+		     widened to and.l #N to clear bits 16-31.  Record the
+		     first (closest to candidate) such instruction.  */
+		  if (cand.widen_and_insn == nullptr)
+		    {
+		      rtx scan_pat = PATTERN (scan);
+		      if (GET_CODE (scan_pat) == SET
+			  && GET_CODE (SET_SRC (scan_pat)) == AND
+			  && REG_P (XEXP (SET_SRC (scan_pat), 0))
+			  && REGNO (XEXP (SET_SRC (scan_pat), 0)) == regno
+			  && CONST_INT_P (XEXP (SET_SRC (scan_pat), 1))
+			  && INTVAL (XEXP (SET_SRC (scan_pat), 1)) >= 0)
+			{
+			  cand.widen_and_insn = scan;
+			  if (dump_file)
+			    fprintf (dump_file,
+				     "    -> Found widenable and.w #%ld\n",
+				     (long) INTVAL (
+				       XEXP (SET_SRC (scan_pat), 1)));
+			}
+		    }
+		  continue;
+		}
 	      found_def = true;  /* For byte ext, word modify clobbers.  */
 	      break;
 
@@ -2400,6 +2434,15 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before)
 	    }
 	}
 
+      /* If still not valid and we found a widenable and.w, use it.  */
+      if (!cand.valid && cand.ext_type == EXT_WORD_TO_LONG
+	  && cand.widen_and_insn != nullptr)
+	{
+	  if (dump_file)
+	    fprintf (dump_file, "  Found widenable and.w for d%d\n", regno);
+	  cand.valid = true;
+	}
+
       if (dump_file)
 	fprintf (dump_file, "  Final: valid=%d num_defs=%d\n",
 		 cand.valid, (int)cand.def_insns.length ());
@@ -2410,6 +2453,44 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before)
     {
       if (!cand.valid)
 	continue;
+
+      /* Handle widen_and_insn: widen and.w #N to and.l #N, which
+	 clears bits 16-31 as a side effect, making the later
+	 and.l #65535 redundant.  */
+      if (cand.widen_and_insn != nullptr && cand.def_insns.is_empty ())
+	{
+	  /* If the widen_and_insn was already deleted by a previous
+	     candidate (e.g. a BYTE_TO_WORD on the same register),
+	     skip this transformation.  */
+	  if (cand.widen_and_insn->deleted ())
+	    {
+	      if (dump_file)
+		fprintf (dump_file, "  SKIP: widen_and_insn already deleted\n");
+	      continue;
+	    }
+	  rtx old_pat = PATTERN (cand.widen_and_insn);
+	  rtx mask = XEXP (SET_SRC (old_pat), 1);
+	  unsigned widen_regno = REGNO (cand.reg);
+	  rtx si_reg = gen_rtx_REG (SImode, widen_regno);
+	  rtx new_src = gen_rtx_AND (SImode, si_reg, mask);
+	  rtx new_set = gen_rtx_SET (si_reg, new_src);
+	  rtx_insn *new_insn
+	    = emit_insn_before (new_set, cand.widen_and_insn);
+	  INSN_CODE (new_insn) = -1;
+	  if (recog_memoized (new_insn) >= 0)
+	    {
+	      delete_insn (cand.widen_and_insn);
+	      delete_insn (cand.andi_insn);
+	      changes++;
+	      if (dump_file)
+		fprintf (dump_file, "  Widened and.w #%ld to and.l, "
+			 "deleted and.l #65535 for d%d\n",
+			 (long) INTVAL (mask), widen_regno);
+	    }
+	  else
+	    delete_insn (new_insn);
+	  continue;  /* Skip normal transformation.  */
+	}
 
       /* Insert moveq #0,reg before each definition.  */
       bool all_succeeded = true;
@@ -2602,13 +2683,45 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before)
 		       INSN_UID (def_insn), def_bb->index);
 	    }
 
+	  /* If the definition is clr.w (word-mode clear), widen it to
+	     moveq #0 (long-mode clear) in-place instead of inserting
+	     a separate instruction.  */
+	  rtx def_pat = PATTERN (def_insn);
+	  if (cand.ext_type == EXT_WORD_TO_LONG
+	      && GET_CODE (def_pat) == SET
+	      && REG_P (SET_DEST (def_pat))
+	      && GET_MODE (SET_DEST (def_pat)) == HImode
+	      && SET_SRC (def_pat) == const0_rtx
+	      && REGNO (SET_DEST (def_pat)) == regno)
+	    {
+	      /* Replace clr.w with moveq #0 (clears all 32 bits).  */
+	      rtx si_reg = gen_rtx_REG (SImode, regno);
+	      rtx wide_pat = gen_rtx_SET (si_reg, const0_rtx);
+	      rtx_insn *wide_insn = emit_insn_before (wide_pat, def_insn);
+	      INSN_CODE (wide_insn) = -1;
+	      if (recog_memoized (wide_insn) >= 0)
+		{
+		  unsigned key2 = (INSN_UID (def_insn) << 4) | (regno & 0xf);
+		  bitmap_set_bit (already_cleared_before, key2);
+		  delete_insn (def_insn);
+		  inserted_insns.safe_push (wide_insn);
+		  if (dump_file)
+		    fprintf (dump_file, "  Widened clr.w to moveq #0 "
+			     "for d%d\n", regno);
+		  continue;
+		}
+	      delete_insn (wide_insn);
+	      all_succeeded = false;
+	      break;
+	    }
+
 	  /* For SI mode register, use moveq #0.
 	     For HI mode (byte-to-word), need to clear just the word.  */
 	  rtx clear_reg;
 	  if (cand.ext_type == EXT_BYTE_TO_WORD)
-	    clear_reg = gen_rtx_REG (HImode, REGNO (cand.reg));
+	    clear_reg = gen_rtx_REG (HImode, regno);
 	  else
-	    clear_reg = gen_rtx_REG (SImode, REGNO (cand.reg));
+	    clear_reg = gen_rtx_REG (SImode, regno);
 
 	  rtx clear_pat = gen_rtx_SET (clear_reg, const0_rtx);
 	  rtx_insn *new_insn = emit_insn_before (clear_pat, def_insn);
