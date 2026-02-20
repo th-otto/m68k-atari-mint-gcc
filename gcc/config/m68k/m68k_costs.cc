@@ -1207,7 +1207,8 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	rtx op1 = XEXP (x, 1);
 	int idx = GET_MODE_SIZE (mode) > 2 ? 1 : 0;
 
-	if (REG_P (op0))
+	if (REG_P (op0)
+	    || (SUBREG_P (op0) && REG_P (SUBREG_REG (op0))))
 	  {
 	    int shift_cost = costs->shift_base[idx];
 	    if (CONST_INT_P (op1))
@@ -1465,4 +1466,23 @@ m68k_address_cost_impl (rtx x, machine_mode mode, bool speed)
   int total = 0;
   m68k_rtx_costs_impl (&mem, mode, SET, 0, &total, speed);
   return total;
+}
+
+/* Implement TARGET_REGISTER_MOVE_COST.  */
+
+int
+m68k_register_move_cost_impl (reg_class_t from, reg_class_t to)
+{
+  /* Moves to/from FP registers are expensive.  */
+  if ((from == FP_REGS) != (to == FP_REGS))
+    return 4;
+
+  /* Penalize moves from data to address registers.  On m68k, moves to
+     address registers don't set CC flags, representing a hidden cost
+     that the default uniform cost=2 doesn't capture.  */
+  if (flag_m68k_ira_promote
+      && from == DATA_REGS && to == ADDR_REGS)
+    return 3;
+
+  return 2;
 }

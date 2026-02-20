@@ -189,6 +189,7 @@ static int m68k_address_cost (rtx, machine_mode, addr_space_t, bool);
 extern bool m68k_rtx_costs_impl (rtx, machine_mode, int, int, int *, bool);
 extern int m68k_insn_cost_impl (rtx_insn *, bool);
 extern int m68k_address_cost_impl (rtx, machine_mode, bool);
+extern int m68k_register_move_cost_impl (reg_class_t, reg_class_t);
 #if M68K_HONOR_TARGET_STRICT_ALIGNMENT
 static bool m68k_return_in_memory (const_tree, const_tree);
 #endif
@@ -298,6 +299,9 @@ static void m68k_file_end (void);
 
 #undef TARGET_ADDRESS_COST
 #define TARGET_ADDRESS_COST m68k_address_cost
+
+#undef TARGET_REGISTER_MOVE_COST
+#define TARGET_REGISTER_MOVE_COST m68k_register_move_cost
 
 #undef TARGET_NEW_ADDRESS_PROFITABLE_P
 #define TARGET_NEW_ADDRESS_PROFITABLE_P m68k_new_address_profitable_p
@@ -884,6 +888,14 @@ m68k_option_override_internal (bool main_args_p)
      PRE sometimes splits such loops, preventing post-increment formation.  */
   if (!OPTION_SET_P (param_gcse_no_selfloop_split))
     param_gcse_no_selfloop_split = 1;
+
+  /* On m68k, instructions like add.w %dN,%dN read the register once,
+     but the RTL (plus:HI rN rN) lists it in two operand positions.
+     Without dedup, IRA inflates the allocno frequency, distorting
+     thread priority during graph coloring and causing suboptimal
+     register choices.  */
+  if (!OPTION_SET_P (param_ira_ignore_duplicate_uses_in_insn))
+    param_ira_ignore_duplicate_uses_in_insn = 1;
 }
 
 /* Implement the TARGET_OPTION_OVERRIDE hook.  */
@@ -3613,6 +3625,15 @@ m68k_address_cost (rtx x, machine_mode mode,
 		   bool speed)
 {
   return m68k_address_cost_impl (x, mode, speed);
+}
+
+/* Wrapper for m68k_register_move_cost_impl in m68k_costs.cc.  */
+
+static int
+m68k_register_move_cost (machine_mode mode ATTRIBUTE_UNUSED,
+			 reg_class_t from, reg_class_t to)
+{
+  return m68k_register_move_cost_impl (from, to);
 }
 
 /* Implement TARGET_NEW_ADDRESS_PROFITABLE_P.
