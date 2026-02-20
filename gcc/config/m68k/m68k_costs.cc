@@ -555,7 +555,7 @@ static const struct m68k_cost_table m68k_cost_68040 = {
   /* const_other */ 5,
   /* pre_dec */ { 0, 0 },
   /* cmp */ { 0, 1, 2 },
-  /* alu_adj */ { 0, 0 },
+  /* alu_adj */ { 2, 1 },
   /* buscycle_cost */ 1
 };
 
@@ -571,64 +571,47 @@ get_cost_table (void)
     return &m68k_cost_68040;
 }
 
-/* Calculate memory addressing cost for speed optimization */
+/* Calculate memory addressing cost for speed optimization.
+   Uses m68k_decompose_address to classify the addressing mode, which
+   correctly handles SIGN_EXTEND, MULT, and ASHIFT index forms that
+   the previous ad-hoc matching missed.  */
 static int
-mem_cost_speed (rtx addr, const struct m68k_cost_table *costs, int opno)
+mem_cost_speed (rtx addr, machine_mode mode,
+		const struct m68k_cost_table *costs, int opno)
 {
-  int code = GET_CODE (addr);
+  struct m68k_address address;
   int total;
 
-  switch (code)
+  if (!m68k_decompose_address (mode, addr, false, &address))
+    return costs->mem[MEM_DEFAULT][opno];
+
+  if (address.code == PRE_DEC)
+    return costs->mem[MEM_PRE_DEC][opno];
+
+  if (address.code == POST_INC)
+    return costs->mem[MEM_REG][opno];
+
+  if (address.index)
+    return costs->mem[MEM_INDEX][opno];
+
+  if (address.base && address.offset)
     {
-    case REG:
-      total = costs->mem[MEM_REG][opno];
-      /* Data register as address base penalty (68020+) */
-      if (costs->dreg_penalty && REGNO (addr) < 8)
+      total = costs->mem[MEM_DISP][opno];
+      if (costs->dreg_penalty && REGNO (address.base) < 8)
 	total += costs->dreg_penalty;
       return total;
-
-    case POST_INC:
-      return costs->mem[MEM_REG][opno];  /* POST_INC same as REG */
-
-    case PRE_DEC:
-      return costs->mem[MEM_PRE_DEC][opno];
-
-    case SYMBOL_REF:
-    case LABEL_REF:
-      return costs->mem[MEM_ABS][opno];
-
-    case PLUS:
-      {
-	rtx base = XEXP (addr, 0);
-	rtx offset = XEXP (addr, 1);
-
-	if (REG_P (base))
-	  {
-	    if (CONST_INT_P (offset) || SYMBOL_REF_P (offset))
-	      {
-		total = costs->mem[MEM_DISP][opno];
-		/* Data register as address base penalty (68020+) */
-		if (costs->dreg_penalty && REGNO (base) < 8)
-		  total += costs->dreg_penalty;
-		return total;
-	      }
-	    if (REG_P (offset))
-	      return costs->mem[MEM_INDEX][opno];
-	  }
-	/* Check for (PLUS (PLUS reg reg) const) - indexed with displacement */
-	if (GET_CODE (base) == PLUS)
-	  return costs->mem[MEM_INDEX][opno];
-      }
-      break;
-
-    case CONST_INT:
-      return costs->mem[MEM_ABS][opno];
-
-    default:
-      break;
     }
 
-  return costs->mem[MEM_DEFAULT][opno];
+  if (address.base)
+    {
+      total = costs->mem[MEM_REG][opno];
+      if (costs->dreg_penalty && REGNO (address.base) < 8)
+	total += costs->dreg_penalty;
+      return total;
+    }
+
+  /* Absolute address or symbolic constant.  */
+  return costs->mem[MEM_ABS][opno];
 }
 
 /* Forward declaration for recursive calls.  Internal callers must use
@@ -997,7 +980,7 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
     case MEM:
       {
 	rtx addr = XEXP (x, 0);
-	*total = mem_cost_speed (addr, costs, opno);
+	*total = mem_cost_speed (addr, mode, costs, opno);
 	/* Add cost for long mode memory access (68000 16-bit bus) */
 	if (costs->mem_long_add && mode != QImode && mode != HImode)
 	  *total += costs->mem_long_add;
@@ -1228,7 +1211,17 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	  {
 	    int shift_cost = costs->shift_base[idx];
 	    if (CONST_INT_P (op1))
-	      shift_cost += costs->shift_per_count * INTVAL (op1);
+	      {
+		HOST_WIDE_INT count = INTVAL (op1);
+		shift_cost += costs->shift_per_count * count;
+		/* Shift counts > 8 need a moveq to load the count into
+		   a register, since ASd/LSd #imm only supports 1-8.
+		   Exception: shift by 16 in SI mode uses the swap
+		   instruction (ashrsi_16/lshrsi_16/ashlsi_16 patterns),
+		   not moveq + register shift.  */
+		if (count > 8 && !(count == 16 && idx == 1))
+		  shift_cost += costs->shift_large_add;
+	      }
 	    else
 	      shift_cost += costs->shift_var_add;
 	    /* Apply speed divisor for -Os (68000 style) */

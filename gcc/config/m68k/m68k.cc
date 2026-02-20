@@ -145,14 +145,8 @@ static struct m68k_frame current_frame;
    INDEX is either HImode or SImode.  The other fields are SImode.
 
    If CODE is PRE_DEC, the address is -(BASE).  If CODE is POST_INC,
-   the address is (BASE)+.  */
-struct m68k_address {
-  enum rtx_code code;
-  rtx base;
-  rtx index;
-  rtx offset;
-  int scale;
-};
+   the address is (BASE)+.  struct m68k_address is defined in
+   m68k-protos.h.  */
 
 static int m68k_sched_adjust_cost (rtx_insn *, int, rtx_insn *, int,
 				   unsigned int);
@@ -2751,7 +2745,7 @@ m68k_jump_table_ref_p (rtx x)
    STRICT_P says whether strict checking is needed.  If the address
    is valid, describe its components in *ADDRESS.  */
 
-static bool
+bool
 m68k_decompose_address (machine_mode mode, rtx x,
 			bool strict_p, struct m68k_address *address)
 {
@@ -2893,6 +2887,40 @@ m68k_decompose_address (machine_mode mode, rtx x,
 	{
 	  address->base = XEXP (x, 1);
 	  return true;
+	}
+
+      /* Recognize (plus (plus base index) index) as base + index*2.
+	 When fwprop substitutes (plus reg reg) for x*2 into a memory
+	 address, simplify_gen_binary reassociates it from
+	 (plus base (plus idx idx)) to (plus (plus base idx) idx).
+	 Only accept this on 68020+ which supports scaled indexing.  */
+      if ((TARGET_68020 || TARGET_COLDFIRE)
+	  && GET_CODE (XEXP (x, 0)) == PLUS)
+	{
+	  rtx inner = XEXP (x, 0);
+	  rtx outer_right = XEXP (x, 1);
+
+	  /* (plus (plus A B) C) where B == C → base=A, index=C, scale=2.  */
+	  if (rtx_equal_p (XEXP (inner, 1), outer_right)
+	      && m68k_legitimate_base_reg_p (XEXP (inner, 0), strict_p)
+	      && m68k_legitimate_index_reg_p (outer_right, strict_p))
+	    {
+	      address->base = XEXP (inner, 0);
+	      address->index = outer_right;
+	      address->scale = 2;
+	      return true;
+	    }
+
+	  /* (plus (plus A B) C) where A == C → base=B, index=C, scale=2.  */
+	  if (rtx_equal_p (XEXP (inner, 0), outer_right)
+	      && m68k_legitimate_base_reg_p (XEXP (inner, 1), strict_p)
+	      && m68k_legitimate_index_reg_p (outer_right, strict_p))
+	    {
+	      address->base = XEXP (inner, 1);
+	      address->index = outer_right;
+	      address->scale = 2;
+	      return true;
+	    }
 	}
     }
   return false;
