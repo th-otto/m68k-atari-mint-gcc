@@ -53,7 +53,39 @@ enum {
   MEM_DEFAULT    /* complex/unknown */
 };
 
-/* Cost table structure - unified for all CPUs */
+/* Cost table structure - unified for all CPUs.
+
+   All values are in actual hardware clock cycles for easy editing and
+   verification against processor manuals.  The cost_scale field converts
+   these cycle counts to GCC's internal cost units via:
+
+       COSTS_N_INSNS(cycles) / cost_scale
+
+   GCC defines COSTS_N_INSNS(1) = 4 as the cost of one fast instruction.
+   cost_scale is set to the cycle count of a fast instruction on each CPU,
+   so that a fast instruction always maps to COSTS_N_INSNS(1):
+
+       68000:  add.w  =  4 cycles  -> cost_scale = 4  ->  4*4/4 =  4
+       68020:  add.l  =  2 cycles  -> cost_scale = 2  ->  2*4/2 =  4
+       68040:  add.l  =  1 cycle   -> cost_scale = 1  ->  1*4/1 =  4
+
+   A slow instruction like mulu.w scales the same way:
+
+       68000:  mulu.w = 50 cycles  -> cost_scale = 4  -> 50*4/4 =  50
+       68020:  mulu.w = 28 cycles  -> cost_scale = 2  -> 28*4/2 =  56
+       68040:  mulu.w = 16 cycles  -> cost_scale = 1  -> 16*4/1 =  64
+
+   So mulu.w costs 12-16 fast instructions depending on CPU — GCC can
+   compare this directly against a synth_mult decomposition of adds.
+
+   Correct scaling matters because GCC's optimization passes compare
+   target-reported costs against hardcoded COSTS_N_INSNS thresholds.
+   For example, if-conversion (ifcvt.cc) uses COSTS_N_INSNS(2) as the
+   baseline cost of a compare+branch when deciding whether to replace
+   a branch with a conditional move.  With a wrong cost_scale, a simple
+   add.l would appear to cost COSTS_N_INSNS(2) instead of COSTS_N_INSNS(1),
+   making GCC overly conservative about replacing branches.
+ */
 struct m68k_cost_table {
   /* CPU type - used only for selecting what to look up */
   enum m68k_cpu_cost_type cpu;
@@ -170,7 +202,7 @@ struct m68k_cost_table {
 static const struct m68k_cost_table m68k_cost_68000 = {
   /* cpu */
   M68K_CPU_68000,
-  /* cost_scale */
+  /* cost_scale: moveq = 4 cycles */
   4,
 
   /* call: [reg, disp, abs, fallback] */
@@ -291,8 +323,8 @@ static const struct m68k_cost_table m68k_cost_68000 = {
 static const struct m68k_cost_table m68k_cost_68020 = {
   /* cpu */
   M68K_CPU_68020,
-  /* cost_scale */
-  1,
+  /* cost_scale: a fast 68020 instruction (add.l Dn,Dn) takes 2 cycles */
+  2,
 
   /* call: [reg, disp, abs, fallback] */
   { 7, 9, 7, 13 },
@@ -411,7 +443,7 @@ static const struct m68k_cost_table m68k_cost_68020 = {
 static const struct m68k_cost_table m68k_cost_68040 = {
   /* cpu */
   M68K_CPU_68040,
-  /* cost_scale */
+  /* cost_scale: add.l = 1 cycle */
   1,
 
   /* call: [reg, disp, abs, fallback] */
@@ -674,20 +706,37 @@ mul_cost (rtx x, machine_mode mode, const struct m68k_cost_table *costs,
 	}
     }
 
+  /* Widening multiply (mulu.w/muls.w): operand is ZERO_EXTEND or
+     SIGN_EXTEND, so the hardware uses word multiply timing.
+     On 68000, use the word multiply cost directly.
+     On 68020+, this path handles the init_expmed probe (no constant
+     known), so use the constant-multiply formula with average bit
+     count (half the narrower mode width).  */
+  if (GET_CODE (op0) == ZERO_EXTEND || GET_CODE (op0) == SIGN_EXTEND)
+    {
+      if (costs->cpu == M68K_CPU_68000)
+	{
+	  int narrow_idx
+	    = GET_MODE_SIZE (GET_MODE (XEXP (op0, 0))) > 2 ? 1 : 0;
+	  *total = costs->mult[narrow_idx];
+	}
+      else
+	{
+	  int avg_bits = GET_MODE_BITSIZE (GET_MODE (XEXP (op0, 0))) / 2;
+	  *total = costs->mult_const_base
+		   + costs->mult_per_bit * avg_bits / costs->mult_per_bit_div;
+	}
+      return true;
+    }
+
+  /* Non-widening, non-constant multiply.  On 68000 the microcoded
+     multiply includes EA timing, so recursively cost op0.  On 68020+
+     the EA is pipelined separately, so just use the multiply cost.  */
   if (costs->cpu == M68K_CPU_68000)
     {
-      /* 68000-style: microcoded multiply */
-      if (GET_CODE (op0) == ZERO_EXTEND
-	  || GET_CODE (op0) == SIGN_EXTEND)
-	{
-	  *total = 0;
-	  mode = HImode;
-	  idx = 0;
-	}
-      else if (!m68k_rtx_costs_unified (op0, mode, MULT, 0, total,
-					costs, true))
+      if (!m68k_rtx_costs_unified (op0, mode, MULT, 0, total,
+				   costs, true))
 	return false;
-
       *total += costs->mult[idx];
       return true;
     }
