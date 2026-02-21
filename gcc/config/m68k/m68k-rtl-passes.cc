@@ -169,6 +169,143 @@ get_negative_offset (rtx mem, int regno)
   return 0;
 }
 
+/* Recursively search RTX for MEMs whose address is
+   (plus (reg REGNO) (const_int -INCR)) and whose mode size equals INCR.
+   If exactly one such MEM is found, set *MEM_LOC to its location and
+   return 1.  Returns the count of matching MEMs (0 or 1 means success,
+   >1 means ambiguous).  */
+
+static int
+find_postinc_candidate (rtx *loc, int regno, HOST_WIDE_INT incr,
+			rtx **mem_loc)
+{
+  rtx x = *loc;
+  if (x == NULL_RTX)
+    return 0;
+
+  if (MEM_P (x))
+    {
+      rtx addr = XEXP (x, 0);
+      if (GET_CODE (addr) == PLUS
+	  && REG_P (XEXP (addr, 0))
+	  && (int) REGNO (XEXP (addr, 0)) == regno
+	  && CONST_INT_P (XEXP (addr, 1))
+	  && INTVAL (XEXP (addr, 1)) == -incr
+	  && GET_MODE_SIZE (GET_MODE (x)) == incr)
+	{
+	  *mem_loc = loc;
+	  return 1;
+	}
+      /* Don't recurse into the MEM's address — we only care about
+	 top-level MEMs with the matching pattern.  */
+      return 0;
+    }
+
+  int count = 0;
+  const char *fmt = GET_RTX_FORMAT (GET_CODE (x));
+  for (int i = GET_RTX_LENGTH (GET_CODE (x)) - 1; i >= 0; i--)
+    {
+      if (fmt[i] == 'e')
+	{
+	  count += find_postinc_candidate (&XEXP (x, i), regno, incr,
+					   mem_loc);
+	  if (count > 1)
+	    return count;
+	}
+      else if (fmt[i] == 'E')
+	{
+	  for (int j = XVECLEN (x, i) - 1; j >= 0; j--)
+	    {
+	      count += find_postinc_candidate (&XVECEXP (x, i, j), regno,
+					       incr, mem_loc);
+	      if (count > 1)
+		return count;
+	    }
+	}
+    }
+
+  return count;
+}
+
+/* Try to merge an increment instruction with the following instruction's
+   memory operand into a POST_INC addressing mode.
+
+   This transforms:
+     addq.l #N,%aN
+     <insn with -N(%aN)>         ; MEM mode size == N
+
+   Into:
+     <insn with (%aN)+>          ; POST_INC, addq deleted
+
+   This handles the pattern created by LRA when it decomposes POST_INC
+   side effects in cbranch and other patterns.  Works for any instruction
+   type (branch, compare, load, store) and any mode size.
+
+   Returns true if the transformation was made.  */
+
+static bool
+try_merge_postinc (basic_block bb, rtx_insn *add_insn,
+		   int regno, HOST_WIDE_INT incr)
+{
+  /* Must be an address register (a0-a7 = regs 8-15).  */
+  if (regno < 8 || regno > 15)
+    return false;
+
+  /* Only handle positive increments.  */
+  if (incr <= 0)
+    return false;
+
+  /* Find the next non-debug instruction.  */
+  rtx_insn *next_insn = next_nondebug_insn_bb (bb, add_insn);
+  if (!next_insn)
+    return false;
+
+  /* Find exactly one MEM with matching negative offset.  */
+  rtx *mem_loc = nullptr;
+  int count = find_postinc_candidate (&PATTERN (next_insn), regno, incr,
+				      &mem_loc);
+  if (count != 1 || !mem_loc)
+    return false;
+
+  /* The address register must not appear as a destination in next_insn
+     (apart from inside the MEM we're about to modify).  POST_INC modifies
+     the register, so it conflicts with any other write.  */
+  rtx set = single_set (next_insn);
+  if (set && REG_P (SET_DEST (set))
+      && (int) REGNO (SET_DEST (set)) == regno)
+    return false;
+
+  /* Save original MEM for rollback.  */
+  rtx orig_mem = *mem_loc;
+
+  /* Build POST_INC replacement.  */
+  rtx reg = gen_rtx_REG (Pmode, regno);
+  machine_mode mode = GET_MODE (orig_mem);
+  rtx postinc_addr = gen_rtx_POST_INC (Pmode, reg);
+  rtx postinc_mem = gen_rtx_MEM (mode, postinc_addr);
+  MEM_COPY_ATTRIBUTES (postinc_mem, orig_mem);
+
+  *mem_loc = postinc_mem;
+
+  /* Validate the transformed instruction.  */
+  INSN_CODE (next_insn) = -1;
+  if (recog_memoized (next_insn) < 0)
+    {
+      /* Restore original.  */
+      *mem_loc = orig_mem;
+      INSN_CODE (next_insn) = -1;
+      recog_memoized (next_insn);
+      return false;
+    }
+
+  /* Success — apply.  */
+  add_reg_note (next_insn, REG_INC, reg);
+  df_insn_rescan (next_insn);
+  delete_insn (add_insn);
+
+  return true;
+}
+
 /* Try to normalize increment position: move increment instructions that
    are followed by negative-offset memory accesses to after those accesses,
    adjusting the offsets to be positive.
@@ -568,25 +705,22 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
 
 /* Main function for the normalize_autoinc pass.
 
-   This pass normalizes increment positions by moving increment instructions
-   that are followed by negative-offset memory accesses to after those
-   accesses, adjusting the offsets to be positive.
+   Phase 1 — POST_INC merge:
+   Merges an increment instruction with the immediately following
+   instruction when that instruction uses the register with a negative
+   offset equal to the increment and a matching MEM mode size:
 
-   This transforms:
-     move.w (%a0),(%a1)
-     move.w 2(%a0),2(%a1)
-     move.w 4(%a0),4(%a1)
-     addq.l #8,%a0             ; increment in middle
-     addq.l #8,%a1
-     move.w -2(%a0),-2(%a1)    ; negative offset
+     addq.l #1,%a0              →  tst.b (%a0)+
+     tst.b -1(%a0)                 (addq deleted)
 
-   Into:
-     move.w (%a0),(%a1)
-     move.w 2(%a0),2(%a1)
-     move.w 4(%a0),4(%a1)
-     move.w 6(%a0),6(%a1)      ; -2 + 8 = 6
-     addq.l #8,%a0             ; moved to end
-     addq.l #8,%a1             ; moved to end
+   This reconstructs POST_INC addressing that LRA decomposed.
+
+   Phase 2 — Increment normalization:
+   Moves increment instructions that are followed by negative-offset
+   memory accesses to after those accesses, adjusting offsets to positive:
+
+     addq.l #8,%a0              →  move.w 6(%a0),6(%a1)
+     move.w -2(%a0),-2(%a1)        addq.l #8,%a0
 
    This enables subsequent passes (m68k-autoinc, peephole2) to convert
    all accesses to POST_INC addressing and merge adjacent word accesses
@@ -618,6 +752,15 @@ m68k_normalize_autoinc (function *func)
 	      HOST_WIDE_INT incr;
 	      if (is_reg_increment (insn, &regno, &incr))
 		{
+		  /* Phase 1: try to merge into POST_INC first.  */
+		  if (try_merge_postinc (bb, insn, regno, incr))
+		    {
+		      changes++;
+		      made_changes = true;
+		      bb_changed = true;
+		      continue;
+		    }
+		  /* Phase 2: try to normalize increment position.  */
 		  if (try_normalize_increment_position (bb, insn, regno, incr))
 		    {
 		      changes++;
@@ -633,7 +776,16 @@ m68k_normalize_autoinc (function *func)
 	      HOST_WIDE_INT incr;
 	      if (is_reg_increment (BB_END (bb), &regno, &incr))
 		{
-		  if (try_normalize_increment_position (bb, BB_END (bb), regno, incr))
+		  /* Phase 1: try merge (last insn can't be an increment
+		     followed by something, but check for completeness).  */
+		  if (try_merge_postinc (bb, BB_END (bb), regno, incr))
+		    {
+		      changes++;
+		      made_changes = true;
+		      bb_changed = true;
+		    }
+		  else if (try_normalize_increment_position (bb, BB_END (bb),
+							     regno, incr))
 		    {
 		      changes++;
 		      made_changes = true;
@@ -4171,6 +4323,189 @@ public:
 
 }; /* class m68k_pass_reorder_for_cc */
 
+
+
+/* =======================================================================
+   RTL pass: m68k_pass_canon_scaled_index
+
+   Canonicalize 3-register address forms created by fwprop into the
+   standard scaled index form that both legacy reload and LRA can handle.
+
+   When fwprop substitutes (plus idx idx) for idx*2 into a memory address,
+   simplify_gen_binary reassociates it:
+     (plus base (plus idx idx))  →  (plus (plus base idx) idx)
+
+   m68k_legitimate_address_p accepts this 3-register form for 68020+
+   (which supports scaled indexing), so fwprop keeps the substitution.
+   However, LRA's decompose_normal_address (rtlanal.cc) can only classify
+   2 ambiguous register operands and asserts on 3.
+
+   This pass converts the 3-register form to the canonical 2-operand form:
+     (plus (plus base idx) idx)  →  (plus base (ashift idx (const_int 1)))
+
+   The canonical form has only 2 PLUS operands (base and the ASHIFT), and
+   get_index_term in rtlanal.cc recognizes ASHIFT as a scale — so both
+   legacy reload (via m68k_decompose_index) and LRA handle it correctly.
+
+   Runs after fwprop2 (7.28) and before IRA (8.1).  */
+
+/* Recursively walk RTX and replace any (plus (plus A B) C) where B == C
+   or A == C with (plus base (ashift idx (const_int 1))).  Returns true
+   if any replacement was made.  */
+
+static bool
+canon_scaled_index_1 (rtx *loc)
+{
+  rtx x = *loc;
+  if (x == NULL_RTX)
+    return false;
+
+  bool changed = false;
+
+  /* Only process inside MEMs — the 3-register form appears as a
+     memory address.  */
+  if (MEM_P (x))
+    {
+      rtx addr = XEXP (x, 0);
+      if (GET_CODE (addr) == PLUS
+	  && GET_CODE (XEXP (addr, 0)) == PLUS)
+	{
+	  rtx inner = XEXP (addr, 0);
+	  rtx outer_right = XEXP (addr, 1);
+
+	  /* (plus (plus A B) C) where B == C → base=A, index=C<<1.  */
+	  if (REG_P (outer_right)
+	      && rtx_equal_p (XEXP (inner, 1), outer_right)
+	      && REG_P (XEXP (inner, 0)))
+	    {
+	      rtx base = XEXP (inner, 0);
+	      rtx scaled = gen_rtx_ASHIFT (Pmode, outer_right,
+					   const1_rtx);
+	      rtx new_addr = gen_rtx_PLUS (Pmode, base, scaled);
+	      XEXP (x, 0) = new_addr;
+	      return true;
+	    }
+
+	  /* (plus (plus A B) C) where A == C → base=B, index=C<<1.  */
+	  if (REG_P (outer_right)
+	      && rtx_equal_p (XEXP (inner, 0), outer_right)
+	      && REG_P (XEXP (inner, 1)))
+	    {
+	      rtx base = XEXP (inner, 1);
+	      rtx scaled = gen_rtx_ASHIFT (Pmode, outer_right,
+					   const1_rtx);
+	      rtx new_addr = gen_rtx_PLUS (Pmode, base, scaled);
+	      XEXP (x, 0) = new_addr;
+	      return true;
+	    }
+	}
+
+      /* Recurse into the address for nested MEMs.  */
+      if (canon_scaled_index_1 (&XEXP (x, 0)))
+	changed = true;
+      return changed;
+    }
+
+  /* Recurse into sub-expressions.  */
+  const char *fmt = GET_RTX_FORMAT (GET_CODE (x));
+  for (int i = GET_RTX_LENGTH (GET_CODE (x)) - 1; i >= 0; i--)
+    {
+      if (fmt[i] == 'e')
+	{
+	  if (canon_scaled_index_1 (&XEXP (x, i)))
+	    changed = true;
+	}
+      else if (fmt[i] == 'E')
+	{
+	  for (int j = XVECLEN (x, i) - 1; j >= 0; j--)
+	    {
+	      if (canon_scaled_index_1 (&XVECEXP (x, i, j)))
+		changed = true;
+	    }
+	}
+    }
+
+  return changed;
+}
+
+static unsigned int
+m68k_canon_scaled_index (function *func)
+{
+  unsigned int changes = 0;
+  basic_block bb;
+
+  FOR_EACH_BB_FN (bb, func)
+    {
+      rtx_insn *insn;
+      FOR_BB_INSNS (bb, insn)
+	{
+	  if (!NONDEBUG_INSN_P (insn))
+	    continue;
+
+	  if (canon_scaled_index_1 (&PATTERN (insn)))
+	    {
+	      INSN_CODE (insn) = -1;
+	      if (recog_memoized (insn) < 0)
+		{
+		  if (dump_file)
+		    fprintf (dump_file,
+			     "m68k-canon-scaled-index: insn %d: "
+			     "recog failed after rewrite\n",
+			     INSN_UID (insn));
+		}
+	      else
+		{
+		  df_insn_rescan (insn);
+		  changes++;
+		  if (dump_file)
+		    fprintf (dump_file,
+			     "m68k-canon-scaled-index: insn %d: "
+			     "rewrote to ashift form\n",
+			     INSN_UID (insn));
+		}
+	    }
+	}
+    }
+
+  return 0;
+}
+
+/* Pass data for m68k_pass_canon_scaled_index.  */
+
+const pass_data m68k_pass_data_canon_scaled_index =
+{
+  RTL_PASS,			 /* type */
+  "m68k-canon-scaled-index",	 /* name */
+  OPTGROUP_NONE,		 /* optinfo_flags */
+  TV_MACH_DEP,			 /* tv_id */
+  0,				 /* properties_required */
+  0,				 /* properties_provided */
+  0,				 /* properties_destroyed */
+  0,				 /* todo_flags_start */
+  0				 /* todo_flags_finish */
+};
+
+/* The pass class for canon_scaled_index.  */
+
+class m68k_pass_canon_scaled_index : public rtl_opt_pass
+{
+public:
+  m68k_pass_canon_scaled_index (gcc::context *ctxt)
+    : rtl_opt_pass (m68k_pass_data_canon_scaled_index, ctxt)
+  {}
+
+  bool gate (function *) final override
+  {
+    return optimize > 0 && (TARGET_68020 || TARGET_COLDFIRE);
+  }
+
+  unsigned int execute (function *func) final override
+  {
+    return m68k_canon_scaled_index (func);
+  }
+
+}; /* class m68k_pass_canon_scaled_index */
+
 } /* anonymous namespace */
 
 /* Factory function for m68k_pass_normalize_autoinc.  */
@@ -4219,4 +4554,12 @@ rtl_opt_pass *
 make_m68k_pass_reorder_for_cc (gcc::context *ctxt)
 {
   return new m68k_pass_reorder_for_cc (ctxt);
+}
+
+/* Factory function for m68k_pass_canon_scaled_index.  */
+
+rtl_opt_pass *
+make_m68k_pass_canon_scaled_index (gcc::context *ctxt)
+{
+  return new m68k_pass_canon_scaled_index (ctxt);
 }

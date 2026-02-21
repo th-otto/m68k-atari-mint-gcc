@@ -147,9 +147,8 @@ Target RejectNegative Mask(LONG_JUMP_TABLE_OFFSETS)
 Use 32-bit offsets in jump tables rather than 16-bit offsets.
 
 mlra
-Target Var(m68k_lra_p) Undocumented
-Usa LRA for reload instead of the old reload framework.  This option is
-experimental, and it may be removed in future versions of the compiler.
+Target Var(m68k_lra_p) Init(1)
+Use LRA instead of the legacy reload framework.
 
 mnobitfield
 Target RejectNegative InverseMask(BITFIELD)

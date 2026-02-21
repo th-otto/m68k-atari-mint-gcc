@@ -2905,7 +2905,10 @@ m68k_decompose_address (machine_mode mode, rtx x,
 	 When fwprop substitutes (plus reg reg) for x*2 into a memory
 	 address, simplify_gen_binary reassociates it from
 	 (plus base (plus idx idx)) to (plus (plus base idx) idx).
-	 Only accept this on 68020+ which supports scaled indexing.  */
+	 Only accept this on 68020+ which supports scaled indexing.
+	 The m68k-canon-scaled-index pass (after fwprop, before IRA)
+	 rewrites this to (plus base (ashift idx 1)) so that LRA's
+	 decompose_normal_address can handle it.  */
       if ((TARGET_68020 || TARGET_COLDFIRE)
 	  && GET_CODE (XEXP (x, 0)) == PLUS)
 	{

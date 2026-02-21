@@ -65,6 +65,20 @@ INSERT_PASS_BEFORE (pass_store_merging, 1, m68k_pass_reorder_mem);
 
 INSERT_PASS_AFTER (pass_inc_dec, 1, m68k_pass_avail_copy_elim);
 
+/* Canonicalize 3-register scaled index addresses for LRA compatibility.
+
+   fwprop substitutes (plus idx idx) for idx*2 into memory addresses, and
+   simplify_gen_binary reassociates the result to (plus (plus base idx) idx).
+   m68k_legitimate_address_p accepts this 3-register form for 68020+, but
+   LRA's decompose_normal_address can only classify 2 register operands.
+
+   This pass rewrites (plus (plus base idx) idx) to (plus base (ashift idx 1))
+   which is the canonical scaled index form that both reload and LRA handle.
+
+   Runs after avail_copy_elim (which also runs after inc_dec), before IRA.  */
+
+INSERT_PASS_AFTER (pass_inc_dec, 1, m68k_pass_canon_scaled_index);
+
 /* Normalize increment positions for auto-increment optimization.
 
    When GCC's IVOPTS pass places pointer increments in the middle of a
