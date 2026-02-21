@@ -8233,12 +8233,18 @@ pseudo_used_as_mem_address_p (unsigned int regno)
 }
 
 /* Implement TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS.
-   On m68k, memory addressing modes require address registers (An) as bases.
-   There is no (Dn) addressing mode on any 68k CPU.
+   Prevent IRA's allocno-class widening from defeating register-class
+   preferences determined by cost analysis.
 
-   Only force ADDR_REGS when the pseudo is actually used as a memory address.
-   Pseudos used only for pointer arithmetic or comparisons can stay in
-   data registers to avoid unnecessary callee-save overhead.  */
+   DATA_REGS case: when costs say DATA_REGS is best but the allocno class
+   was widened to GENERAL_REGS, narrow it back.  Otherwise IRA thread
+   coalescing can pull the pseudo into an address register, forcing reload
+   to insert a copy through a data register.
+
+   ADDR_REGS case: when the pseudo is used as a memory base address, force
+   ADDR_REGS.  There is no (Dn) addressing mode on any 68k CPU.  Pseudos
+   used only for pointer arithmetic or comparisons can stay in data
+   registers to avoid unnecessary callee-save overhead.  */
 
 static reg_class_t
 m68k_ira_change_pseudo_allocno_class (int regno,
@@ -8247,6 +8253,14 @@ m68k_ira_change_pseudo_allocno_class (int regno,
 {
   if (!flag_m68k_ira_promote)
     return allocno_class;
+
+  /* If DATA_REGS is best but the class was widened to GENERAL_REGS,
+     narrow it back.  This prevents thread coalescing from pulling
+     data-register-preferring pseudos into address registers, which
+     would force reload to insert a copy.  */
+  if (best_class == DATA_REGS
+      && allocno_class == GENERAL_REGS)
+    return DATA_REGS;
 
   /* Only consider forcing ADDR_REGS if that's the best class.  */
   if (best_class != ADDR_REGS)
