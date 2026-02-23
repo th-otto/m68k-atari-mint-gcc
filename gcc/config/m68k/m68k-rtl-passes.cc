@@ -287,9 +287,14 @@ try_merge_postinc (basic_block bb, rtx_insn *add_insn,
 
   *mem_loc = postinc_mem;
 
-  /* Validate the transformed instruction.  */
+  /* Validate the transformed instruction.  recog_memoized alone is not
+     sufficient: predicates like nonimmediate_operand accept POST_INC, but
+     constraint letters may not (e.g. extendsidi2 allows '<' but not '>').
+     Use strict=1 since this pass runs after register allocation.  */
   INSN_CODE (next_insn) = -1;
-  if (recog_memoized (next_insn) < 0)
+  if (recog_memoized (next_insn) < 0
+      || (extract_insn (next_insn),
+	  !constrain_operands (1, get_enabled_alternatives (next_insn))))
     {
       /* Restore original.  */
       *mem_loc = orig_mem;
@@ -603,9 +608,15 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
   else
     SET_SRC (set) = postinc_mem;
 
-  /* Validate the transformed insn.  */
+  /* Validate the transformed insn: must be recognized AND satisfy
+     constraints.  recog alone is insufficient because predicates like
+     nonimmediate_operand accept POST_INC memory, but constraint letters
+     may not (e.g. extendsidi2 allows '<' pre-dec but not '>' post-inc).
+     Use strict=1 since this pass runs after register allocation.  */
   INSN_CODE (first_insn) = -1;
-  if (recog_memoized (first_insn) < 0)
+  if (recog_memoized (first_insn) < 0
+      || (extract_insn (first_insn),
+	  !constrain_operands (1, get_enabled_alternatives (first_insn))))
     {
       /* Transformation not valid, restore original.  */
       if (is_dest)
@@ -663,9 +674,11 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
       MEM_COPY_ATTRIBUTES (new_mem, old_mem);
       *mem_loc = new_mem;
 
-      /* Validate.  */
+      /* Validate: check both recognition and constraints (strict=1).  */
       INSN_CODE (insn) = -1;
-      if (recog_memoized (insn) < 0)
+      if (recog_memoized (insn) < 0
+	  || (extract_insn (insn),
+	      !constrain_operands (1, get_enabled_alternatives (insn))))
 	{
 	  /* Restore and abort.  */
 	  *mem_loc = old_mem;
@@ -1030,7 +1043,7 @@ try_cross_bb_postinc (basic_block bb)
       if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), other_op))
 	continue;
 
-      /* Build the POST_INC form and validate via recog.  */
+      /* Build the POST_INC form and validate via recog + constraints.  */
       rtx reg = gen_rtx_REG (Pmode, regno);
       machine_mode mode = GET_MODE (load_mem);
       rtx postinc_addr = gen_rtx_POST_INC (Pmode, reg);
@@ -1043,7 +1056,9 @@ try_cross_bb_postinc (basic_block bb)
 	SET_SRC (set) = postinc_mem;
 
       INSN_CODE (load_insn) = -1;
-      if (recog_memoized (load_insn) < 0)
+      if (recog_memoized (load_insn) < 0
+	  || (extract_insn (load_insn),
+	      !constrain_operands (1, get_enabled_alternatives (load_insn))))
 	{
 	  /* Restore original.  */
 	  if (is_dest)

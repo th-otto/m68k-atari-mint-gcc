@@ -8476,6 +8476,7 @@ m68k_ira_change_pseudo_allocno_class (int regno,
       && ((REG_POINTER (regno_reg_rtx[regno])
 	   && pseudo_used_as_mem_address_p (regno))
 	  || (ira_use_lra_p
+	      && !TARGET_COLDFIRE
 	      && pseudo_pointer_derived_p (regno)
 	      && pseudo_only_addr_ops_p (regno))))
     return ADDR_REGS;
