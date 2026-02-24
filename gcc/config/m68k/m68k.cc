@@ -8452,8 +8452,8 @@ m68k_ira_change_pseudo_allocno_class (int regno,
 
   /* When costs are equal (best_class == GENERAL_REGS) or IRA prefers
      ADDR_REGS (best_class == ADDR_REGS) but the allocno class was
-     widened, and the pseudo is pointer-typed or pointer-derived AND
-     actually used as a memory address base, prefer ADDR_REGS.
+     widened, and the pseudo is pointer-typed AND actually used as a
+     memory address base, prefer ADDR_REGS.
 
      The REG_POINTER check alone is insufficient: many pointer pseudos
      are only used in copies or arithmetic (e.g., saving a base pointer
@@ -8467,16 +8467,22 @@ m68k_ira_change_pseudo_allocno_class (int regno,
      hook), then pass 1 widens allocno_class back to GENERAL_REGS
      but keeps best as ADDR_REGS.
 
-     For LRA mode, also promote pointer-derived pseudos (e.g., loop
-     induction variables computed from pointer values) that only use
-     addr-reg-compatible operations.  This compensates for LRA's flat
-     coloring keeping caller-save registers in the profitable set.  */
-  if ((best_class == GENERAL_REGS || best_class == ADDR_REGS)
+     ColdFire is excluded from all ADDR_REGS promotion: its ISA
+     constraints differ from classic 68k, and forcing ADDR_REGS can
+     create unsatisfiable allocation conflicts that cause IRA/LRA to
+     loop indefinitely.
+
+     For LRA mode on classic 68k, also promote pointer-derived pseudos
+     (e.g., loop induction variables computed from pointer values) that
+     only use addr-reg-compatible operations.  This compensates for
+     LRA's flat coloring keeping caller-save registers in the
+     profitable set.  */
+  if (!TARGET_COLDFIRE
+      && (best_class == GENERAL_REGS || best_class == ADDR_REGS)
       && allocno_class == GENERAL_REGS
       && ((REG_POINTER (regno_reg_rtx[regno])
 	   && pseudo_used_as_mem_address_p (regno))
 	  || (ira_use_lra_p
-	      && !TARGET_COLDFIRE
 	      && pseudo_pointer_derived_p (regno)
 	      && pseudo_only_addr_ops_p (regno))))
     return ADDR_REGS;
@@ -8491,7 +8497,7 @@ m68k_ira_change_pseudo_allocno_class (int regno,
 
   /* Check if this pseudo is actually used as a memory address.
      If so, force ADDR_REGS to avoid reload copies.  */
-  if (pseudo_used_as_mem_address_p (regno))
+  if (!TARGET_COLDFIRE && pseudo_used_as_mem_address_p (regno))
     return ADDR_REGS;
 
   /* Pseudo is only used for arithmetic/comparisons - let IRA decide.  */
