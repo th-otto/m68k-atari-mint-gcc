@@ -1460,6 +1460,185 @@ reorder_mem_accesses (auto_vec<reorder_mem_info> &accesses)
   return true;
 }
 
+/* Information about a constant-address memory access.  */
+
+struct const_addr_info
+{
+  gimple *stmt;           /* The statement.  */
+  tree mem_ref;           /* The MEM_REF tree.  */
+  HOST_WIDE_INT abs_addr; /* Absolute byte address.  */
+  HOST_WIDE_INT size;     /* Access size in bytes.  */
+  bool is_lhs;            /* True if this is the LHS (store).  */
+};
+
+/* Comparison function for sorting by absolute address.  */
+
+static int
+compare_const_addr (const void *a, const void *b)
+{
+  const const_addr_info *ca = (const const_addr_info *) a;
+  const const_addr_info *cb = (const const_addr_info *) b;
+
+  if (ca->abs_addr < cb->abs_addr)
+    return -1;
+  if (ca->abs_addr > cb->abs_addr)
+    return 1;
+  return 0;
+}
+
+/* Normalize constant-address bases in BB.
+
+   When loop unrolling produces MEM_REFs with different INTEGER_CST base
+   pointers that access contiguous memory, this rewrites them to share
+   a common (lowest) base with increasing offsets.  This enables the RTL
+   pipeline to use a single address register for the entire sequence.  */
+
+static bool
+normalize_constant_address_bases (basic_block bb)
+{
+  auto_vec<const_addr_info> accesses;
+
+  /* Collect constant-address memory accesses.  */
+  for (gimple_stmt_iterator gsi = gsi_start_bb (bb);
+       !gsi_end_p (gsi); gsi_next (&gsi))
+    {
+      gimple *stmt = gsi_stmt (gsi);
+
+      if (!gimple_assign_single_p (stmt))
+	continue;
+
+      if (gimple_has_volatile_ops (stmt))
+	continue;
+
+      tree lhs = gimple_assign_lhs (stmt);
+      tree rhs = gimple_assign_rhs1 (stmt);
+      tree mem_ref = NULL_TREE;
+      bool is_lhs = false;
+
+      if (TREE_CODE (lhs) == MEM_REF)
+	{
+	  mem_ref = lhs;
+	  is_lhs = true;
+	}
+      else if (TREE_CODE (rhs) == MEM_REF)
+	{
+	  mem_ref = rhs;
+	  is_lhs = false;
+	}
+      else
+	continue;
+
+      /* The MEM_REF must have an INTEGER_CST pointer (constant address).  */
+      tree ptr = TREE_OPERAND (mem_ref, 0);
+      tree mem_offset = TREE_OPERAND (mem_ref, 1);
+
+      if (TREE_CODE (ptr) != INTEGER_CST || TREE_CODE (mem_offset) != INTEGER_CST)
+	continue;
+
+      /* Resolve full address including any outer COMPONENT_REF etc.  */
+      poly_int64 bit_offset, bit_size, bit_max_size;
+      bool reverse;
+      tree base = get_ref_base_and_extent (mem_ref, &bit_offset, &bit_size,
+					   &bit_max_size, &reverse);
+
+      if (!bit_offset.is_constant () || !bit_size.is_constant ())
+	continue;
+      if (!known_eq (bit_size, bit_max_size))
+	continue;
+
+      /* For a plain MEM_REF[int_cst, offset], base should be the MEM_REF
+	 itself and bit_offset should be 0 (the offset is in operand 1).
+	 Compute the absolute address.  */
+      HOST_WIDE_INT abs_addr = tree_to_shwi (ptr) + tree_to_shwi (mem_offset)
+			       + bit_offset.to_constant () / BITS_PER_UNIT;
+      HOST_WIDE_INT size = bit_size.to_constant () / BITS_PER_UNIT;
+
+      if (size <= 0)
+	continue;
+
+      const_addr_info info;
+      info.stmt = stmt;
+      info.mem_ref = mem_ref;
+      info.abs_addr = abs_addr;
+      info.size = size;
+      info.is_lhs = is_lhs;
+      accesses.safe_push (info);
+    }
+
+  if (accesses.length () < 2)
+    return false;
+
+  /* Sort by absolute address.  */
+  accesses.qsort (compare_const_addr);
+
+  bool changed = false;
+  unsigned n = accesses.length ();
+
+  /* Partition into contiguous runs and normalize each.  */
+  unsigned run_start = 0;
+  while (run_start < n)
+    {
+      unsigned run_end = run_start + 1;
+      while (run_end < n
+	     && accesses[run_end].abs_addr
+		== accesses[run_end - 1].abs_addr
+		   + accesses[run_end - 1].size)
+	run_end++;
+
+      unsigned run_len = run_end - run_start;
+      if (run_len >= 2)
+	{
+	  HOST_WIDE_INT canonical_base = accesses[run_start].abs_addr;
+
+	  for (unsigned i = run_start; i < run_end; i++)
+	    {
+	      HOST_WIDE_INT new_offset = accesses[i].abs_addr - canonical_base;
+	      tree mem_ref = accesses[i].mem_ref;
+	      tree old_ptr = TREE_OPERAND (mem_ref, 0);
+	      tree old_off = TREE_OPERAND (mem_ref, 1);
+
+	      /* Skip if already normalized.  */
+	      if (tree_to_shwi (old_ptr) == canonical_base
+		  && tree_to_shwi (old_off) == new_offset)
+		continue;
+
+	      /* Build new MEM_REF with canonical base and new offset.  */
+	      tree ptr_type = TREE_TYPE (old_ptr);
+	      tree off_type = TREE_TYPE (old_off);
+	      tree new_ptr = build_int_cst (ptr_type, canonical_base);
+	      tree new_off = build_int_cst (off_type, new_offset);
+	      tree mem_type = TREE_TYPE (mem_ref);
+	      tree new_mem = build2 (MEM_REF, mem_type, new_ptr, new_off);
+
+	      /* Preserve alignment info.  */
+	      if (TREE_THIS_VOLATILE (mem_ref))
+		TREE_THIS_VOLATILE (new_mem) = 1;
+
+	      if (accesses[i].is_lhs)
+		gimple_assign_set_lhs (accesses[i].stmt, new_mem);
+	      else
+		gimple_assign_set_rhs1 (accesses[i].stmt, new_mem);
+
+	      update_stmt (accesses[i].stmt);
+	      changed = true;
+
+	      if (dump_file && (dump_flags & TDF_DETAILS))
+		{
+		  fprintf (dump_file,
+			   "m68k: Normalized const-addr base to %ld+%ld: ",
+			   (long) canonical_base, (long) new_offset);
+		  print_gimple_stmt (dump_file, accesses[i].stmt, 0,
+				     TDF_SLIM);
+		}
+	    }
+	}
+
+      run_start = run_end;
+    }
+
+  return changed;
+}
+
 /* Main function for the reorder_mem pass.  */
 
 static unsigned int
@@ -1470,6 +1649,11 @@ m68k_reorder_mem (function *fun)
 
   FOR_EACH_BB_FN (bb, fun)
     {
+      /* Normalize constant-address bases first so contiguous accesses
+	 to absolute addresses share a common base pointer.  */
+      if (normalize_constant_address_bases (bb))
+	changed = true;
+
       hash_map<tree, auto_vec<reorder_mem_info> *> base_map;
 
       /* Collect memory accesses grouped by base pointer.  */
@@ -1527,8 +1711,7 @@ public:
 
   bool gate (function *) final override
   {
-    /* Only run at -O2 or higher, not at -Os.  */
-    return optimize >= 2 && !optimize_size && flag_m68k_reorder_mem;
+    return optimize > 0 && flag_m68k_reorder_mem;
   }
 
   unsigned int execute (function *func) final override
