@@ -20,6 +20,19 @@ along with GCC; see the file COPYING3.  If not see
 /* Define functions defined in aux-output.c and used in templates.  */
 
 #ifdef RTX_CODE
+
+/* Decomposed m68k address.  */
+struct m68k_address {
+  enum rtx_code code;
+  rtx base;
+  rtx index;
+  rtx offset;
+  int scale;
+};
+
+extern bool m68k_decompose_address (machine_mode, rtx, bool,
+				    struct m68k_address *);
+
 extern enum m68k_function_kind m68k_get_function_kind (tree);
 extern HOST_WIDE_INT m68k_initial_elimination_offset (int from, int to);
 
@@ -125,3 +138,20 @@ void m68k_order_regs_for_local_alloc(void);
 void m68k_call_abi_override (const_tree);
 enum calling_abi m68k_function_type_abi (const_tree);
 enum calling_abi m68k_cfun_abi (void);
+
+/* Functions from m68k-rtl-passes.cc.  */
+class rtl_opt_pass;
+namespace gcc { class context; }
+extern rtl_opt_pass *make_m68k_pass_normalize_autoinc (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_opt_autoinc (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_elim_andi (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_highword_opt (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_avail_copy_elim (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_reorder_for_cc (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_canon_scaled_index (gcc::context *);
+
+/* Functions from m68k-gimple-passes.cc.  */
+class gimple_opt_pass;
+extern gimple_opt_pass *make_m68k_pass_autoinc_split (gcc::context *);
+extern gimple_opt_pass *make_m68k_pass_narrow_index_mult (gcc::context *);
+extern gimple_opt_pass *make_m68k_pass_reorder_mem (gcc::context *);

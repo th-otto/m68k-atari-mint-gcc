@@ -705,12 +705,12 @@ doloop_optimize (class loop *loop)
   if (est_niter == -1)
     est_niter = get_likely_max_loop_iterations_int (loop);
 
-  if (est_niter >= 0 && est_niter < 3)
+  if (est_niter >= 0 && est_niter < targetm.doloop_min_iterations)
     {
       if (dump_file)
 	fprintf (dump_file,
-		 "Doloop: Too few iterations (%u) to be profitable.\n",
-		 (unsigned int)est_niter);
+		 "Doloop: Too few iterations (%u, min %d) to be profitable.\n",
+		 (unsigned int)est_niter, targetm.doloop_min_iterations);
       return false;
     }
 

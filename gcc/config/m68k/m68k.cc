@@ -51,6 +51,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "stmt.h"
 #include "expr.h"
 #include "reload.h"
+#include "ira.h"
 #include "tm_p.h"
 #include "target.h"
 #include "debug.h"
@@ -68,6 +69,9 @@ along with GCC; see the file COPYING3.  If not see
 #include "rtl-iter.h"
 #include "toplev.h"
 #include "dbxout.h"
+#include "cfgloop.h"
+#include "gimple.h"
+#include "gimple-iterator.h"
 
 /* This file should be included last.  */
 #include "target-def.h"
@@ -142,14 +146,8 @@ static struct m68k_frame current_frame;
    INDEX is either HImode or SImode.  The other fields are SImode.
 
    If CODE is PRE_DEC, the address is -(BASE).  If CODE is POST_INC,
-   the address is (BASE)+.  */
-struct m68k_address {
-  enum rtx_code code;
-  rtx base;
-  rtx index;
-  rtx offset;
-  int scale;
-};
+   the address is (BASE)+.  struct m68k_address is defined in
+   m68k-protos.h.  */
 
 static int m68k_sched_adjust_cost (rtx_insn *, int, rtx_insn *, int,
 				   unsigned int);
@@ -185,6 +183,14 @@ static bool m68k_ok_for_sibcall_p (tree, tree);
 static bool m68k_tls_symbol_p (rtx);
 static rtx m68k_legitimize_address (rtx, rtx, machine_mode);
 static bool m68k_rtx_costs (rtx, machine_mode, int, int, int *, bool);
+static int m68k_insn_cost (rtx_insn *, bool);
+static int m68k_address_cost (rtx, machine_mode, addr_space_t, bool);
+
+/* Cost calculation functions - implementations in m68k_costs.cc.  */
+extern bool m68k_rtx_costs_impl (rtx, machine_mode, int, int, int *, bool);
+extern int m68k_insn_cost_impl (rtx_insn *, bool);
+extern int m68k_address_cost_impl (rtx, machine_mode, bool);
+extern int m68k_register_move_cost_impl (reg_class_t, reg_class_t);
 #if M68K_HONOR_TARGET_STRICT_ALIGNMENT
 static bool m68k_return_in_memory (const_tree, const_tree);
 #endif
@@ -288,6 +294,19 @@ static void m68k_file_end (void);
 
 #undef TARGET_RTX_COSTS
 #define TARGET_RTX_COSTS m68k_rtx_costs
+
+#undef TARGET_INSN_COST
+#define TARGET_INSN_COST m68k_insn_cost
+
+#undef TARGET_ADDRESS_COST
+#define TARGET_ADDRESS_COST m68k_address_cost
+
+#undef TARGET_REGISTER_MOVE_COST
+#define TARGET_REGISTER_MOVE_COST m68k_register_move_cost
+
+
+#undef TARGET_NEW_ADDRESS_PROFITABLE_P
+#define TARGET_NEW_ADDRESS_PROFITABLE_P m68k_new_address_profitable_p
 
 #undef TARGET_ATTRIBUTE_TABLE
 #define TARGET_ATTRIBUTE_TABLE m68k_attribute_table
@@ -415,6 +434,36 @@ TARGET_GNU_ATTRIBUTES (m68k_attribute_table,
 
 #undef TARGET_DOCUMENTATION_NAME
 #define TARGET_DOCUMENTATION_NAME "m68k"
+
+#undef TARGET_CAN_USE_DOLOOP_P
+#define TARGET_CAN_USE_DOLOOP_P m68k_can_use_doloop_p
+
+#undef TARGET_PREFERRED_DOLOOP_MODE
+#define TARGET_PREFERRED_DOLOOP_MODE m68k_preferred_doloop_mode
+
+#undef TARGET_PREDICT_DOLOOP_P
+#define TARGET_PREDICT_DOLOOP_P m68k_predict_doloop_p
+
+/* Credit for using doloop IV for loop exit comparison.
+   dbra is one instruction vs cmp.l + jne (two instructions).
+   TODO: Perhaps this should be COSTS_N_INSNS (-2) to more strongly
+   prefer dbra; more test cases and tuning needed.  */
+#undef TARGET_DOLOOP_COST_FOR_COMPARE
+#define TARGET_DOLOOP_COST_FOR_COMPARE (COSTS_N_INSNS (-1))
+
+/* Enable doloop for loops with 1+ iterations (default is 3).
+   The dbra instruction is always beneficial on m68k.  */
+#undef TARGET_DOLOOP_MIN_ITERATIONS
+#define TARGET_DOLOOP_MIN_ITERATIONS 1
+
+/* Prefer jump table dispatch for runtime loop unrolling.
+   The serial compare cascade generates 12+ instructions on m68k for
+   unroll factor 8.  A jump table is 3 instructions + 16 bytes of data.  */
+#undef TARGET_PREFER_RUNTIME_UNROLL_TABLEJUMP
+#define TARGET_PREFER_RUNTIME_UNROLL_TABLEJUMP true
+
+#undef TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS
+#define TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS m68k_ira_change_pseudo_allocno_class
 
 
 /* Base flags for 68k ISAs.  */
@@ -818,6 +867,46 @@ m68k_option_override_internal (bool main_args_p)
    * Introduced by commit 04c9cf5c786b94fbe3f6f21f06cae73a7575ff7a
    */
   flag_fold_mem_offsets = 0;
+
+  /* Disable IV splitting in the loop unroller.  When enabled, the unroller
+     generates base+offset addressing for each unrolled iteration, which
+     prevents efficient post-increment addressing.  With this disabled,
+     the unroller chains increments, enabling move.l (%a0)+,(%a1)+ patterns
+     that are much more efficient on m68k.  */
+  if (!OPTION_SET_P (flag_split_ivs_in_unroller))
+    flag_split_ivs_in_unroller = 0;
+
+  /* Enable register renaming at -O2+ to eliminate dead register copies
+     left by IRA, e.g. function argument copies where the original
+     register could be reused directly.  The m68k ISA has no encoding
+     differences between registers (unlike x86 REX), so renaming has
+     no code-size downside.  */
+  if (optimize >= 2 && !OPTION_SET_P (flag_rename_registers))
+    flag_rename_registers = 1;
+
+  /* Prevent PRE from splitting self-loop edges.  On m68k, tight self-loops
+     with mem[reg+offset] + reg+=N can be converted to post-increment
+     addressing by auto_inc_dec, but only when both insns are in the same BB.
+     PRE sometimes splits such loops, preventing post-increment formation.  */
+  if (!OPTION_SET_P (param_gcse_no_selfloop_split))
+    param_gcse_no_selfloop_split = 1;
+
+  /* On m68k, instructions like add.w %dN,%dN read the register once,
+     but the RTL (plus:HI rN rN) lists it in two operand positions.
+     Without dedup, IRA inflates the allocno frequency, distorting
+     thread priority during graph coloring and causing suboptimal
+     register choices.  */
+  if (!OPTION_SET_P (param_ira_ignore_duplicate_uses_in_insn))
+    param_ira_ignore_duplicate_uses_in_insn = 1;
+
+  /* Merge pass-through allocnos with parent region even when register
+     pressure is high.  On m68k with only 15 general registers, IRA's
+     hierarchical coloring often splits loop-invariant pseudos into
+     separate allocnos at each loop level, producing unnecessary copies.
+     For pass-through allocnos (zero references at the inner level),
+     merging eliminates these copies without increasing pressure.  */
+  if (!OPTION_SET_P (flag_ira_merge_passthrough))
+    flag_ira_merge_passthrough = 1;
 }
 
 /* Implement the TARGET_OPTION_OVERRIDE hook.  */
@@ -1861,16 +1950,16 @@ m68k_ok_for_sibcall_p (tree decl, tree exp)
 	return false;
     }
 
-  /* The FASTCALL ABI has more call-clobbered registers;
-      disallow sibcalls from STD to FASTCALL.  */
-  if (cfun->machine->call_abi == STD_ABI
-      && m68k_function_type_abi (type) == FASTCALL_ABI)
+  /* Reject cross-ABI sibcalls entirely.  */
+  if (m68k_function_type_abi (type) != cfun->machine->call_abi)
       return false;
 
-  /* FIXME: currently does not work at all for FASTCALL, because the
-     A2 register for the call will be restored in the epilogue
-     before being used */
-  if (cfun->machine->call_abi == FASTCALL_ABI || m68k_function_type_abi (type) != cfun->machine->call_abi)
+  /* For FASTCALL, only allow direct sibcalls (to a known symbol).
+     Indirect sibcalls would need m68k_legitimize_sibcall_address to
+     load the target into STATIC_CHAIN_REGNUM (A0), which conflicts
+     with FASTCALL argument registers.  Direct calls just emit
+     "jra symbol" with no register conflict.  */
+  if (cfun->machine->call_abi == FASTCALL_ABI && !decl)
       return false;
 
   kind = m68k_get_function_kind (current_function_decl);
@@ -2679,7 +2768,7 @@ m68k_jump_table_ref_p (rtx x)
    STRICT_P says whether strict checking is needed.  If the address
    is valid, describe its components in *ADDRESS.  */
 
-static bool
+bool
 m68k_decompose_address (machine_mode mode, rtx x,
 			bool strict_p, struct m68k_address *address)
 {
@@ -2821,6 +2910,43 @@ m68k_decompose_address (machine_mode mode, rtx x,
 	{
 	  address->base = XEXP (x, 1);
 	  return true;
+	}
+
+      /* Recognize (plus (plus base index) index) as base + index*2.
+	 When fwprop substitutes (plus reg reg) for x*2 into a memory
+	 address, simplify_gen_binary reassociates it from
+	 (plus base (plus idx idx)) to (plus (plus base idx) idx).
+	 Only accept this on 68020+ which supports scaled indexing.
+	 The m68k-canon-scaled-index pass (after fwprop, before IRA)
+	 rewrites this to (plus base (ashift idx 1)) so that LRA's
+	 decompose_normal_address can handle it.  */
+      if ((TARGET_68020 || TARGET_COLDFIRE)
+	  && GET_CODE (XEXP (x, 0)) == PLUS)
+	{
+	  rtx inner = XEXP (x, 0);
+	  rtx outer_right = XEXP (x, 1);
+
+	  /* (plus (plus A B) C) where B == C → base=A, index=C, scale=2.  */
+	  if (rtx_equal_p (XEXP (inner, 1), outer_right)
+	      && m68k_legitimate_base_reg_p (XEXP (inner, 0), strict_p)
+	      && m68k_legitimate_index_reg_p (outer_right, strict_p))
+	    {
+	      address->base = XEXP (inner, 0);
+	      address->index = outer_right;
+	      address->scale = 2;
+	      return true;
+	    }
+
+	  /* (plus (plus A B) C) where A == C → base=B, index=C, scale=2.  */
+	  if (rtx_equal_p (XEXP (inner, 0), outer_right)
+	      && m68k_legitimate_base_reg_p (XEXP (inner, 1), strict_p)
+	      && m68k_legitimate_index_reg_p (outer_right, strict_p))
+	    {
+	      address->base = XEXP (inner, 1);
+	      address->index = outer_right;
+	      address->scale = 2;
+	      return true;
+	    }
 	}
     }
   return false;
@@ -3488,185 +3614,54 @@ m68k_const_method (HOST_WIDE_INT i)
   return MOVL;
 }
 
-/* Return the cost of moving constant I into a data register.  */
-
-static int
-const_int_cost (HOST_WIDE_INT i)
-{
-  switch (m68k_const_method (i))
-    {
-    case MOVQ:
-      /* Constants between -128 and 127 are cheap due to moveq.  */
-      return 0;
-    case MVZ:
-    case MVS:
-    case NOTB:
-    case NOTW:
-    case NEGW:
-    case SWAP:
-      /* Constants easily generated by moveq + not.b/not.w/neg.w/swap.  */
-      return 1;
-    case MOVL:
-      return 2;
-    default:
-      gcc_unreachable ();
-    }
-}
+/* Wrapper for m68k_rtx_costs_impl in m68k_costs.cc.  */
 
 static bool
 m68k_rtx_costs (rtx x, machine_mode mode, int outer_code,
-		int opno ATTRIBUTE_UNUSED,
-		int *total, bool speed ATTRIBUTE_UNUSED)
+		int opno, int *total, bool speed)
 {
-  int code = GET_CODE (x);
+  return m68k_rtx_costs_impl (x, mode, outer_code, opno, total, speed);
+}
 
-  switch (code)
-    {
-    case CONST_INT:
-      /* Constant zero is super cheap due to clr instruction.  */
-      if (x == const0_rtx)
-	*total = 0;
-      else
-        *total = const_int_cost (INTVAL (x));
-      return true;
+/* Wrapper for m68k_insn_cost_impl in m68k_costs.cc.  */
 
-    case CONST:
-    case LABEL_REF:
-    case SYMBOL_REF:
-      *total = 3;
-      return true;
+static int
+m68k_insn_cost (rtx_insn *insn, bool speed)
+{
+  return m68k_insn_cost_impl (insn, speed);
+}
 
-    case CONST_DOUBLE:
-      /* Make 0.0 cheaper than other floating constants to
-         encourage creating tstsf and tstdf insns.  */
-      if ((GET_RTX_CLASS (outer_code) == RTX_COMPARE
-	   || GET_RTX_CLASS (outer_code) == RTX_COMM_COMPARE)
-          && (x == CONST0_RTX (SFmode) || x == CONST0_RTX (DFmode)))
-	*total = 4;
-      else
-	*total = 5;
-      return true;
+/* Wrapper for m68k_address_cost_impl in m68k_costs.cc.  */
 
-    /* These are vaguely right for a 68020.  */
-    /* The costs for long multiply have been adjusted to work properly
-       in synth_mult on the 68020, relative to an average of the time
-       for add and the time for shift, taking away a little more because
-       sometimes move insns are needed.  */
-    /* div?.w is relatively cheaper on 68000 counted in COSTS_N_INSNS
-       terms.  */
-#define MULL_COST				\
-  (TUNE_68060 ? 2				\
-   : TUNE_68040 ? 5				\
-   : (TUNE_CFV2 && TUNE_EMAC) ? 3		\
-   : (TUNE_CFV2 && TUNE_MAC) ? 4		\
-   : TUNE_CFV2 ? 8				\
-   : TARGET_COLDFIRE ? 3 : 13)
+static int
+m68k_address_cost (rtx x, machine_mode mode,
+		   addr_space_t as ATTRIBUTE_UNUSED,
+		   bool speed)
+{
+  return m68k_address_cost_impl (x, mode, speed);
+}
 
-#define MULW_COST				\
-  (TUNE_68060 ? 2				\
-   : TUNE_68040 ? 3				\
-   : TUNE_68000_10 ? 5				\
-   : (TUNE_CFV2 && TUNE_EMAC) ? 3		\
-   : (TUNE_CFV2 && TUNE_MAC) ? 2		\
-   : TUNE_CFV2 ? 8				\
-   : TARGET_COLDFIRE ? 2 : 8)
+/* Wrapper for m68k_register_move_cost_impl in m68k_costs.cc.  */
 
-#define DIVW_COST				\
-  (TARGET_CF_HWDIV ? 11				\
-   : TUNE_68000_10 || TARGET_COLDFIRE ? 12 : 27)
+static int
+m68k_register_move_cost (machine_mode mode ATTRIBUTE_UNUSED,
+			 reg_class_t from, reg_class_t to)
+{
+  return m68k_register_move_cost_impl (from, to);
+}
 
-    case PLUS:
-      /* An lea costs about three times as much as a simple add.  */
-      if (mode == SImode
-	  && GET_CODE (XEXP (x, 1)) == REG
-	  && ((GET_CODE (XEXP (x, 0)) == MULT
-	       && GET_CODE (XEXP (XEXP (x, 0), 0)) == REG
-	       && GET_CODE (XEXP (XEXP (x, 0), 1)) == CONST_INT
-	       && (INTVAL (XEXP (XEXP (x, 0), 1)) == 2
-		   || INTVAL (XEXP (XEXP (x, 0), 1)) == 4
-		   || INTVAL (XEXP (XEXP (x, 0), 1)) == 8))
-	      || (GET_CODE (XEXP (x, 0)) == ASHIFT
-		  && GET_CODE (XEXP (XEXP (x, 0), 0)) == REG
-		  && GET_CODE (XEXP (XEXP (x, 0), 1)) == CONST_INT
-		  && ((unsigned HOST_WIDE_INT) INTVAL (XEXP (XEXP (x, 0), 1))
-		      <= 3))))
-	{
-	    /* lea an@(dx:l:i),am */
-	    *total = COSTS_N_INSNS (TARGET_COLDFIRE ? 2 : 3);
-	    return true;
-	}
-      return false;
+/* Implement TARGET_NEW_ADDRESS_PROFITABLE_P.
+   Prevent the scheduler from replacing auto-increment addressing with
+   base + offset addressing unless it's actually cheaper.  */
 
-    case ASHIFT:
-    case ASHIFTRT:
-    case LSHIFTRT:
-      if (TUNE_68060)
-	{
-          *total = COSTS_N_INSNS(1);
-	  return true;
-	}
-      if (TUNE_68000_10)
-        {
-	  if (GET_CODE (XEXP (x, 1)) == CONST_INT)
-	    {
-	      if (INTVAL (XEXP (x, 1)) < 16)
-	        *total = COSTS_N_INSNS (2) + INTVAL (XEXP (x, 1)) / 2;
-	      else
-	        /* We're using clrw + swap for these cases.  */
-	        *total = COSTS_N_INSNS (4) + (INTVAL (XEXP (x, 1)) - 16) / 2;
-	    }
-	  else
-	    *total = COSTS_N_INSNS (10); /* Worst case.  */
-	  return true;
-        }
-      /* A shift by a big integer takes an extra instruction.  */
-      if (GET_CODE (XEXP (x, 1)) == CONST_INT
-	  && (INTVAL (XEXP (x, 1)) == 16))
-	{
-	  *total = COSTS_N_INSNS (2);	 /* clrw;swap */
-	  return true;
-	}
-      if (GET_CODE (XEXP (x, 1)) == CONST_INT
-	  && !(INTVAL (XEXP (x, 1)) > 0
-	       && INTVAL (XEXP (x, 1)) <= 8))
-	{
-	  *total = COSTS_N_INSNS (TARGET_COLDFIRE ? 1 : 3);	 /* lsr #i,dn */
-	  return true;
-	}
-      return false;
-
-    case MULT:
-      if ((GET_CODE (XEXP (x, 0)) == ZERO_EXTEND
-	   || GET_CODE (XEXP (x, 0)) == SIGN_EXTEND)
-	  && mode == SImode)
-        *total = COSTS_N_INSNS (MULW_COST);
-      else if (mode == QImode || mode == HImode)
-        *total = COSTS_N_INSNS (MULW_COST);
-      else
-        *total = COSTS_N_INSNS (MULL_COST);
-      return true;
-
-    case DIV:
-    case UDIV:
-    case MOD:
-    case UMOD:
-      if (mode == QImode || mode == HImode)
-        *total = COSTS_N_INSNS (DIVW_COST);	/* div.w */
-      else if (TARGET_CF_HWDIV)
-        *total = COSTS_N_INSNS (18);
-      else
-	*total = COSTS_N_INSNS (43);		/* div.l */
-      return true;
-
-    case ZERO_EXTRACT:
-      if (GET_RTX_CLASS (outer_code) == RTX_COMPARE
-	  || GET_RTX_CLASS (outer_code) == RTX_COMM_COMPARE)
-        *total = 0;
-      return false;
-
-    default:
-      return false;
-    }
+static bool
+m68k_new_address_profitable_p (rtx memref, rtx_insn *insn, rtx new_addr)
+{
+  addr_space_t as = MEM_ADDR_SPACE (memref);
+  bool speed = optimize_bb_for_speed_p (BLOCK_FOR_INSN (insn));
+  int old_cost = address_cost (XEXP (memref, 0), GET_MODE (memref), as, speed);
+  int new_cost = address_cost (new_addr, GET_MODE (memref), as, speed);
+  return new_cost <= old_cost;
 }
 
 /* Return an instruction to move CONST_INT OPERANDS[1] into data register
@@ -8084,6 +8079,430 @@ m68k_use_lra_p ()
 #else
 #define NEED_INDICATE_EXEC_STACK	0
 #endif
+
+/* Implement TARGET_CAN_USE_DOLOOP_P.
+   The dbra instruction operates only on the low 16 bits of a data register,
+   supporting a maximum of 65536 iterations (counting from 65535 down to -1).  */
+
+static bool
+m68k_can_use_doloop_p (const widest_int &iterations,
+		       const widest_int &iterations_max,
+		       unsigned int loop_depth,
+		       bool entered_at_top ATTRIBUTE_UNUSED)
+{
+  if (!flag_m68k_doloop)
+    return false;
+
+  /* ColdFire doesn't have dbra.  */
+  if (TARGET_COLDFIRE)
+    return false;
+
+  /* Allow up to two levels of loop nesting for dbra.  Each dbra loop
+     typically uses ~2 IV registers, so 2 nested loops use ~4 registers,
+     roughly 25% of the available register set.  This keeps register
+     pressure manageable.  Deeper nesting has diminishing returns.  */
+  if (loop_depth > 2)
+    return false;
+
+  /* If we know the exact iteration count, check it fits in 16 bits.
+     dbra can do up to 65536 iterations (counter 65535 down to -1).  */
+  if (iterations != 0)
+    return wi::leu_p (iterations, 65536);
+
+  /* Unknown exact iteration count - check the maximum bound.
+     iterations_max == 0 means the maximum is also unknown.  */
+  if (iterations_max == 0)
+    {
+      /* Both iteration count and maximum are unknown.
+	 We cannot safely use dbra since we can't guarantee
+	 the count fits in 16 bits.  */
+      return false;
+    }
+
+  /* Maximum is known - check it fits in 16 bits.  */
+  return wi::leu_p (iterations_max, 65536);
+}
+
+/* Implement TARGET_PREFERRED_DOLOOP_MODE.
+   Always return HImode since dbra operates on 16-bit values.
+   The can_use_doloop_p hook ensures iteration counts fit in 16 bits.  */
+
+static machine_mode
+m68k_preferred_doloop_mode (machine_mode mode ATTRIBUTE_UNUSED)
+{
+  return HImode;
+}
+
+/* Implement TARGET_PREDICT_DOLOOP_P.
+   This helps IVOPTS preserve count-based IVs when doloop is likely to be used.
+   Without this, IVOPTS at -O2 may transform counted loops into pointer-based
+   loops before the DOLOOP pass runs, preventing dbra usage.  */
+
+static bool
+m68k_predict_doloop_p (class loop *loop)
+{
+  if (!flag_m68k_doloop)
+    return false;
+
+  /* ColdFire doesn't have dbra.  */
+  if (TARGET_COLDFIRE)
+    return false;
+
+  /* Check iteration bounds if available.
+     dbra can handle up to 65536 iterations.  */
+  if (loop->any_upper_bound
+      && wi::gtu_p (loop->nb_iterations_upper_bound, 65536))
+    return false;
+
+  /* For loops with inner loops, check that the outer loop body
+     (excluding inner loops) doesn't contain function calls.
+     Function calls clobber 4 or 5 caller-saved registers, so avoiding dbra
+     in outer loops with calls keeps register pressure under ~25% of the
+     register set.  Inner loops still benefit from dbra since they are
+     typically hotter and gain more from the optimization.  */
+  if (loop->inner != NULL)
+    {
+      basic_block *bbs = get_loop_body (loop);
+      unsigned n_bbs = loop->num_nodes;
+
+      for (unsigned i = 0; i < n_bbs; i++)
+	{
+	  basic_block bb = bbs[i];
+
+	  /* Skip BBs that are part of inner loops.  */
+	  if (bb->loop_father != loop)
+	    continue;
+
+	  /* Check all statements in this BB for calls.  */
+	  for (gimple_stmt_iterator gsi = gsi_start_bb (bb);
+	       !gsi_end_p (gsi); gsi_next (&gsi))
+	    {
+	      gimple *stmt = gsi_stmt (gsi);
+	      if (is_gimple_call (stmt)
+		  && !gimple_call_internal_p (stmt))
+		{
+		  free (bbs);
+		  return false;
+		}
+	    }
+	}
+      free (bbs);
+    }
+
+  /* Predict doloop will be used - tell IVOPTS to preserve count-based IV.  */
+  return true;
+}
+
+
+/* Return true if all occurrences of REGNO in expression X appear in
+   contexts where m68k address registers are sufficient.  PARENT_CODE
+   is the RTX code of X's parent node (UNKNOWN at top level).
+
+   Address registers handle: move, add, sub, compare, memory address.
+   They cannot do: bitwise ops, shifts, multiply, divide, negate,
+   sign/zero extend, strict_low_part writes.  */
+
+static bool
+regno_addr_safe_context_p (rtx x, unsigned int regno,
+			   enum rtx_code parent_code)
+{
+  if (x == NULL_RTX)
+    return true;
+
+  enum rtx_code code = GET_CODE (x);
+
+  /* Found our pseudo -- check if the parent context is addr-safe.  */
+  if (code == REG && REGNO (x) == regno)
+    {
+      switch (parent_code)
+	{
+	/* Operations that require data registers on m68k.  */
+	case AND: case IOR: case XOR: case NOT:
+	case ASHIFT: case ASHIFTRT: case LSHIFTRT:
+	case ROTATE: case ROTATERT:
+	case MULT: case DIV: case MOD: case UDIV: case UMOD:
+	case NEG: case ABS:
+	case SIGN_EXTEND: case ZERO_EXTEND: case TRUNCATE:
+	case STRICT_LOW_PART:
+	case UNSPEC: case UNSPEC_VOLATILE:
+	  return false;
+	default:
+	  return true;
+	}
+    }
+
+  /* Special handling for SET: the destination is addr-safe only if
+     the source operation is addr-reg compatible.  */
+  if (code == SET)
+    {
+      rtx dest = SET_DEST (x);
+      rtx src = SET_SRC (x);
+
+      if (refers_to_regno_p (regno, dest))
+	{
+	  rtx d = dest;
+	  /* strict_low_part write requires data register.  */
+	  if (GET_CODE (d) == STRICT_LOW_PART)
+	    {
+	      d = XEXP (d, 0);
+	      if (GET_CODE (d) == SUBREG)
+		d = SUBREG_REG (d);
+	      if (REG_P (d) && REGNO (d) == regno)
+		return false;
+	    }
+	  if (GET_CODE (d) == SUBREG)
+	    d = SUBREG_REG (d);
+	  if (REG_P (d) && REGNO (d) == regno)
+	    {
+	      /* Pseudo IS the SET destination.  The source operation
+		 determines whether this needs a data register.  */
+	      switch (GET_CODE (src))
+		{
+		case AND: case IOR: case XOR: case NOT:
+		case ASHIFT: case ASHIFTRT: case LSHIFTRT:
+		case ROTATE: case ROTATERT:
+		case MULT: case DIV: case MOD: case UDIV: case UMOD:
+		case NEG: case ABS:
+		case SIGN_EXTEND: case ZERO_EXTEND: case TRUNCATE:
+		case UNSPEC: case UNSPEC_VOLATILE:
+		  return false;
+		default:
+		  break;
+		}
+	    }
+	  else
+	    {
+	      /* Pseudo is nested in dest (e.g., in MEM address).  */
+	      if (!regno_addr_safe_context_p (dest, regno, SET))
+		return false;
+	    }
+	}
+
+      return regno_addr_safe_context_p (src, regno, SET);
+    }
+
+  /* Recurse into sub-expressions with current code as parent.  */
+  const char *fmt = GET_RTX_FORMAT (code);
+  for (int i = GET_RTX_LENGTH (code) - 1; i >= 0; i--)
+    {
+      if (fmt[i] == 'e')
+	{
+	  if (!regno_addr_safe_context_p (XEXP (x, i), regno, code))
+	    return false;
+	}
+      else if (fmt[i] == 'E')
+	{
+	  for (int j = XVECLEN (x, i) - 1; j >= 0; j--)
+	    if (!regno_addr_safe_context_p (XVECEXP (x, i, j), regno, code))
+	      return false;
+	}
+    }
+  return true;
+}
+
+/* Return true if pseudo REGNO only participates in operations that
+   m68k address registers can handle (move, add, sub, compare,
+   memory addressing).  Scans all DEF and USE chain references.  */
+
+static bool
+pseudo_only_addr_ops_p (unsigned int regno)
+{
+  df_ref ref;
+
+  for (ref = DF_REG_DEF_CHAIN (regno); ref; ref = DF_REF_NEXT_REG (ref))
+    {
+      rtx_insn *insn = DF_REF_INSN (ref);
+      if (!insn || !INSN_P (insn))
+	continue;
+      if (!regno_addr_safe_context_p (PATTERN (insn), regno, UNKNOWN))
+	return false;
+    }
+
+  for (ref = DF_REG_USE_CHAIN (regno); ref; ref = DF_REF_NEXT_REG (ref))
+    {
+      rtx_insn *insn = DF_REF_INSN (ref);
+      if (!insn || !INSN_P (insn))
+	continue;
+      if (!regno_addr_safe_context_p (PATTERN (insn), regno, UNKNOWN))
+	return false;
+    }
+
+  return true;
+}
+
+/* Return true if pseudo REGNO is derived from a pointer source.
+   Checks if any DEF of REGNO is a simple copy (set reg reg) from
+   a REG_POINTER pseudo.  This catches cases where GCC's middle-end
+   loses the pointer attribute on a derived value.  */
+
+static bool
+pseudo_pointer_derived_p (unsigned int regno)
+{
+  df_ref ref;
+
+  for (ref = DF_REG_DEF_CHAIN (regno); ref; ref = DF_REF_NEXT_REG (ref))
+    {
+      rtx_insn *insn = DF_REF_INSN (ref);
+      if (!insn || !INSN_P (insn))
+	continue;
+      rtx pat = PATTERN (insn);
+      if (GET_CODE (pat) != SET)
+	continue;
+      rtx dest = SET_DEST (pat);
+      rtx src = SET_SRC (pat);
+      /* Check for simple reg-to-reg copy: (set (reg REGNO) (reg SRC)).  */
+      if (REG_P (dest) && REGNO (dest) == regno
+	  && REG_P (src) && REGNO (src) >= FIRST_PSEUDO_REGISTER
+	  && REG_POINTER (src))
+	return true;
+      /* Also check (set (reg REGNO) (plus (reg SRC) ...)) where SRC
+	 is a pointer (pointer arithmetic).  */
+      if (REG_P (dest) && REGNO (dest) == regno
+	  && GET_CODE (src) == PLUS
+	  && REG_P (XEXP (src, 0))
+	  && REGNO (XEXP (src, 0)) >= FIRST_PSEUDO_REGISTER
+	  && REG_POINTER (XEXP (src, 0)))
+	return true;
+    }
+  return false;
+}
+
+/* Helper: Check if REGNO is used as a memory address in INSN.
+   Recursively scans the RTX pattern looking for (mem (... regno ...)).  */
+
+static bool
+regno_used_as_mem_address_in_rtx (rtx x, unsigned int regno)
+{
+  if (x == NULL_RTX)
+    return false;
+
+  if (MEM_P (x))
+    {
+      /* Check if regno appears anywhere in the address.  */
+      rtx addr = XEXP (x, 0);
+      return refers_to_regno_p (regno, addr);
+    }
+
+  const char *fmt = GET_RTX_FORMAT (GET_CODE (x));
+  for (int i = GET_RTX_LENGTH (GET_CODE (x)) - 1; i >= 0; i--)
+    {
+      if (fmt[i] == 'e')
+	{
+	  if (regno_used_as_mem_address_in_rtx (XEXP (x, i), regno))
+	    return true;
+	}
+      else if (fmt[i] == 'E')
+	{
+	  for (int j = XVECLEN (x, i) - 1; j >= 0; j--)
+	    if (regno_used_as_mem_address_in_rtx (XVECEXP (x, i, j), regno))
+	      return true;
+	}
+    }
+  return false;
+}
+
+/* Check if pseudo REGNO is used as a memory address anywhere.  */
+
+static bool
+pseudo_used_as_mem_address_p (unsigned int regno)
+{
+  df_ref ref;
+
+  for (ref = DF_REG_USE_CHAIN (regno); ref; ref = DF_REF_NEXT_REG (ref))
+    {
+      rtx_insn *insn = DF_REF_INSN (ref);
+      if (insn && INSN_P (insn))
+	{
+	  if (regno_used_as_mem_address_in_rtx (PATTERN (insn), regno))
+	    return true;
+	}
+    }
+  return false;
+}
+
+/* Implement TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS.
+   Prevent IRA's allocno-class widening from defeating register-class
+   preferences determined by cost analysis.
+
+   DATA_REGS case: when costs say DATA_REGS is best but the allocno class
+   was widened to GENERAL_REGS, narrow it back.  Otherwise IRA thread
+   coalescing can pull the pseudo into an address register, forcing reload
+   to insert a copy through a data register.
+
+   ADDR_REGS case: when the pseudo is used as a memory base address, force
+   ADDR_REGS.  There is no (Dn) addressing mode on any 68k CPU.  Pseudos
+   used only for pointer arithmetic or comparisons can stay in data
+   registers to avoid unnecessary callee-save overhead.  */
+
+static reg_class_t
+m68k_ira_change_pseudo_allocno_class (int regno,
+				      reg_class_t allocno_class,
+				      reg_class_t best_class)
+{
+  if (!flag_m68k_ira_promote)
+    return allocno_class;
+
+  /* If DATA_REGS is best but the class was widened to GENERAL_REGS,
+     narrow it back.  This prevents thread coalescing from pulling
+     data-register-preferring pseudos into address registers, which
+     would force reload to insert a copy.  */
+  if (best_class == DATA_REGS
+      && allocno_class == GENERAL_REGS)
+    return DATA_REGS;
+
+  /* When costs are equal (best_class == GENERAL_REGS) or IRA prefers
+     ADDR_REGS (best_class == ADDR_REGS) but the allocno class was
+     widened, and the pseudo is pointer-typed AND actually used as a
+     memory address base, prefer ADDR_REGS.
+
+     The REG_POINTER check alone is insufficient: many pointer pseudos
+     are only used in copies or arithmetic (e.g., saving a base pointer
+     for later reuse).  Promoting these fills address registers and
+     forces non-pointer pseudos into suboptimal data registers.
+     The pseudo_used_as_mem_address_p guard ensures we only promote
+     pseudos that genuinely need address registers for memory access.
+
+     We also handle best_class == ADDR_REGS to handle IRA's two-pass
+     cost computation: pass 0 may set best to ADDR_REGS (from this
+     hook), then pass 1 widens allocno_class back to GENERAL_REGS
+     but keeps best as ADDR_REGS.
+
+     ColdFire is excluded from all ADDR_REGS promotion: its ISA
+     constraints differ from classic 68k, and forcing ADDR_REGS can
+     create unsatisfiable allocation conflicts that cause IRA/LRA to
+     loop indefinitely.
+
+     For LRA mode on classic 68k, also promote pointer-derived pseudos
+     (e.g., loop induction variables computed from pointer values) that
+     only use addr-reg-compatible operations.  This compensates for
+     LRA's flat coloring keeping caller-save registers in the
+     profitable set.  */
+  if (!TARGET_COLDFIRE
+      && (best_class == GENERAL_REGS || best_class == ADDR_REGS)
+      && allocno_class == GENERAL_REGS
+      && ((REG_POINTER (regno_reg_rtx[regno])
+	   && pseudo_used_as_mem_address_p (regno))
+	  || (ira_use_lra_p
+	      && pseudo_pointer_derived_p (regno)
+	      && pseudo_only_addr_ops_p (regno))))
+    return ADDR_REGS;
+
+  /* Only consider forcing ADDR_REGS if that's the best class.  */
+  if (best_class != ADDR_REGS)
+    return allocno_class;
+
+  /* If allocno_class is already ADDR_REGS, no change needed.  */
+  if (allocno_class == ADDR_REGS)
+    return allocno_class;
+
+  /* Check if this pseudo is actually used as a memory address.
+     If so, force ADDR_REGS to avoid reload copies.  */
+  if (!TARGET_COLDFIRE && pseudo_used_as_mem_address_p (regno))
+    return ADDR_REGS;
+
+  /* Pseudo is only used for arithmetic/comparisons - let IRA decide.  */
+  return allocno_class;
+}
 
 static void
 m68k_file_end (void)

@@ -147,9 +147,8 @@ Target RejectNegative Mask(LONG_JUMP_TABLE_OFFSETS)
 Use 32-bit offsets in jump tables rather than 16-bit offsets.
 
 mlra
-Target Var(m68k_lra_p) Undocumented
-Usa LRA for reload instead of the old reload framework.  This option is
-experimental, and it may be removed in future versions of the compiler.
+Target Var(m68k_lra_p) Init(1)
+Use LRA instead of the legacy reload framework.
 
 mnobitfield
 Target RejectNegative InverseMask(BITFIELD)
@@ -222,3 +221,47 @@ Put data in SECTION
 mrodata=
 Target RejectNegative Joined Var(m68k_rodata_string) Init(0)
 Put read-only data in SECTION
+
+mm68k-autoinc
+Target Var(flag_m68k_autoinc) Init(1) Optimization
+Enable the m68k auto-increment optimization passes.
+
+mm68k-narrow-index-mult
+Target Var(flag_m68k_narrow_index_mult) Init(1) Optimization
+Enable the m68k narrow index multiply optimization pass.
+
+mm68k-reorder-mem
+Target Var(flag_m68k_reorder_mem) Init(1) Optimization
+Enable the m68k memory access reordering optimization pass.
+
+mm68k-elim-andi
+Target Var(flag_m68k_elim_andi) Init(1) Optimization
+Enable the m68k redundant AND-immediate elimination pass.
+
+mm68k-highword-opt
+Target Var(flag_m68k_highword_opt) Init(1) Optimization
+Enable the m68k high-word field access optimization pass.
+
+mm68k-doloop
+Target Var(flag_m68k_doloop) Init(1) Optimization
+Enable the m68k doloop (dbra) optimization.
+
+mm68k-ira-promote
+Target Var(flag_m68k_ira_promote) Init(1) Optimization
+Enable the m68k IRA pseudo allocno class promotion.
+
+mm68k-insn-cost
+Target Var(flag_m68k_insn_cost) Init(1) Optimization
+Enable the m68k instruction cost hook that includes destination cost.
+
+mm68k-bitfield-xor
+Target Var(flag_m68k_bitfield_xor) Init(1) Optimization
+Enable the bitfield XOR optimization for BIT_NOT on bitfields.
+
+mm68k-btst-extract
+Target Var(flag_m68k_btst_extract) Init(1) Optimization
+Enable the btst+sne peephole for single-bit extraction on 68000/68010.
+
+mm68k-avail-copy-elim
+Target Var(flag_m68k_avail_copy_elim) Init(1) Optimization
+Enable the m68k available copy elimination pass.

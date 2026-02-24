@@ -1674,7 +1674,10 @@ ira_single_region_allocno_p (ira_allocno_t a, ira_allocno_t subloop_a)
   auto rclass = ALLOCNO_CLASS (a);
   auto pclass = ira_pressure_class_translate[rclass];
   auto loop_used_regs = ALLOCNO_LOOP_TREE_NODE (a)->reg_pressure[pclass];
-  return loop_used_regs <= ira_class_hard_regs_num[pclass];
+  if (loop_used_regs <= ira_class_hard_regs_num[pclass])
+    return true;
+
+  return false;
 }
 
 /* Return the set of all hard registers that conflict with A.  */

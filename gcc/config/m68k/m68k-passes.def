@@ -1,0 +1,154 @@
+/* Description of target passes for Motorola 68k.
+   Copyright (C) 2025 Free Software Foundation, Inc. */
+
+/* This file is part of GCC.
+
+   GCC is free software; you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free
+   Software Foundation; either version 3, or (at your option) any later
+   version.
+
+   GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+   WARRANTY; without even the implied warranty of MERCHANTABILITY or
+   FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+   for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with GCC; see the file COPYING3.  If not see
+   <http://www.gnu.org/licenses/>.  */
+
+/* Split combined pointer increments to enable auto-increment addressing.
+
+   Problem: forwprop combines sequential *ptr++ operations into a single
+   large increment (e.g., step=16 for four 4-byte accesses).  This prevents
+   auto-increment because step != element_size.
+
+   Solution: Split back to individual increments (step=4 each), enabling
+   IVOPTS and auto-inc-dec to form move.l (%a0)+,(%a1)+.
+
+   Runs after IVOPTS to undo forwprop's combining.  */
+
+INSERT_PASS_AFTER (pass_iv_optimize, 1, m68k_pass_autoinc_split);
+
+/* Narrow index multiply optimization for m68k .w indexing.
+
+   Narrows 32-bit multiplies to 16-bit when safe, enabling .w indexed
+   addressing which sign-extends automatically.  Handles both explicit
+   casts from narrow types and 32-bit values with VRP-constrained ranges.
+
+   Runs after VRP1 to see range constraints from [[assume(...)]].  */
+
+INSERT_PASS_AFTER (pass_vrp, 1, m68k_pass_narrow_index_mult);
+
+/* Reorder memory accesses to enable sequential access patterns.
+
+   When source code accesses struct fields or array elements through a base
+   pointer in non-sequential order, store merging and auto-increment cannot
+   optimize the pattern.  This pass reorders accesses by memory offset when
+   safe (no dependency violations), enabling subsequent optimizations.
+
+   Example:
+     s->d = 0; s->b = 0; s->c = 0; s->a = 0;  // scattered
+   Becomes:
+     s->a = 0; s->b = 0; s->c = 0; s->d = 0;  // sequential
+
+   The sequential pattern enables store merging (two clr.l instead of
+   three clr.w) and post-increment addressing (clr.l (%a0)+).
+
+   Runs before store-merging so merged stores benefit from the pattern.  */
+
+INSERT_PASS_BEFORE (pass_store_merging, 1, m68k_pass_reorder_mem);
+
+/* Eliminate redundant register copies that are already available on all
+   incoming paths.  Runs after inc_dec to clean up copies it reintroduces
+   in unrolled loop peels, before IRA to enable register coalescing.  */
+
+INSERT_PASS_AFTER (pass_inc_dec, 1, m68k_pass_avail_copy_elim);
+
+/* Canonicalize 3-register scaled index addresses for LRA compatibility.
+
+   fwprop substitutes (plus idx idx) for idx*2 into memory addresses, and
+   simplify_gen_binary reassociates the result to (plus (plus base idx) idx).
+   m68k_legitimate_address_p accepts this 3-register form for 68020+, but
+   LRA's decompose_normal_address can only classify 2 register operands.
+
+   This pass rewrites (plus (plus base idx) idx) to (plus base (ashift idx 1))
+   which is the canonical scaled index form that both reload and LRA handle.
+
+   Runs after avail_copy_elim (which also runs after inc_dec), before IRA.  */
+
+INSERT_PASS_AFTER (pass_inc_dec, 1, m68k_pass_canon_scaled_index);
+
+/* Pre-RA auto-increment optimization.
+
+   Handles multi-step indexed sequences, cross-BB patterns, and increment
+   repositioning on pseudos.  Runs after combine/scheduling so POST_INC
+   patterns are visible to IRA for better register allocation.
+
+   Placed after pass_sched (7.47) to catch patterns created by combine
+   and scheduling.  */
+
+INSERT_PASS_AFTER (pass_sched, 1, m68k_pass_opt_autoinc);
+
+/* Post-RA auto-increment normalization (LRA decomposition recovery).
+
+   Reconstructs POST_INC addressing that LRA decomposed into separate
+   increment + negative-offset access:
+
+     addq.l #1,%a0              →  tst.b (%a0)+
+     tst.b -1(%a0)                 (addq deleted)
+
+   Also retains increment normalization as a fallback for patterns that
+   LRA/reload may re-introduce.  The bulk of increment normalization is
+   now handled pre-RA by m68k_pass_opt_autoinc.
+
+   Runs before peephole2.  */
+
+INSERT_PASS_BEFORE (pass_peephole2, 1, m68k_pass_normalize_autoinc);
+
+/* Reorder loads so the register tested by a conditional branch is set
+   by the immediately preceding instruction.  m68k moves set CC, so the
+   final pass can then elide the tst instruction.
+
+   Runs after peephole2.  */
+
+INSERT_PASS_AFTER (pass_peephole2, 1, m68k_pass_reorder_for_cc);
+
+/* Eliminate redundant andi.l #65535 zero-extension instructions.
+
+   On M68K, word (.w) operations only modify the lower 16 bits, leaving
+   upper bits unchanged.  This pass detects patterns where:
+   1. A register is defined by a word-sized operation
+   2. All subsequent operations until the andi are word/byte operations
+   3. An andi.l #65535 is used to zero-extend for 32-bit use
+
+   By inserting moveq #0 before the first definition, the upper bits
+   remain zero throughout, making the andi redundant:
+
+   Before:
+     move.w (%a0),%d0      ; 6 bytes - upper bits undefined
+     subq.w #1,%d0         ; word op
+     andi.l #65535,%d0     ; 6 bytes - zero-extend
+
+   After:
+     moveq #0,%d0          ; 2 bytes - clear upper bits
+     move.w (%a0),%d0      ; 6 bytes - upper bits stay 0
+     subq.w #1,%d0         ; word op - upper bits stay 0
+     ; andi eliminated!    ; saves 4 bytes, 8-16 cycles
+
+   Runs after rtl_dce (the last DCE pass) to prevent the inserted
+   moveq from being deleted as dead code.  GCC's DCE doesn't understand
+   that m68k word operations preserve upper register bits.  */
+
+INSERT_PASS_AFTER (pass_fast_rtl_dce, 1, m68k_pass_elim_andi);
+
+/* Optimize high-word field access for small structs passed by value.
+
+   Extraction:  clr.w %d0; swap %d0  ->  swap %d0
+   Computation: swap %d0; ext.l %d0; add.w %d1,%d0  ->  swap %d0; add.w %d1,%d0
+   Insertion:   swap %d1; clr.w %d1; and.l #65535,%d0; or.l %d1,%d0
+                ->  swap %d0; move.w %d1,%d0; swap %d0
+
+   Runs after elim_andi to work on simplified code.  */
+
+INSERT_PASS_AFTER (pass_fast_rtl_dce, 1, m68k_pass_highword_opt);

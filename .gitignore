@@ -1,3 +1,6 @@
+.DS_Store
+build*/
+
 *.diff
 *.patch
 *.orig

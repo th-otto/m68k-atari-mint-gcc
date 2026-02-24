@@ -12310,6 +12310,24 @@ this escpecially for address IV uses.
 The default value is zero.
 @end deftypevr
 
+@deftypevr {Target Hook} int64_t TARGET_DOLOOP_COST_FOR_COMPARE
+Cost adjustment applied when the doloop IV candidate is used for the
+loop exit comparison.  A negative value credits targets where the doloop
+instruction is cheaper than a regular compare and branch sequence.
+For example, on m68k the @code{dbra} instruction replaces both compare
+and branch, saving one instruction, so a value of -4 is appropriate.
+The default value is zero.
+@end deftypevr
+
+@deftypevr {Target Hook} int TARGET_DOLOOP_MIN_ITERATIONS
+Minimum number of estimated iterations for doloop optimization
+to be considered profitable.  The doloop pass will reject loops
+with fewer estimated iterations than this value.  Set this to a
+lower value (e.g., 1) for targets like m68k where the dbra
+instruction is always beneficial regardless of iteration count.
+The default value is 3.
+@end deftypevr
+
 @deftypefn {Target Hook} bool TARGET_CAN_USE_DOLOOP_P (const widest_int @var{&iterations}, const widest_int @var{&iterations_max}, unsigned int @var{loop_depth}, bool @var{entered_at_top})
 Return true if it is possible to use low-overhead loops (@code{doloop_end}
 and @code{doloop_begin}) for a particular loop.  @var{iterations} gives the
@@ -12497,6 +12515,14 @@ the loop, which is going to be checked for unrolling. This target hook
 is required only when the target has special constraints like maximum
 number of memory accesses.
 @end deftypefn
+
+@deftypevr {Target Hook} bool TARGET_PREFER_RUNTIME_UNROLL_TABLEJUMP
+Return true if the target prefers a jump table dispatch for the
+remainder iterations of runtime-unrolled loops, instead of a serial
+compare-and-branch cascade.  The jump table is constant-time whereas
+the compare cascade is O(unroll_factor).  Only effective when the
+target also supports @code{tablejump}.
+@end deftypevr
 
 @defmac POWI_MAX_MULTS
 If defined, this macro is interpreted as a signed integer C expression
