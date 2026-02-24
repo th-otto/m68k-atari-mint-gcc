@@ -137,7 +137,9 @@ update_mem_offset_inplace (rtx *mem_loc, int regno, HOST_WIDE_INT new_offset)
     return false;
 
   machine_mode mem_mode = GET_MODE (old_mem);
-  rtx reg = gen_rtx_REG (Pmode, regno);
+  /* Use the canonical regno_reg_rtx so that LRA's SET_REGNO in
+     lra_final_code_change will update this rtx in place.  */
+  rtx reg = regno_reg_rtx[regno];
 
   rtx new_addr;
   if (new_offset == 0)
@@ -451,293 +453,19 @@ try_normalize_increment_position (basic_block bb, rtx_insn *add_insn,
   return true;
 }
 
-/* Try to convert a memory access and subsequent offset accesses to POST_INC.
-   Returns true if any transformation was made.  */
-
-static bool
-try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
-			rtx mem, int is_dest)
-{
-  int regno;
-  if (!mem_reg_p (mem, &regno))
-    return false;
-
-  /* Must be an address register (a0-a7 = regs 8-15).  */
-  if (regno < 8 || regno > 15)
-    return false;
-
-  /* POST_INC modifies the address register.  We cannot use POST_INC if the
-     other operand of the first instruction is the same register, because
-     that would create conflicting uses (e.g., loading into %a0 from
-     memory addressed by %a0 with post-increment).  */
-  rtx first_set = single_set (first_insn);
-  if (first_set)
-    {
-      rtx other_op = is_dest ? SET_SRC (first_set) : SET_DEST (first_set);
-      if (REG_P (other_op) && (int) REGNO (other_op) == regno)
-	return false;
-      /* Also check for the register appearing in the other operand.  */
-      if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), other_op))
-	return false;
-    }
-
-  machine_mode mode = GET_MODE (mem);
-  int size = GET_MODE_SIZE (mode);
-
-  /* Collect instructions that need offset adjustment.  */
-  auto_vec<rtx_insn *> fixup_insns;
-  rtx_insn *add_insn = nullptr;
-  HOST_WIDE_INT expected_offset = size;
-
-  for (rtx_insn *insn = next_nondebug_insn_bb (bb, first_insn);
-       insn;
-       insn = next_nondebug_insn_bb (bb, insn))
-    {
-      rtx set = single_set (insn);
-      if (!set)
-	break;
-
-      rtx dest = SET_DEST (set);
-      rtx src = SET_SRC (set);
-
-      /* Check for LEA/ADD that increments our register.  */
-      int inc_regno;
-      HOST_WIDE_INT incr;
-      if (is_reg_increment (insn, &inc_regno, &incr) && inc_regno == regno)
-	{
-	  if (incr >= size)
-	    {
-	      add_insn = insn;
-	      break;
-	    }
-	  return false;  /* Increment too small.  */
-	}
-
-      /* Check for memory access using our register with expected offset.  */
-      int mem_regno;
-      HOST_WIDE_INT offset;
-
-      /* Check if register is used in BOTH src and dest - can't handle that
-	 case since we'd need to update both operands consistently.  */
-      bool src_uses_reg = reg_mentioned_p (gen_rtx_REG (Pmode, regno), src);
-      bool dest_uses_reg = reg_mentioned_p (gen_rtx_REG (Pmode, regno), dest);
-      if (src_uses_reg && dest_uses_reg)
-	return false;
-
-      /* Check source operand.  */
-      if (MEM_P (src))
-	{
-	  if (mem_reg_offset_p (src, &mem_regno, &offset)
-	      && mem_regno == regno)
-	    {
-	      if (offset != expected_offset)
-		return false;  /* Offset doesn't match expected sequence.  */
-	      fixup_insns.safe_push (insn);
-	      expected_offset += size;
-	      continue;
-	    }
-	  else if (mem_reg_p (src, &mem_regno) && mem_regno == regno)
-	    {
-	      /* Another zero-offset access - can't handle.  */
-	      return false;
-	    }
-	}
-
-      /* Check destination operand.  */
-      if (MEM_P (dest))
-	{
-	  if (mem_reg_offset_p (dest, &mem_regno, &offset)
-	      && mem_regno == regno)
-	    {
-	      if (offset != expected_offset)
-		return false;
-	      fixup_insns.safe_push (insn);
-	      expected_offset += size;
-	      continue;
-	    }
-	  else if (mem_reg_p (dest, &mem_regno) && mem_regno == regno)
-	    {
-	      return false;
-	    }
-	}
-
-      /* If the register is used but not in a recognizable pattern, abort.  */
-      if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (insn)))
-	return false;
-    }
-
-  /* Need at least one fixup instruction.  */
-  if (fixup_insns.is_empty ())
-    return false;
-
-  /* If no add instruction, only proceed if the register is dead
-     at the end of the basic block (we can safely modify it).  */
-  HOST_WIDE_INT add_incr = 0;
-  if (add_insn)
-    {
-      /* Verify the add increment matches what we expect.  */
-      int add_regno;
-      if (!is_reg_increment (add_insn, &add_regno, &add_incr))
-	return false;
-
-      if (add_incr < expected_offset)
-	return false;
-    }
-  else
-    {
-      /* No add instruction - check if register is dead.  */
-      bitmap live_out = df_get_live_out (bb);
-      if (bitmap_bit_p (live_out, regno))
-	return false;  /* Register is live, can't safely modify it.  */
-
-      /* Set add_incr to the expected offset so the transformation works.  */
-      add_incr = expected_offset;
-    }
-
-  /* Now perform the transformation.  */
-
-  /* 1. Convert first instruction to use POST_INC.  */
-  rtx reg = gen_rtx_REG (Pmode, regno);
-  rtx postinc_addr = gen_rtx_POST_INC (Pmode, reg);
-  rtx postinc_mem = gen_rtx_MEM (mode, postinc_addr);
-  MEM_COPY_ATTRIBUTES (postinc_mem, mem);
-
-  rtx set = single_set (first_insn);
-  if (is_dest)
-    SET_DEST (set) = postinc_mem;
-  else
-    SET_SRC (set) = postinc_mem;
-
-  /* Validate the transformed insn: must be recognized AND satisfy
-     constraints.  recog alone is insufficient because predicates like
-     nonimmediate_operand accept POST_INC memory, but constraint letters
-     may not (e.g. extendsidi2 allows '<' pre-dec but not '>' post-inc).
-     Use strict=1 since this pass runs after register allocation.  */
-  INSN_CODE (first_insn) = -1;
-  if (recog_memoized (first_insn) < 0
-      || (extract_insn (first_insn),
-	  !constrain_operands (1, get_enabled_alternatives (first_insn))))
-    {
-      /* Transformation not valid, restore original.  */
-      if (is_dest)
-	SET_DEST (set) = mem;
-      else
-	SET_SRC (set) = mem;
-      INSN_CODE (first_insn) = -1;
-      recog_memoized (first_insn);
-      return false;
-    }
-
-  /* Add REG_INC note and notify DF about the change.  */
-  add_reg_note (first_insn, REG_INC, reg);
-  df_insn_rescan (first_insn);
-
-  /* 2. Fix up subsequent instructions - reduce their offsets.  */
-  HOST_WIDE_INT current_adj = size;
-  for (rtx_insn *insn : fixup_insns)
-    {
-      rtx set = single_set (insn);
-
-      /* Use is_dest to determine which operand to fix - we're processing
-	 the same operand type (source vs dest) as the first instruction.  */
-      rtx *mem_loc = is_dest ? &SET_DEST (set) : &SET_SRC (set);
-      if (!MEM_P (*mem_loc))
-	continue;
-
-      rtx old_mem = *mem_loc;
-      machine_mode mem_mode = GET_MODE (old_mem);
-      int mem_size = GET_MODE_SIZE (mem_mode);
-
-      /* Calculate new offset.  */
-      int mem_regno;
-      HOST_WIDE_INT old_offset;
-      if (!mem_reg_offset_p (old_mem, &mem_regno, &old_offset))
-	continue;
-
-      HOST_WIDE_INT new_offset = old_offset - current_adj;
-
-      /* Create new memory reference.  */
-      rtx new_addr;
-      if (new_offset == 0)
-	{
-	  /* Use POST_INC.  */
-	  new_addr = gen_rtx_POST_INC (Pmode, reg);
-	  current_adj += mem_size;
-	}
-      else
-	{
-	  /* Use offset addressing.  */
-	  new_addr = gen_rtx_PLUS (Pmode, reg, GEN_INT (new_offset));
-	}
-
-      rtx new_mem = gen_rtx_MEM (mem_mode, new_addr);
-      MEM_COPY_ATTRIBUTES (new_mem, old_mem);
-      *mem_loc = new_mem;
-
-      /* Validate: check both recognition and constraints (strict=1).  */
-      INSN_CODE (insn) = -1;
-      if (recog_memoized (insn) < 0
-	  || (extract_insn (insn),
-	      !constrain_operands (1, get_enabled_alternatives (insn))))
-	{
-	  /* Restore and abort.  */
-	  *mem_loc = old_mem;
-	  INSN_CODE (insn) = -1;
-	  recog_memoized (insn);
-	  return false;
-	}
-
-      if (new_offset == 0)
-	add_reg_note (insn, REG_INC, reg);
-      df_insn_rescan (insn);
-    }
-
-  /* 3. Adjust or delete the add instruction (if present).  */
-  if (add_insn)
-    {
-      HOST_WIDE_INT remaining = add_incr - current_adj;
-      if (remaining == 0)
-	{
-	  /* Delete the add instruction entirely.  */
-	  delete_insn (add_insn);
-	}
-      else if (remaining > 0)
-	{
-	  /* Reduce the add value.  */
-	  rtx set = single_set (add_insn);
-	  rtx src = SET_SRC (set);
-	  XEXP (src, 1) = GEN_INT (remaining);
-	  INSN_CODE (add_insn) = -1;
-	  recog_memoized (add_insn);
-	  df_insn_rescan (add_insn);
-	}
-    }
-
-  return true;
-}
-
 /* Main function for the normalize_autoinc pass.
 
-   Phase 1 — POST_INC merge:
-   Merges an increment instruction with the immediately following
-   instruction when that instruction uses the register with a negative
-   offset equal to the increment and a matching MEM mode size:
+   LRA decomposition recovery: merges an increment instruction with the
+   immediately following instruction when that instruction uses the register
+   with a negative offset equal to the increment and a matching MEM mode size:
 
      addq.l #1,%a0              →  tst.b (%a0)+
      tst.b -1(%a0)                 (addq deleted)
 
-   This reconstructs POST_INC addressing that LRA decomposed.
-
-   Phase 2 — Increment normalization:
-   Moves increment instructions that are followed by negative-offset
-   memory accesses to after those accesses, adjusting offsets to positive:
-
-     addq.l #8,%a0              →  move.w 6(%a0),6(%a1)
-     move.w -2(%a0),-2(%a1)        addq.l #8,%a0
-
-   This enables subsequent passes (m68k-autoinc, peephole2) to convert
-   all accesses to POST_INC addressing and merge adjacent word accesses
-   into long accesses.  */
+   This reconstructs POST_INC addressing that LRA decomposed.  Increment
+   normalization (moving increments past negative-offset accesses) is now
+   handled by the pre-RA pass m68k_pass_opt_autoinc, but LRA may
+   re-introduce patterns that need recovery here.  */
 
 static unsigned int
 m68k_normalize_autoinc (function *func)
@@ -745,8 +473,6 @@ m68k_normalize_autoinc (function *func)
   unsigned int changes = 0;
   bool made_changes;
 
-  /* Repeat until no more changes are made, since moving one increment
-     may expose opportunities for moving others.  */
   do
     {
       made_changes = false;
@@ -765,7 +491,6 @@ m68k_normalize_autoinc (function *func)
 	      HOST_WIDE_INT incr;
 	      if (is_reg_increment (insn, &regno, &incr))
 		{
-		  /* Phase 1: try to merge into POST_INC first.  */
 		  if (try_merge_postinc (bb, insn, regno, incr))
 		    {
 		      changes++;
@@ -773,7 +498,8 @@ m68k_normalize_autoinc (function *func)
 		      bb_changed = true;
 		      continue;
 		    }
-		  /* Phase 2: try to normalize increment position.  */
+		  /* Fall back to increment normalization for patterns
+		     that LRA/reload may have re-introduced post-RA.  */
 		  if (try_normalize_increment_position (bb, insn, regno, incr))
 		    {
 		      changes++;
@@ -782,15 +508,12 @@ m68k_normalize_autoinc (function *func)
 		    }
 		}
 	    }
-	  /* Also check the last instruction.  */
 	  if (NONDEBUG_INSN_P (BB_END (bb)))
 	    {
 	      int regno;
 	      HOST_WIDE_INT incr;
 	      if (is_reg_increment (BB_END (bb), &regno, &incr))
 		{
-		  /* Phase 1: try merge (last insn can't be an increment
-		     followed by something, but check for completeness).  */
 		  if (try_merge_postinc (bb, BB_END (bb), regno, incr))
 		    {
 		      changes++;
@@ -807,361 +530,11 @@ m68k_normalize_autoinc (function *func)
 		}
 	    }
 
-	  /* Recompute LUIDs after modifying the basic block.  */
 	  if (bb_changed)
 	    df_recompute_luids (bb);
 	}
     }
   while (made_changes);
-
-  return 0;
-}
-
-/* Check whether REGNO is dead on all successor edges of PRED except
-   the edge to BB.  Returns true if dead on all other edges.  This
-   handles EH edges and other multi-successor scenarios.  */
-
-static bool
-reg_dead_on_other_edges (basic_block pred, basic_block bb, int regno)
-{
-  edge e;
-  edge_iterator ei;
-  FOR_EACH_EDGE (e, ei, pred->succs)
-    {
-      if (e->dest == bb)
-	continue;
-      if (bitmap_bit_p (df_get_live_in (e->dest), regno))
-	return false;
-    }
-  return true;
-}
-
-/* Try to convert a load in a predecessor BB followed by an increment at the
-   top of this BB into a post-increment load.  This handles the cross-BB
-   pattern seen in strcmp-like loops:
-
-     BB_pred:
-       move.b (%a0),%d0       ; load
-       jeq .Lexit              ; conditional branch (ends BB_pred)
-     BB:
-       addq.l #1,%a0           ; increment
-
-   Converts to:
-     BB_pred:
-       move.b (%a0)+,%d0      ; load + increment
-       jeq .Lexit
-     BB:
-       ; addq deleted
-
-   This is safe when the address register is dead on the exit path.  */
-
-static bool
-try_cross_bb_postinc (basic_block bb)
-{
-  bool changed = false;
-
-  /* Process increments near the start of BB.  */
-  for (rtx_insn *insn = BB_HEAD (bb); insn; insn = NEXT_INSN (insn))
-    {
-      if (!NONDEBUG_INSN_P (insn))
-	{
-	  if (insn == BB_END (bb))
-	    break;
-	  continue;
-	}
-
-      int regno;
-      HOST_WIDE_INT incr;
-      if (!is_reg_increment (insn, &regno, &incr))
-	break;  /* Stop at first non-increment instruction.  */
-
-      /* Remember if this is the last insn so we don't escape the BB.  */
-      bool is_last = (insn == BB_END (bb));
-
-      /* Must be an address register (a0-a7 = regs 8-15).  */
-      if (regno < 8 || regno > 15)
-	{
-	  if (is_last) break;
-	  continue;
-	}
-
-      /* Increment must be positive (post-increment only).  */
-      if (incr <= 0)
-	{
-	  if (is_last) break;
-	  continue;
-	}
-
-      /* No prior reads of this register in BB before the increment.
-	 Check from BB_HEAD to this insn.  */
-      bool prior_use = false;
-      for (rtx_insn *scan = BB_HEAD (bb); scan != insn;
-	   scan = NEXT_INSN (scan))
-	{
-	  if (!NONDEBUG_INSN_P (scan))
-	    continue;
-	  if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (scan)))
-	    {
-	      prior_use = true;
-	      break;
-	    }
-	}
-      if (prior_use)
-	{
-	  if (is_last) break;
-	  continue;
-	}
-
-      /* Single predecessor.  */
-      if (!single_pred_p (bb))
-	{
-	  if (is_last) break;
-	  continue;
-	}
-
-      basic_block pred = single_pred (bb);
-
-      /* Skip ENTRY/EXIT pseudo-blocks (they have no real insns).  */
-      if (pred->index < NUM_FIXED_BLOCKS)
-	{
-	  if (is_last) break;
-	  continue;
-	}
-
-      /* Predecessor must end with a conditional branch.  */
-      rtx_insn *branch = BB_END (pred);
-      if (!JUMP_P (branch) || !any_condjump_p (branch))
-	{
-	  if (is_last) break;
-	  continue;
-	}
-
-      /* Predecessor must have exactly 2 successors (no EH edges etc.).  */
-      if (EDGE_COUNT (pred->succs) != 2)
-	{
-	  if (is_last) break;
-	  continue;
-	}
-
-      /* Register must be dead on all other successor edges.  */
-      if (!reg_dead_on_other_edges (pred, bb, regno))
-	{
-	  if (is_last) break;
-	  continue;
-	}
-
-      /* Scan backward from the branch in the predecessor to find a matching
-	 load: (set (reg:M dN) (mem:M (reg:SI aX))) where the MEM's mode
-	 size equals the increment.  */
-      rtx_insn *load_insn = nullptr;
-      rtx load_mem = nullptr;
-      int is_dest = 0;
-
-      for (rtx_insn *scan = PREV_INSN (branch); scan;
-	   scan = PREV_INSN (scan))
-	{
-	  if (BLOCK_FOR_INSN (scan) != pred)
-	    break;
-	  if (!NONDEBUG_INSN_P (scan))
-	    continue;
-
-	  rtx set = single_set (scan);
-	  if (!set)
-	    break;  /* Complex insn, stop.  */
-
-	  rtx dest = SET_DEST (set);
-	  rtx src = SET_SRC (set);
-
-	  /* Check if this instruction defines or clobbers the address
-	     register — if so, stop scanning.  */
-	  if (REG_P (dest) && (int) REGNO (dest) == regno)
-	    break;
-
-	  /* Check for load: (set (reg:M) (mem:M (reg aX))).  */
-	  int mem_regno;
-	  if (MEM_P (src) && mem_reg_p (src, &mem_regno)
-	      && mem_regno == regno)
-	    {
-	      if (GET_MODE_SIZE (GET_MODE (src)) == incr)
-		{
-		  load_insn = scan;
-		  load_mem = src;
-		  is_dest = 0;
-		}
-	      break;  /* Found a use, stop regardless.  */
-	    }
-
-	  /* Check for store: (set (mem:M (reg aX)) (reg:M)).  */
-	  if (MEM_P (dest) && mem_reg_p (dest, &mem_regno)
-	      && mem_regno == regno)
-	    {
-	      if (GET_MODE_SIZE (GET_MODE (dest)) == incr)
-		{
-		  load_insn = scan;
-		  load_mem = dest;
-		  is_dest = 1;
-		}
-	      break;
-	    }
-
-	  /* If the register is referenced otherwise, stop.  */
-	  if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (scan)))
-	    break;
-	}
-
-      if (!load_insn)
-	continue;
-
-      /* Verify no other use of the address register between load and
-	 branch end.  */
-      bool intervening_use = false;
-      for (rtx_insn *scan = NEXT_INSN (load_insn); scan != branch;
-	   scan = NEXT_INSN (scan))
-	{
-	  if (!NONDEBUG_INSN_P (scan))
-	    continue;
-	  if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (scan)))
-	    {
-	      intervening_use = true;
-	      break;
-	    }
-	}
-      if (intervening_use)
-	continue;
-
-      /* Also check the branch itself doesn't use the address register.  */
-      if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (branch)))
-	continue;
-
-      /* POST_INC destination != source: can't do move.l (%a0)+,%a0.  */
-      rtx set = single_set (load_insn);
-      if (!set)
-	continue;
-      rtx other_op = is_dest ? SET_SRC (set) : SET_DEST (set);
-      if (REG_P (other_op) && (int) REGNO (other_op) == regno)
-	continue;
-      if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), other_op))
-	continue;
-
-      /* Build the POST_INC form and validate via recog + constraints.  */
-      rtx reg = gen_rtx_REG (Pmode, regno);
-      machine_mode mode = GET_MODE (load_mem);
-      rtx postinc_addr = gen_rtx_POST_INC (Pmode, reg);
-      rtx postinc_mem = gen_rtx_MEM (mode, postinc_addr);
-      MEM_COPY_ATTRIBUTES (postinc_mem, load_mem);
-
-      if (is_dest)
-	SET_DEST (set) = postinc_mem;
-      else
-	SET_SRC (set) = postinc_mem;
-
-      INSN_CODE (load_insn) = -1;
-      if (recog_memoized (load_insn) < 0
-	  || (extract_insn (load_insn),
-	      !constrain_operands (1, get_enabled_alternatives (load_insn))))
-	{
-	  /* Restore original.  */
-	  if (is_dest)
-	    SET_DEST (set) = load_mem;
-	  else
-	    SET_SRC (set) = load_mem;
-	  INSN_CODE (load_insn) = -1;
-	  recog_memoized (load_insn);
-	  continue;
-	}
-
-      /* Success — apply the transformation.  */
-      add_reg_note (load_insn, REG_INC, reg);
-      df_insn_rescan (load_insn);
-
-      /* Delete the increment instruction.  */
-      delete_insn (insn);
-
-      changed = true;
-
-      /* The insn we just deleted may have been the only instruction
-	 or the last — restart scan from BB_HEAD.  */
-      break;
-    }
-
-  return changed;
-}
-
-/* Main function for the opt_autoinc pass.  */
-
-static unsigned int
-m68k_opt_autoinc (function *func)
-{
-  unsigned int changes = 0;
-
-  /* Phase 1: Cross-BB post-increment conversion.  Repeat until stable
-     because each BB may have multiple increments (e.g. both a0 and a1),
-     and we break after each successful conversion.  */
-  {
-    bool made_changes;
-    do
-      {
-	/* (Re-)compute liveness before each iteration.  */
-	df_analyze ();
-	made_changes = false;
-	basic_block bb;
-	FOR_EACH_BB_FN (bb, func)
-	  {
-	    if (try_cross_bb_postinc (bb))
-	      {
-		changes++;
-		made_changes = true;
-	      }
-	  }
-      }
-    while (made_changes);
-  }
-
-  /* Phase 2: Within-BB post-increment conversion.  */
-  basic_block bb;
-  FOR_EACH_BB_FN (bb, func)
-    {
-      bool bb_changed = false;
-      rtx_insn *insn;
-      FOR_BB_INSNS (bb, insn)
-	{
-	  if (!NONDEBUG_INSN_P (insn))
-	    continue;
-
-	  rtx set = single_set (insn);
-	  if (!set)
-	    continue;
-
-	  rtx dest = SET_DEST (set);
-	  rtx src = SET_SRC (set);
-
-	  /* Check source for memory with zero offset.  */
-	  int regno;
-	  if (MEM_P (src) && mem_reg_p (src, &regno))
-	    {
-	      if (try_convert_to_postinc (bb, insn, src, 0))
-		{
-		  changes++;
-		  bb_changed = true;
-		}
-	    }
-
-	  /* Check destination for memory with zero offset.  */
-	  if (MEM_P (dest) && mem_reg_p (dest, &regno))
-	    {
-	      if (try_convert_to_postinc (bb, insn, dest, 1))
-		{
-		  changes++;
-		  bb_changed = true;
-		}
-	    }
-	}
-
-      /* Recompute LUIDs after modifying the basic block, similar to
-	 what the upstream auto-inc-dec pass does.  */
-      if (bb_changed)
-	df_recompute_luids (bb);
-    }
 
   return 0;
 }
@@ -1202,19 +575,757 @@ public:
 
 }; /* class m68k_pass_normalize_autoinc */
 
+/* =======================================================================
+   RTL pass: m68k_pass_opt_autoinc
+
+   Pre-register-allocation auto-increment optimization.  This pass runs
+   after combine and scheduling (Phase 7) but before IRA (Phase 8), so the
+   register allocator sees POST_INC patterns and can assign address registers
+   without relying on the IRA ADDR_REGS promotion hook.
+
+   It handles three patterns that stock pass_inc_dec misses:
+
+   1. Multi-step indexed sequences: multiple sequential memory accesses
+      through the same pseudo followed by a single increment.
+        (pseudo), 4(pseudo), 8(pseudo), addq #12,pseudo
+      → (pseudo)+, (pseudo)+, (pseudo)+
+
+   2. Cross-BB post-increment: memory access in predecessor BB + increment
+      at top of successor BB, register dead on other edges.
+
+   3. Increment repositioning: increment before negative-offset accesses
+      → move increment after, adjust offsets to positive, enabling POST_INC.
+
+   All three patterns exist on pseudos pre-RA.  Moving them here gives IRA
+   better information (sees POST_INC, naturally allocates address registers).
+
+   The post-RA normalize_autoinc pass retains LRA decomposition recovery
+   (try_merge_postinc) which genuinely requires post-RA.
+   ======================================================================= */
+
+/* Validate an insn pre-RA: must be recognized and satisfy at least one
+   alternative's constraints in non-strict mode.  */
+
+static bool
+validate_insn (rtx_insn *insn)
+{
+  INSN_CODE (insn) = -1;
+  if (recog_memoized (insn) < 0)
+    return false;
+  extract_insn (insn);
+  return constrain_operands (0, get_enabled_alternatives (insn));
+}
+
+/* Try to convert a memory access and subsequent offset accesses to POST_INC
+   on pseudos (pre-RA version).
+
+   Same logic as try_convert_to_postinc but:
+   - No hard-reg range check (works on any pseudo)
+   - Uses strict=0 for constraint validation
+   - Handles the case where no add insn exists by checking live_out
+
+   Returns true if any transformation was made.  */
+
+static bool
+try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
+			       rtx mem, int is_dest)
+{
+  int regno;
+  if (!mem_reg_p (mem, &regno))
+    return false;
+
+  /* POST_INC modifies the address register.  We cannot use POST_INC if the
+     other operand of the first instruction is the same register.  */
+  rtx first_set = single_set (first_insn);
+  if (first_set)
+    {
+      rtx other_op = is_dest ? SET_SRC (first_set) : SET_DEST (first_set);
+      if (REG_P (other_op) && (int) REGNO (other_op) == regno)
+	return false;
+      if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), other_op))
+	return false;
+    }
+
+  machine_mode mode = GET_MODE (mem);
+  int size = GET_MODE_SIZE (mode);
+
+  /* Collect instructions that need offset adjustment.  */
+  auto_vec<rtx_insn *> fixup_insns;
+  rtx_insn *add_insn = nullptr;
+  HOST_WIDE_INT expected_offset = size;
+
+  for (rtx_insn *insn = next_nondebug_insn_bb (bb, first_insn);
+       insn;
+       insn = next_nondebug_insn_bb (bb, insn))
+    {
+      rtx set = single_set (insn);
+      if (!set)
+	break;
+
+      rtx dest = SET_DEST (set);
+      rtx src = SET_SRC (set);
+
+      /* Check for LEA/ADD that increments our register.  */
+      int inc_regno;
+      HOST_WIDE_INT incr;
+      if (is_reg_increment (insn, &inc_regno, &incr) && inc_regno == regno)
+	{
+	  if (incr >= size)
+	    {
+	      add_insn = insn;
+	      break;
+	    }
+	  return false;
+	}
+
+      /* Check if register is used in BOTH src and dest.  */
+      bool src_uses_reg = reg_mentioned_p (gen_rtx_REG (Pmode, regno), src);
+      bool dest_uses_reg = reg_mentioned_p (gen_rtx_REG (Pmode, regno), dest);
+      if (src_uses_reg && dest_uses_reg)
+	return false;
+
+      /* Check source operand.  */
+      int mem_regno;
+      HOST_WIDE_INT offset;
+      if (MEM_P (src))
+	{
+	  if (mem_reg_offset_p (src, &mem_regno, &offset)
+	      && mem_regno == regno)
+	    {
+	      if (offset != expected_offset)
+		return false;
+	      fixup_insns.safe_push (insn);
+	      expected_offset += size;
+	      continue;
+	    }
+	  else if (mem_reg_p (src, &mem_regno) && mem_regno == regno)
+	    return false;
+	}
+
+      /* Check destination operand.  */
+      if (MEM_P (dest))
+	{
+	  if (mem_reg_offset_p (dest, &mem_regno, &offset)
+	      && mem_regno == regno)
+	    {
+	      if (offset != expected_offset)
+		return false;
+	      fixup_insns.safe_push (insn);
+	      expected_offset += size;
+	      continue;
+	    }
+	  else if (mem_reg_p (dest, &mem_regno) && mem_regno == regno)
+	    return false;
+	}
+
+      /* If the register is used but not in a recognizable pattern, abort.  */
+      if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (insn)))
+	return false;
+    }
+
+  /* Need at least one fixup instruction.  */
+  if (fixup_insns.is_empty ())
+    return false;
+
+  HOST_WIDE_INT add_incr = 0;
+  if (add_insn)
+    {
+      int add_regno;
+      if (!is_reg_increment (add_insn, &add_regno, &add_incr))
+	return false;
+      if (add_incr < expected_offset)
+	return false;
+    }
+  else
+    {
+      /* No add instruction — check if register is dead at BB end.  */
+      bitmap live_out = df_get_live_out (bb);
+      if (bitmap_bit_p (live_out, regno))
+	return false;
+      add_incr = expected_offset;
+    }
+
+  /* Now perform the transformation.  */
+
+  /* 1. Convert first instruction to use POST_INC.
+     Use the canonical regno_reg_rtx so that LRA's SET_REGNO in
+     lra_final_code_change will update this rtx in place.  */
+  rtx reg = regno_reg_rtx[regno];
+  rtx postinc_addr = gen_rtx_POST_INC (Pmode, reg);
+  rtx postinc_mem = gen_rtx_MEM (mode, postinc_addr);
+  MEM_COPY_ATTRIBUTES (postinc_mem, mem);
+
+  rtx set = single_set (first_insn);
+  if (is_dest)
+    SET_DEST (set) = postinc_mem;
+  else
+    SET_SRC (set) = postinc_mem;
+
+  /* Validate pre-RA: recog + constraints with strict=0.  */
+  if (!validate_insn (first_insn))
+    {
+      if (is_dest)
+	SET_DEST (set) = mem;
+      else
+	SET_SRC (set) = mem;
+      INSN_CODE (first_insn) = -1;
+      recog_memoized (first_insn);
+      return false;
+    }
+
+  add_reg_note (first_insn, REG_INC, reg);
+  df_insn_rescan (first_insn);
+
+  /* 2. Fix up subsequent instructions — reduce their offsets.  */
+  HOST_WIDE_INT current_adj = size;
+  for (rtx_insn *insn : fixup_insns)
+    {
+      rtx set = single_set (insn);
+      rtx *mem_loc = is_dest ? &SET_DEST (set) : &SET_SRC (set);
+      if (!MEM_P (*mem_loc))
+	continue;
+
+      rtx old_mem = *mem_loc;
+      machine_mode mem_mode = GET_MODE (old_mem);
+      int mem_size = GET_MODE_SIZE (mem_mode);
+
+      int mem_regno;
+      HOST_WIDE_INT old_offset;
+      if (!mem_reg_offset_p (old_mem, &mem_regno, &old_offset))
+	continue;
+
+      HOST_WIDE_INT new_offset = old_offset - current_adj;
+
+      rtx new_addr;
+      if (new_offset == 0)
+	{
+	  new_addr = gen_rtx_POST_INC (Pmode, reg);
+	  current_adj += mem_size;
+	}
+      else
+	new_addr = gen_rtx_PLUS (Pmode, reg, GEN_INT (new_offset));
+
+      rtx new_mem = gen_rtx_MEM (mem_mode, new_addr);
+      MEM_COPY_ATTRIBUTES (new_mem, old_mem);
+      *mem_loc = new_mem;
+
+      if (!validate_insn (insn))
+	{
+	  *mem_loc = old_mem;
+	  INSN_CODE (insn) = -1;
+	  recog_memoized (insn);
+	  return false;
+	}
+
+      if (new_offset == 0)
+	add_reg_note (insn, REG_INC, reg);
+      df_insn_rescan (insn);
+    }
+
+  /* 3. Adjust or delete the add instruction (if present).  */
+  if (add_insn)
+    {
+      HOST_WIDE_INT remaining = add_incr - current_adj;
+      if (remaining == 0)
+	delete_insn (add_insn);
+      else if (remaining > 0)
+	{
+	  rtx set = single_set (add_insn);
+	  rtx src = SET_SRC (set);
+	  XEXP (src, 1) = GEN_INT (remaining);
+	  INSN_CODE (add_insn) = -1;
+	  recog_memoized (add_insn);
+	  df_insn_rescan (add_insn);
+	}
+    }
+
+  return true;
+}
+
+/* Check whether REGNO is dead on all successor edges of PRED except
+   the edge to BB.  Works on pseudos (pre-RA version).  */
+
+static bool
+reg_dead_on_other_edges (basic_block pred, basic_block bb, int regno)
+{
+  edge e;
+  edge_iterator ei;
+  FOR_EACH_EDGE (e, ei, pred->succs)
+    {
+      if (e->dest == bb)
+	continue;
+      if (bitmap_bit_p (df_get_live_in (e->dest), regno))
+	return false;
+    }
+  return true;
+}
+
+/* Try to convert a load in a predecessor BB followed by an increment at the
+   top of this BB into a post-increment load.  Pre-RA version that works
+   on pseudos.
+
+   Same pattern as try_cross_bb_postinc but:
+   - No hard-reg range check
+   - Uses strict=0 for constraint validation  */
+
+static bool
+try_cross_bb_postinc (basic_block bb)
+{
+  bool changed = false;
+
+  for (rtx_insn *insn = BB_HEAD (bb); insn; insn = NEXT_INSN (insn))
+    {
+      if (!NONDEBUG_INSN_P (insn))
+	{
+	  if (insn == BB_END (bb))
+	    break;
+	  continue;
+	}
+
+      int regno;
+      HOST_WIDE_INT incr;
+      if (!is_reg_increment (insn, &regno, &incr))
+	break;
+
+      bool is_last = (insn == BB_END (bb));
+
+      /* Increment must be positive.  */
+      if (incr <= 0)
+	{
+	  if (is_last) break;
+	  continue;
+	}
+
+      /* No prior reads of this register in BB before the increment.  */
+      bool prior_use = false;
+      for (rtx_insn *scan = BB_HEAD (bb); scan != insn;
+	   scan = NEXT_INSN (scan))
+	{
+	  if (!NONDEBUG_INSN_P (scan))
+	    continue;
+	  if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (scan)))
+	    {
+	      prior_use = true;
+	      break;
+	    }
+	}
+      if (prior_use)
+	{
+	  if (is_last) break;
+	  continue;
+	}
+
+      /* Single predecessor.  */
+      if (!single_pred_p (bb))
+	{
+	  if (is_last) break;
+	  continue;
+	}
+
+      basic_block pred = single_pred (bb);
+
+      if (pred->index < NUM_FIXED_BLOCKS)
+	{
+	  if (is_last) break;
+	  continue;
+	}
+
+      /* Predecessor must end with a conditional branch.  */
+      rtx_insn *branch = BB_END (pred);
+      if (!JUMP_P (branch) || !any_condjump_p (branch))
+	{
+	  if (is_last) break;
+	  continue;
+	}
+
+      if (EDGE_COUNT (pred->succs) != 2)
+	{
+	  if (is_last) break;
+	  continue;
+	}
+
+      /* Register must be dead on all other successor edges.  */
+      if (!reg_dead_on_other_edges (pred, bb, regno))
+	{
+	  if (is_last) break;
+	  continue;
+	}
+
+      /* Scan backward from the branch in the predecessor to find a matching
+	 memory access whose mode size equals the increment.  */
+      rtx_insn *load_insn = nullptr;
+      rtx load_mem = nullptr;
+      int is_dest = 0;
+
+      for (rtx_insn *scan = PREV_INSN (branch); scan;
+	   scan = PREV_INSN (scan))
+	{
+	  if (BLOCK_FOR_INSN (scan) != pred)
+	    break;
+	  if (!NONDEBUG_INSN_P (scan))
+	    continue;
+
+	  rtx set = single_set (scan);
+	  if (!set)
+	    break;
+
+	  rtx dest = SET_DEST (set);
+	  rtx src = SET_SRC (set);
+
+	  if (REG_P (dest) && (int) REGNO (dest) == regno)
+	    break;
+
+	  int mem_regno;
+	  if (MEM_P (src) && mem_reg_p (src, &mem_regno)
+	      && mem_regno == regno)
+	    {
+	      if (GET_MODE_SIZE (GET_MODE (src)) == incr)
+		{
+		  load_insn = scan;
+		  load_mem = src;
+		  is_dest = 0;
+		}
+	      break;
+	    }
+
+	  if (MEM_P (dest) && mem_reg_p (dest, &mem_regno)
+	      && mem_regno == regno)
+	    {
+	      if (GET_MODE_SIZE (GET_MODE (dest)) == incr)
+		{
+		  load_insn = scan;
+		  load_mem = dest;
+		  is_dest = 1;
+		}
+	      break;
+	    }
+
+	  if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (scan)))
+	    break;
+	}
+
+      if (!load_insn)
+	continue;
+
+      /* Verify no other use of the register between load and branch.  */
+      bool intervening_use = false;
+      for (rtx_insn *scan = NEXT_INSN (load_insn); scan != branch;
+	   scan = NEXT_INSN (scan))
+	{
+	  if (!NONDEBUG_INSN_P (scan))
+	    continue;
+	  if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (scan)))
+	    {
+	      intervening_use = true;
+	      break;
+	    }
+	}
+      if (intervening_use)
+	continue;
+
+      /* Branch must not use the address register.  */
+      if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (branch)))
+	continue;
+
+      /* POST_INC destination != source.  */
+      rtx set = single_set (load_insn);
+      if (!set)
+	continue;
+      rtx other_op = is_dest ? SET_SRC (set) : SET_DEST (set);
+      if (REG_P (other_op) && (int) REGNO (other_op) == regno)
+	continue;
+      if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), other_op))
+	continue;
+
+      /* Build POST_INC and validate pre-RA.
+	 Use canonical regno_reg_rtx for LRA's SET_REGNO update.  */
+      rtx reg = regno_reg_rtx[regno];
+      machine_mode mode = GET_MODE (load_mem);
+      rtx postinc_addr = gen_rtx_POST_INC (Pmode, reg);
+      rtx postinc_mem = gen_rtx_MEM (mode, postinc_addr);
+      MEM_COPY_ATTRIBUTES (postinc_mem, load_mem);
+
+      if (is_dest)
+	SET_DEST (set) = postinc_mem;
+      else
+	SET_SRC (set) = postinc_mem;
+
+      if (!validate_insn (load_insn))
+	{
+	  if (is_dest)
+	    SET_DEST (set) = load_mem;
+	  else
+	    SET_SRC (set) = load_mem;
+	  INSN_CODE (load_insn) = -1;
+	  recog_memoized (load_insn);
+	  continue;
+	}
+
+      add_reg_note (load_insn, REG_INC, reg);
+      df_insn_rescan (load_insn);
+      delete_insn (insn);
+      changed = true;
+      break;
+    }
+
+  return changed;
+}
+
+/* Try to normalize increment position for pseudos (pre-RA version).
+   Moves increment instructions followed by negative-offset memory accesses
+   to after those accesses, adjusting offsets to positive.
+
+   Same logic as try_normalize_increment_position but without hard-reg
+   checks and using pre-RA validation.  */
+
+static bool
+try_normalize_increment_position_opt (basic_block bb, rtx_insn *add_insn,
+					 int regno, HOST_WIDE_INT incr)
+{
+  /* Only handle positive increments.  */
+  if (incr <= 0)
+    return false;
+
+  /* Collect instructions with negative offsets that need adjustment.  */
+  struct insn_to_fix {
+    rtx_insn *insn;
+    HOST_WIDE_INT src_offset;
+    HOST_WIDE_INT dest_offset;
+  };
+  auto_vec<insn_to_fix> fixups;
+  rtx_insn *last_fixup_insn = nullptr;
+
+  for (rtx_insn *insn = next_nondebug_insn_bb (bb, add_insn);
+       insn;
+       insn = next_nondebug_insn_bb (bb, insn))
+    {
+      rtx set = single_set (insn);
+      if (!set)
+	break;
+
+      rtx src = SET_SRC (set);
+      rtx dest = SET_DEST (set);
+
+      HOST_WIDE_INT src_neg = get_negative_offset (src, regno);
+      HOST_WIDE_INT dest_neg = get_negative_offset (dest, regno);
+
+      if (src_neg < 0 || dest_neg < 0)
+	{
+	  rtx reg = gen_rtx_REG (Pmode, regno);
+	  bool src_uses_reg = reg_mentioned_p (reg, src);
+	  bool dest_uses_reg = reg_mentioned_p (reg, dest);
+	  if (src_uses_reg && src_neg == 0)
+	    break;
+	  if (dest_uses_reg && dest_neg == 0)
+	    break;
+
+	  insn_to_fix fix;
+	  fix.insn = insn;
+	  fix.src_offset = src_neg;
+	  fix.dest_offset = dest_neg;
+	  fixups.safe_push (fix);
+	  last_fixup_insn = insn;
+	  continue;
+	}
+
+      if (reg_set_p (gen_rtx_REG (Pmode, regno), insn))
+	break;
+      if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (insn)))
+	break;
+    }
+
+  if (fixups.is_empty ())
+    return false;
+
+  /* Verify all negative offsets can be adjusted to valid positive offsets.  */
+  for (const insn_to_fix &fix : fixups)
+    {
+      if (fix.src_offset < 0)
+	{
+	  HOST_WIDE_INT new_off = fix.src_offset + incr;
+	  if (new_off < 0 || new_off > 32767)
+	    return false;
+	}
+      if (fix.dest_offset < 0)
+	{
+	  HOST_WIDE_INT new_off = fix.dest_offset + incr;
+	  if (new_off < 0 || new_off > 32767)
+	    return false;
+	}
+    }
+
+  /* Perform the transformation: adjust offsets.  */
+  for (const insn_to_fix &fix : fixups)
+    {
+      rtx set = single_set (fix.insn);
+
+      if (fix.src_offset < 0)
+	{
+	  HOST_WIDE_INT new_offset = fix.src_offset + incr;
+	  update_mem_offset_inplace (&SET_SRC (set), regno, new_offset);
+	}
+      if (fix.dest_offset < 0)
+	{
+	  HOST_WIDE_INT new_offset = fix.dest_offset + incr;
+	  update_mem_offset_inplace (&SET_DEST (set), regno, new_offset);
+	}
+
+      INSN_CODE (fix.insn) = -1;
+      if (recog_memoized (fix.insn) < 0)
+	return false;
+      df_insn_rescan (fix.insn);
+    }
+
+  /* Move the increment instruction to after the last fixup instruction.  */
+  remove_insn (add_insn);
+  add_insn_after (add_insn, last_fixup_insn, bb);
+  df_insn_rescan (add_insn);
+
+  return true;
+}
+
+/* Main function for the opt_autoinc pass.  */
+
+static unsigned int
+m68k_opt_autoinc (function *func)
+{
+  unsigned int changes = 0;
+
+  /* Phase 1: Cross-BB post-increment conversion.  Repeat until stable.  */
+  {
+    bool made_changes;
+    do
+      {
+	df_analyze ();
+	made_changes = false;
+	basic_block bb;
+	FOR_EACH_BB_FN (bb, func)
+	  {
+	    if (try_cross_bb_postinc (bb))
+	      {
+		changes++;
+		made_changes = true;
+	      }
+	  }
+      }
+    while (made_changes);
+  }
+
+  /* Phase 2: Increment normalization.  Repeat until stable.  */
+  {
+    bool made_changes;
+    do
+      {
+	made_changes = false;
+	basic_block bb;
+	FOR_EACH_BB_FN (bb, func)
+	  {
+	    bool bb_changed = false;
+	    rtx_insn *insn, *next;
+	    for (insn = BB_HEAD (bb); insn != BB_END (bb); insn = next)
+	      {
+		next = NEXT_INSN (insn);
+		if (!NONDEBUG_INSN_P (insn))
+		  continue;
+
+		int regno;
+		HOST_WIDE_INT incr;
+		if (is_reg_increment (insn, &regno, &incr))
+		  {
+		    if (try_normalize_increment_position_opt (bb, insn,
+								regno, incr))
+		      {
+			changes++;
+			made_changes = true;
+			bb_changed = true;
+		      }
+		  }
+	      }
+	    /* Also check the last instruction.  */
+	    if (NONDEBUG_INSN_P (BB_END (bb)))
+	      {
+		int regno;
+		HOST_WIDE_INT incr;
+		if (is_reg_increment (BB_END (bb), &regno, &incr))
+		  {
+		    if (try_normalize_increment_position_opt (bb, BB_END (bb),
+								regno, incr))
+		      {
+			changes++;
+			made_changes = true;
+			bb_changed = true;
+		      }
+		  }
+	      }
+
+	    if (bb_changed)
+	      df_recompute_luids (bb);
+	  }
+      }
+    while (made_changes);
+  }
+
+  /* Phase 3: Within-BB multi-step post-increment conversion.  */
+  {
+    df_analyze ();
+    basic_block bb;
+    FOR_EACH_BB_FN (bb, func)
+      {
+	bool bb_changed = false;
+	rtx_insn *insn;
+	FOR_BB_INSNS (bb, insn)
+	  {
+	    if (!NONDEBUG_INSN_P (insn))
+	      continue;
+
+	    rtx set = single_set (insn);
+	    if (!set)
+	      continue;
+
+	    rtx dest = SET_DEST (set);
+	    rtx src = SET_SRC (set);
+
+	    int regno;
+	    if (MEM_P (src) && mem_reg_p (src, &regno))
+	      {
+		if (try_convert_to_postinc (bb, insn, src, 0))
+		  {
+		    changes++;
+		    bb_changed = true;
+		  }
+	      }
+
+	    if (MEM_P (dest) && mem_reg_p (dest, &regno))
+	      {
+		if (try_convert_to_postinc (bb, insn, dest, 1))
+		  {
+		    changes++;
+		    bb_changed = true;
+		  }
+	      }
+	  }
+
+	if (bb_changed)
+	  df_recompute_luids (bb);
+      }
+  }
+
+  return 0;
+}
+
 /* Pass data for m68k_pass_opt_autoinc.  */
 
 const pass_data m68k_pass_data_opt_autoinc =
 {
-  RTL_PASS,	    /* type */
-  "m68k-autoinc",   /* name */
-  OPTGROUP_NONE,    /* optinfo_flags */
-  TV_MACH_DEP,	    /* tv_id */
-  0,		    /* properties_required */
-  0,		    /* properties_provided */
-  0,		    /* properties_destroyed */
-  0,		    /* todo_flags_start */
-  TODO_df_finish    /* todo_flags_finish */
+  RTL_PASS,		    /* type */
+  "m68k-autoinc",          /* name */
+  OPTGROUP_NONE,	    /* optinfo_flags */
+  TV_MACH_DEP,		    /* tv_id */
+  0,			    /* properties_required */
+  0,			    /* properties_provided */
+  0,			    /* properties_destroyed */
+  0,			    /* todo_flags_start */
+  TODO_df_finish	    /* todo_flags_finish */
 };
 
 /* The pass class for opt_autoinc.  */
@@ -1237,8 +1348,6 @@ public:
   }
 
 }; /* class m68k_pass_opt_autoinc */
-
-
 
 
 /* =======================================================================
