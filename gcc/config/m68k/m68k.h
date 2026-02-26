@@ -479,9 +479,6 @@ extern enum reg_class regno_reg_class[];
  ((CLASS) == FP_REGS ? GET_MODE_NUNITS (MODE) \
   : ((GET_MODE_SIZE (MODE) + UNITS_PER_WORD - 1) / UNITS_PER_WORD))
 
-/* Moves between fp regs and other regs are two insns.  */
-#define REGISTER_MOVE_COST(MODE, CLASS1, CLASS2)	\
-  ((((CLASS1) == FP_REGS) != ((CLASS2) == FP_REGS)) ? 4 : 2)
 
 
 /* Stack layout; function entry, exit and calling.  */

@@ -72,5 +72,8 @@ stamp-*
 /isl*
 /gettext*
 
+.DS_Store
+build*/
+
 # ADDITIONS from GCCRS front-end
 libgrust/*/target/

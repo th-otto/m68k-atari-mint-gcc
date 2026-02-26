@@ -222,3 +222,7 @@ Put data in SECTION
 mrodata=
 Target RejectNegative Joined Var(m68k_rodata_string) Init(0)
 Put read-only data in SECTION
+
+mm68k-insn-cost
+Target Var(flag_m68k_insn_cost) Init(1) Optimization
+Enable the m68k instruction cost hook that includes destination cost.
