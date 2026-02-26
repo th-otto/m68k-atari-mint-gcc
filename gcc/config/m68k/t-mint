@@ -25,6 +25,9 @@ m68k-pass-memreorder.o: $(srcdir)/config/m68k/m68k-pass-memreorder.cc
 	$(COMPILE) $<
 	$(POSTCOMPILE)
 
+m68k-pass-autoinc.o: $(srcdir)/config/m68k/m68k-pass-autoinc.cc
+	$(COMPILE) $<
+	$(POSTCOMPILE)
 
 # Register the m68k-specific passes
 PASSES_EXTRA += $(srcdir)/config/m68k/m68k-passes.def

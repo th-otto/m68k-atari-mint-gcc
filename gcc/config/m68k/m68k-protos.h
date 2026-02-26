@@ -150,6 +150,12 @@ class gimple_opt_pass;
 extern gimple_opt_pass *make_m68k_pass_reorder_mem (gcc::context *);
 extern rtl_opt_pass *make_m68k_pass_reorder_incr (gcc::context *);
 
+/* Functions from m68k-pass-autoinc.cc.  */
+extern gimple_opt_pass *make_m68k_pass_autoinc_split (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_normalize_autoinc (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_opt_autoinc (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_avail_copy_elim (gcc::context *);
+
 #ifdef RTX_CODE
 #ifdef TREE_CODE
 void m68k_init_cumulative_args (CUMULATIVE_ARGS *, tree, rtx, tree, int);

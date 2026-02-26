@@ -1954,6 +1954,46 @@ prune_insertions_deletions (int n_elems)
   free (deletions);
 }
 
+/* Inserting an expression on a self-loop edge (src == dest) causes
+   commit_edge_insertions to split the single-BB loop into header + latch.
+   This adds an unconditional jump and a register copy per iteration
+   without saving any computation, so it is never profitable.  Prune
+   any expressions that would require such insertion.  */
+
+static void
+prune_selfloop_insertions (struct edge_list *edge_list)
+{
+  int num_edges = NUM_EDGES (edge_list);
+  auto_sbitmap prune_exprs (expr_hash_table.n_elems);
+  bitmap_clear (prune_exprs);
+
+  for (int e = 0; e < num_edges; e++)
+    {
+      edge eg = INDEX_EDGE (edge_list, e);
+      if (eg->src == eg->dest)
+	{
+	  sbitmap_iterator sbi;
+	  unsigned int j;
+	  EXECUTE_IF_SET_IN_BITMAP (pre_insert_map[e], 0, j, sbi)
+	    bitmap_set_bit (prune_exprs, j);
+	}
+    }
+
+  sbitmap_iterator sbi;
+  unsigned int j;
+  EXECUTE_IF_SET_IN_BITMAP (prune_exprs, 0, j, sbi)
+    {
+      for (int e = 0; e < num_edges; e++)
+	bitmap_clear_bit (pre_insert_map[e], j);
+      for (int i = 0; i < last_basic_block_for_fn (cfun); i++)
+	bitmap_clear_bit (pre_delete_map[i], j);
+
+      if (dump_file)
+	fprintf (dump_file,
+		 "PRE: pruning expression %d (self-loop edge split)\n", j);
+    }
+}
+
 /* Top level routine to do the dataflow analysis needed by PRE.  */
 
 static struct edge_list *
@@ -1988,6 +2028,9 @@ compute_pre_data (void)
   ae_kill = NULL;
 
   prune_insertions_deletions (expr_hash_table.n_elems);
+
+  if (param_gcse_no_selfloop_split)
+    prune_selfloop_insertions (edge_list);
 
   return edge_list;
 }

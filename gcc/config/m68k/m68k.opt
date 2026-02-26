@@ -234,6 +234,10 @@ mm68k-autoinc
 Target Var(flag_m68k_autoinc) Init(1) Optimization
 Enable the m68k auto-increment optimization passes.
 
+mm68k-avail-copy-elim
+Target Var(flag_m68k_avail_copy_elim) Init(1) Optimization
+Enable the m68k available copy elimination pass.
+
 mm68k-bitfield-xor
 Target Var(flag_m68k_bitfield_xor) Init(1) Optimization
 Enable the bitfield XOR optimization for BIT_NOT on bitfields.

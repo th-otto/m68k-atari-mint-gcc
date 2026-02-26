@@ -2241,6 +2241,10 @@ fivopts-autoinc-step
 Common Var(flag_ivopts_autoinc_step) Init(1) Optimization
 When target supports auto-increment addressing, discount IV step costs in IVOPTS.
 
+fivopts-autoinc-multiuse
+Common Var(flag_ivopts_autoinc_multiuse) Init(0) Optimization
+Generate auto-increment IV candidates for all uses in multi-use address groups.
+
 fjump-tables
 Common Var(flag_jump_tables) Init(0) Optimization
 Use jump tables for sufficiently large switch statements.

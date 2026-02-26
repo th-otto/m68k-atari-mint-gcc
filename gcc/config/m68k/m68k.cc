@@ -888,6 +888,13 @@ m68k_option_override_internal (bool main_args_p)
   if (optimize >= 2 && !OPTION_SET_P (flag_rename_registers))
     flag_rename_registers = 1;
 
+  /* Prevent PRE from splitting self-loop edges.  On m68k, tight self-loops
+     with mem[reg+offset] + reg+=N can be converted to post-increment
+     addressing by auto_inc_dec, but only when both insns are in the same BB.
+     PRE sometimes splits such loops, preventing post-increment formation.  */
+  if (!OPTION_SET_P (param_gcse_no_selfloop_split))
+    param_gcse_no_selfloop_split = 1;
+
   /* On m68k, instructions like add.w %dN,%dN read the register once,
      but the RTL (plus:HI rN rN) lists it in two operand positions.
      Without dedup, IRA inflates the allocno frequency, distorting
@@ -912,6 +919,12 @@ m68k_option_override_internal (bool main_args_p)
      that are much more efficient on m68k.  */
   if (!OPTION_SET_P (flag_split_ivs_in_unroller))
     flag_split_ivs_in_unroller = 0;
+
+  /* Enable IVOPTS auto-increment candidates for multi-use address groups.
+     This lets the cost model choose optimal increment placement when both
+     reads and writes share an IV pointer.  */
+  if (!OPTION_SET_P (flag_ivopts_autoinc_multiuse))
+    flag_ivopts_autoinc_multiuse = 1;
 }
 
 /* Implement the TARGET_OPTION_OVERRIDE hook.  */

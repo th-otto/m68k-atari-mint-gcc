@@ -3572,6 +3572,13 @@ add_iv_candidate_for_groups (struct ivopts_data *data)
 
       gcc_assert (group->vuses[0] != NULL);
       add_iv_candidate_for_use (data, group->vuses[0]);
+
+      /* Also add candidates for the last use, so that auto-increment
+	 candidates (IP_AFTER_USE) cover both ends of the group.
+	 The cost model selects the better placement.  */
+      unsigned last = group->vuses.length () - 1;
+      if (last > 0 && flag_ivopts_autoinc_multiuse)
+	add_iv_candidate_for_use (data, group->vuses[last]);
     }
   add_iv_candidate_derived_from_uses (data);
 }
@@ -4744,16 +4751,40 @@ get_address_cost (struct ivopts_data *data, struct iv_use *use,
 
 	  if (dominated_by_ainc_use)
 	    {
-	      poly_int64 ainc_offset = (aff_inv->offset).force_shwi ();
-
-	      if (stmt_after_increment (data->current_loop, cand, use->stmt))
-		ainc_offset += ainc_step;
-	      cost = get_address_cost_ainc (ainc_step, ainc_offset,
-					    addr_mode, mem_mode, as, speed);
-	      if (!cost.infinite_cost_p ())
+	      /* Only compute ainc cost for the actual auto-increment
+		 use.  Non-ainc uses are regular memory accesses that
+		 should be costed with regular addressing.  If a
+		 non-ainc use is after the increment point, adjust
+		 the offset so the regular cost path reflects the
+		 displacement from the incremented IV value.  Without
+		 this, non-ainc uses get spurious ainc mode matches
+		 (e.g., POST_INC for plain register-indirect).  */
+	      bool is_ainc_use = (cand->ainc_use == NULL
+				  || cand->ainc_use == use);
+	      if (!flag_ivopts_autoinc_multiuse || is_ainc_use)
 		{
-		  *can_autoinc = true;
-		  return cost;
+		  poly_int64 ainc_offset
+		    = (aff_inv->offset).force_shwi ();
+
+		  if (stmt_after_increment (data->current_loop, cand,
+					    use->stmt))
+		    ainc_offset += ainc_step;
+		  cost = get_address_cost_ainc (ainc_step, ainc_offset,
+						addr_mode, mem_mode,
+						as, speed);
+		  if (!cost.infinite_cost_p ())
+		    {
+		      *can_autoinc = true;
+		      return cost;
+		    }
+		}
+	      else if (stmt_after_increment (data->current_loop,
+					     cand, use->stmt))
+		{
+		  /* Non-ainc use sees the post-increment IV value.
+		     Adjust offset so regular cost path accounts for
+		     the displacement (e.g., -2 for step=2).  */
+		  aff_inv->offset -= ainc_step;
 		}
 	      cost = no_cost;
 	    }
@@ -5062,6 +5093,7 @@ determine_group_iv_cost_address (struct ivopts_data *data,
 	  }
       sum_cost += cost;
     }
+
   set_group_iv_cost (data, group, cand, sum_cost, inv_vars,
 		     NULL_TREE, ERROR_MARK, inv_exprs);
 

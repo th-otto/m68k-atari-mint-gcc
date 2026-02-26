@@ -67,3 +67,49 @@ INSERT_PASS_BEFORE (pass_store_merging, 1, m68k_pass_reorder_mem);
    Runs after scheduling (where patterns form), before IRA.  */
 
 INSERT_PASS_AFTER (pass_sched, 1, m68k_pass_reorder_incr);
+
+/* Split combined pointer increments to enable auto-increment addressing.
+
+   Problem: forwprop combines sequential *ptr++ operations into a single
+   large increment (e.g., step=16 for four 4-byte accesses).  This prevents
+   auto-increment because step != element_size.
+
+   Solution: Split back to individual increments (step=4 each), enabling
+   IVOPTS and auto-inc-dec to form move.l (%a0)+,(%a1)+.
+
+   Runs after IVOPTS to undo forwprop's combining.  */
+
+INSERT_PASS_AFTER (pass_iv_optimize, 1, m68k_pass_autoinc_split);
+
+/* Eliminate redundant register copies that are already available on all
+   incoming paths.  Runs after inc_dec to clean up copies it reintroduces
+   in unrolled loop peels, before IRA to enable register coalescing.  */
+
+INSERT_PASS_AFTER (pass_inc_dec, 1, m68k_pass_avail_copy_elim);
+
+/* Pre-RA auto-increment optimization.
+
+   Handles multi-step indexed sequences, cross-BB patterns, and increment
+   repositioning on pseudos.  Runs after combine/scheduling so POST_INC
+   patterns are visible to IRA for better register allocation.
+
+   Placed after pass_sched to catch patterns created by combine
+   and scheduling.  Runs after reorder_incr which normalizes increment
+   positions first.  */
+
+INSERT_PASS_AFTER (pass_sched, 1, m68k_pass_opt_autoinc);
+
+/* Post-RA auto-increment normalization (LRA decomposition recovery).
+
+   Reconstructs POST_INC addressing that LRA decomposed into separate
+   increment + negative-offset access:
+
+     addq.l #1,%a0              ->  tst.b (%a0)+
+     tst.b -1(%a0)                 (addq deleted)
+
+   Also retains increment normalization as a fallback for patterns that
+   LRA/reload may re-introduce.
+
+   Runs before peephole2.  */
+
+INSERT_PASS_BEFORE (pass_peephole2, 1, m68k_pass_normalize_autoinc);
