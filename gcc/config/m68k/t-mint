@@ -7,6 +7,14 @@ m68k_costs.o: $(srcdir)/config/m68k/m68k_costs.cc
 	$(COMPILE) $<
 	$(POSTCOMPILE)
 
+# Extra object files for m68k optimization passes
+m68k-pass-regalloc.o: $(srcdir)/config/m68k/m68k-pass-regalloc.cc
+	$(COMPILE) $<
+	$(POSTCOMPILE)
+
+# Register the m68k-specific passes
+PASSES_EXTRA += $(srcdir)/config/m68k/m68k-passes.def
+
 M68K_AWK = $(strip $(shell $(AWK) 'BEGIN { FS="[ \t]*[,()][ \t]*"; ORS=" " }; \
 	/^M68K_DEVICE/ { CPU=$$3; FLAGS=$$8; \
 	CPU_NAME=substr($$2,2,length($$2)-2); \

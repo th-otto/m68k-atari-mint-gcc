@@ -1,0 +1,52 @@
+/* Description of target passes for Motorola 68k.
+   Copyright (C) 2025 Free Software Foundation, Inc. */
+
+/* This file is part of GCC.
+
+   GCC is free software; you can redistribute it and/or modify it under
+   the terms of the GNU General Public License as published by the Free
+   Software Foundation; either version 3, or (at your option) any later
+   version.
+
+   GCC is distributed in the hope that it will be useful, but WITHOUT ANY
+   WARRANTY; without even the implied warranty of MERCHANTABILITY or
+   FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+   for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with GCC; see the file COPYING3.  If not see
+   <http://www.gnu.org/licenses/>.  */
+
+/* Canonicalize 3-register scaled index addresses for LRA compatibility.
+
+   fwprop substitutes (plus idx idx) for idx*2 into memory addresses, and
+   simplify_gen_binary reassociates the result to (plus (plus base idx) idx).
+   m68k_legitimate_address_p accepts this 3-register form for 68020+, but
+   LRA's decompose_normal_address can only classify 2 register operands.
+
+   This pass rewrites (plus (plus base idx) idx) to (plus base (ashift idx 1))
+   which is the canonical scaled index form that both reload and LRA handle.
+
+   Runs after avail_copy_elim (which also runs after inc_dec), before IRA.  */
+
+INSERT_PASS_AFTER (pass_inc_dec, 1, m68k_pass_canon_scaled_index);
+
+/* Break false partial-write live ranges before IRA.
+
+   When a pseudo is built from partial writes (bfins + strict_low_part)
+   that collectively cover all 32 bits, DF treats each as read-modify-write.
+   Via loop back-edges, the pseudo appears live across calls, forcing IRA
+   to use callee-saved registers.  This pass inserts a zero-cost clobber
+   before the first partial write to break the false dependency.
+
+   Runs immediately before IRA so all pre-RA transforms have completed.  */
+
+INSERT_PASS_BEFORE (pass_ira, 1, m68k_pass_break_false_dep);
+
+/* Clean up standalone (clobber (reg pseudo)) insns inserted by
+   break_false_dep.  They served their purpose for IRA liveness but LRA
+   does not assign hard registers to standalone clobbers.
+
+   Runs after reload, before postreload (which uses cselib).  */
+
+INSERT_PASS_BEFORE (pass_postreload, 1, m68k_pass_break_false_dep_cleanup);

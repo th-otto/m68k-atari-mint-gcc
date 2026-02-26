@@ -986,7 +986,7 @@ extern enum M68K_SYMBOLIC_CALL m68k_symbolic_call_var;
 typedef enum { MOVL, SWAP, NEGW, NOTW, NOTB, MOVQ, MVS, MVZ }
   M68K_CONST_METHOD;
 
-extern M68K_CONST_METHOD m68k_const_method (HOST_WIDE_INT);
+extern M68K_CONST_METHOD m68k_const_method (HOST_WIDE_INT, rtx = 0);
 #endif
 
 extern void m68k_emit_move_double (rtx [2]);

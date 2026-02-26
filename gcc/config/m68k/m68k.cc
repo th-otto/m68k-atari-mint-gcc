@@ -309,6 +309,9 @@ static void m68k_file_end (void);
 #undef TARGET_NEW_ADDRESS_PROFITABLE_P
 #define TARGET_NEW_ADDRESS_PROFITABLE_P m68k_new_address_profitable_p
 
+#undef TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS
+#define TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS m68k_ira_change_pseudo_allocno_class
+
 #undef TARGET_ATTRIBUTE_TABLE
 #define TARGET_ATTRIBUTE_TABLE m68k_attribute_table
 
@@ -838,6 +841,31 @@ m68k_option_override_internal (bool main_args_p)
    * Introduced by commit 04c9cf5c786b94fbe3f6f21f06cae73a7575ff7a
    */
   flag_fold_mem_offsets = 0;
+
+  /* Enable register renaming at -O2+ to eliminate dead register copies
+     left by IRA, e.g. function argument copies where the original
+     register could be reused directly.  The m68k ISA has no encoding
+     differences between registers (unlike x86 REX), so renaming has
+     no code-size downside.  */
+  if (optimize >= 2 && !OPTION_SET_P (flag_rename_registers))
+    flag_rename_registers = 1;
+
+  /* On m68k, instructions like add.w %dN,%dN read the register once,
+     but the RTL (plus:HI rN rN) lists it in two operand positions.
+     Without dedup, IRA inflates the allocno frequency, distorting
+     thread priority during graph coloring and causing suboptimal
+     register choices.  */
+  if (!OPTION_SET_P (param_ira_ignore_duplicate_uses_in_insn))
+    param_ira_ignore_duplicate_uses_in_insn = 1;
+
+  /* Merge pass-through allocnos with parent region even when register
+     pressure is high.  On m68k with only 15 general registers, IRA's
+     hierarchical coloring often splits loop-invariant pseudos into
+     separate allocnos at each loop level, producing unnecessary copies.
+     For pass-through allocnos (zero references at the inner level),
+     merging eliminates these copies without increasing pressure.  */
+  if (!OPTION_SET_P (flag_ira_merge_passthrough))
+    flag_ira_merge_passthrough = 1;
 }
 
 /* Implement the TARGET_OPTION_OVERRIDE hook.  */
@@ -2842,6 +2870,43 @@ m68k_decompose_address (machine_mode mode, rtx x,
 	  address->base = XEXP (x, 1);
 	  return true;
 	}
+
+      /* Recognize (plus (plus base index) index) as base + index*2.
+	 When fwprop substitutes (plus reg reg) for x*2 into a memory
+	 address, simplify_gen_binary reassociates it from
+	 (plus base (plus idx idx)) to (plus (plus base idx) idx).
+	 Only accept this on 68020+ which supports scaled indexing.
+	 The m68k-canon-scaled-index pass (after fwprop, before IRA)
+	 rewrites this to (plus base (ashift idx 1)) so that LRA's
+	 decompose_normal_address can handle it.  */
+      if ((TARGET_68020 || TARGET_COLDFIRE)
+	  && GET_CODE (XEXP (x, 0)) == PLUS)
+	{
+	  rtx inner = XEXP (x, 0);
+	  rtx outer_right = XEXP (x, 1);
+
+	  /* (plus (plus A B) C) where B == C → base=A, index=C, scale=2.  */
+	  if (rtx_equal_p (XEXP (inner, 1), outer_right)
+	      && m68k_legitimate_base_reg_p (XEXP (inner, 0), strict_p)
+	      && m68k_legitimate_index_reg_p (outer_right, strict_p))
+	    {
+	      address->base = XEXP (inner, 0);
+	      address->index = outer_right;
+	      address->scale = 2;
+	      return true;
+	    }
+
+	  /* (plus (plus A B) C) where A == C → base=B, index=C, scale=2.  */
+	  if (rtx_equal_p (XEXP (inner, 0), outer_right)
+	      && m68k_legitimate_base_reg_p (XEXP (inner, 1), strict_p)
+	      && m68k_legitimate_index_reg_p (outer_right, strict_p))
+	    {
+	      address->base = XEXP (inner, 1);
+	      address->index = outer_right;
+	      address->scale = 2;
+	      return true;
+	    }
+	}
     }
   return false;
 }
@@ -3464,12 +3529,20 @@ m68k_tls_reference_p (rtx x, bool legitimate_p)
 
 #define USE_MOVQ(i)	((unsigned) ((i) + 128) <= 255)
 
-/* Return the type of move that should be used for integer I.  */
+/* Return the type of move that should be used for integer I.
+   When DEST is a MEM, register-only synthesis methods (moveq, not.b,
+   not.w, neg.w, swap) are unavailable — the constant must be embedded
+   as a full immediate.  Exceptions: zero (uses clr) and mov3q values
+   (encoded in opcode, ColdFire only).  */
 
 M68K_CONST_METHOD
-m68k_const_method (HOST_WIDE_INT i)
+m68k_const_method (HOST_WIDE_INT i, rtx dest)
 {
   unsigned u;
+
+  /* Memory destinations cannot use register-only synthesis.  */
+  if (dest && MEM_P (dest) && i != 0 && !valid_mov3q_const (i))
+    return MOVL;
 
   if (USE_MOVQ (i))
     return MOVQ;
@@ -7972,6 +8045,316 @@ static bool
 m68k_use_lra_p ()
 {
   return m68k_lra_p;
+}
+
+/* Return true if all occurrences of REGNO in expression X appear in
+   contexts where m68k address registers are sufficient.  PARENT_CODE
+   is the RTX code of X's parent node (UNKNOWN at top level).
+
+   Address registers handle: move, add, sub, compare, memory address.
+   They cannot do: bitwise ops, shifts, multiply, divide, negate,
+   sign/zero extend, strict_low_part writes.  */
+
+static bool
+regno_addr_safe_context_p (rtx x, unsigned int regno,
+			   enum rtx_code parent_code)
+{
+  if (x == NULL_RTX)
+    return true;
+
+  enum rtx_code code = GET_CODE (x);
+
+  /* Found our pseudo -- check if the parent context is addr-safe.  */
+  if (code == REG && REGNO (x) == regno)
+    {
+      switch (parent_code)
+	{
+	/* Operations that require data registers on m68k.  */
+	case AND: case IOR: case XOR: case NOT:
+	case ASHIFT: case ASHIFTRT: case LSHIFTRT:
+	case ROTATE: case ROTATERT:
+	case MULT: case DIV: case MOD: case UDIV: case UMOD:
+	case NEG: case ABS:
+	case SIGN_EXTEND: case ZERO_EXTEND: case TRUNCATE:
+	case STRICT_LOW_PART:
+	case UNSPEC: case UNSPEC_VOLATILE:
+	  return false;
+	default:
+	  return true;
+	}
+    }
+
+  /* Special handling for SET: the destination is addr-safe only if
+     the source operation is addr-reg compatible.  */
+  if (code == SET)
+    {
+      rtx dest = SET_DEST (x);
+      rtx src = SET_SRC (x);
+
+      if (refers_to_regno_p (regno, dest))
+	{
+	  rtx d = dest;
+	  /* strict_low_part write requires data register.  */
+	  if (GET_CODE (d) == STRICT_LOW_PART)
+	    {
+	      d = XEXP (d, 0);
+	      if (GET_CODE (d) == SUBREG)
+		d = SUBREG_REG (d);
+	      if (REG_P (d) && REGNO (d) == regno)
+		return false;
+	    }
+	  if (GET_CODE (d) == SUBREG)
+	    d = SUBREG_REG (d);
+	  if (REG_P (d) && REGNO (d) == regno)
+	    {
+	      /* Pseudo IS the SET destination.  The source operation
+		 determines whether this needs a data register.  */
+	      switch (GET_CODE (src))
+		{
+		case AND: case IOR: case XOR: case NOT:
+		case ASHIFT: case ASHIFTRT: case LSHIFTRT:
+		case ROTATE: case ROTATERT:
+		case MULT: case DIV: case MOD: case UDIV: case UMOD:
+		case NEG: case ABS:
+		case SIGN_EXTEND: case ZERO_EXTEND: case TRUNCATE:
+		case UNSPEC: case UNSPEC_VOLATILE:
+		  return false;
+		default:
+		  break;
+		}
+	    }
+	  else
+	    {
+	      /* Pseudo is nested in dest (e.g., in MEM address).  */
+	      if (!regno_addr_safe_context_p (dest, regno, SET))
+		return false;
+	    }
+	}
+
+      return regno_addr_safe_context_p (src, regno, SET);
+    }
+
+  /* Recurse into sub-expressions with current code as parent.  */
+  const char *fmt = GET_RTX_FORMAT (code);
+  for (int i = GET_RTX_LENGTH (code) - 1; i >= 0; i--)
+    {
+      if (fmt[i] == 'e')
+	{
+	  if (!regno_addr_safe_context_p (XEXP (x, i), regno, code))
+	    return false;
+	}
+      else if (fmt[i] == 'E')
+	{
+	  for (int j = XVECLEN (x, i) - 1; j >= 0; j--)
+	    if (!regno_addr_safe_context_p (XVECEXP (x, i, j), regno, code))
+	      return false;
+	}
+    }
+  return true;
+}
+
+/* Return true if pseudo REGNO only participates in operations that
+   m68k address registers can handle (move, add, sub, compare,
+   memory addressing).  Scans all DEF and USE chain references.  */
+
+static bool
+pseudo_only_addr_ops_p (unsigned int regno)
+{
+  df_ref ref;
+
+  for (ref = DF_REG_DEF_CHAIN (regno); ref; ref = DF_REF_NEXT_REG (ref))
+    {
+      rtx_insn *insn = DF_REF_INSN (ref);
+      if (!insn || !INSN_P (insn))
+	continue;
+      if (!regno_addr_safe_context_p (PATTERN (insn), regno, UNKNOWN))
+	return false;
+    }
+
+  for (ref = DF_REG_USE_CHAIN (regno); ref; ref = DF_REF_NEXT_REG (ref))
+    {
+      rtx_insn *insn = DF_REF_INSN (ref);
+      if (!insn || !INSN_P (insn))
+	continue;
+      if (!regno_addr_safe_context_p (PATTERN (insn), regno, UNKNOWN))
+	return false;
+    }
+
+  return true;
+}
+
+/* Return true if pseudo REGNO is derived from a pointer source.
+   Checks if any DEF of REGNO is a simple copy (set reg reg) from
+   a REG_POINTER pseudo.  This catches cases where GCC's middle-end
+   loses the pointer attribute on a derived value.  */
+
+static bool
+pseudo_pointer_derived_p (unsigned int regno)
+{
+  df_ref ref;
+
+  for (ref = DF_REG_DEF_CHAIN (regno); ref; ref = DF_REF_NEXT_REG (ref))
+    {
+      rtx_insn *insn = DF_REF_INSN (ref);
+      if (!insn || !INSN_P (insn))
+	continue;
+      rtx pat = PATTERN (insn);
+      if (GET_CODE (pat) != SET)
+	continue;
+      rtx dest = SET_DEST (pat);
+      rtx src = SET_SRC (pat);
+      /* Check for simple reg-to-reg copy: (set (reg REGNO) (reg SRC)).  */
+      if (REG_P (dest) && REGNO (dest) == regno
+	  && REG_P (src) && REGNO (src) >= FIRST_PSEUDO_REGISTER
+	  && REG_POINTER (src))
+	return true;
+      /* Also check (set (reg REGNO) (plus (reg SRC) ...)) where SRC
+	 is a pointer (pointer arithmetic).  */
+      if (REG_P (dest) && REGNO (dest) == regno
+	  && GET_CODE (src) == PLUS
+	  && REG_P (XEXP (src, 0))
+	  && REGNO (XEXP (src, 0)) >= FIRST_PSEUDO_REGISTER
+	  && REG_POINTER (XEXP (src, 0)))
+	return true;
+    }
+  return false;
+}
+
+/* Helper: Check if REGNO is used as a memory address in INSN.
+   Recursively scans the RTX pattern looking for (mem (... regno ...)).  */
+
+static bool
+regno_used_as_mem_address_in_rtx (rtx x, unsigned int regno)
+{
+  if (x == NULL_RTX)
+    return false;
+
+  if (MEM_P (x))
+    {
+      /* Check if regno appears anywhere in the address.  */
+      rtx addr = XEXP (x, 0);
+      return refers_to_regno_p (regno, addr);
+    }
+
+  const char *fmt = GET_RTX_FORMAT (GET_CODE (x));
+  for (int i = GET_RTX_LENGTH (GET_CODE (x)) - 1; i >= 0; i--)
+    {
+      if (fmt[i] == 'e')
+	{
+	  if (regno_used_as_mem_address_in_rtx (XEXP (x, i), regno))
+	    return true;
+	}
+      else if (fmt[i] == 'E')
+	{
+	  for (int j = XVECLEN (x, i) - 1; j >= 0; j--)
+	    if (regno_used_as_mem_address_in_rtx (XVECEXP (x, i, j), regno))
+	      return true;
+	}
+    }
+  return false;
+}
+
+/* Check if pseudo REGNO is used as a memory address anywhere.  */
+
+static bool
+pseudo_used_as_mem_address_p (unsigned int regno)
+{
+  df_ref ref;
+
+  for (ref = DF_REG_USE_CHAIN (regno); ref; ref = DF_REF_NEXT_REG (ref))
+    {
+      rtx_insn *insn = DF_REF_INSN (ref);
+      if (insn && INSN_P (insn))
+	{
+	  if (regno_used_as_mem_address_in_rtx (PATTERN (insn), regno))
+	    return true;
+	}
+    }
+  return false;
+}
+
+/* Implement TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS.
+   Prevent IRA's allocno-class widening from defeating register-class
+   preferences determined by cost analysis.
+
+   DATA_REGS case: when costs say DATA_REGS is best but the allocno class
+   was widened to GENERAL_REGS, narrow it back.  Otherwise IRA thread
+   coalescing can pull the pseudo into an address register, forcing reload
+   to insert a copy through a data register.
+
+   ADDR_REGS case: when the pseudo is used as a memory base address, force
+   ADDR_REGS.  There is no (Dn) addressing mode on any 68k CPU.  Pseudos
+   used only for pointer arithmetic or comparisons can stay in data
+   registers to avoid unnecessary callee-save overhead.  */
+
+static reg_class_t
+m68k_ira_change_pseudo_allocno_class (int regno,
+				      reg_class_t allocno_class,
+				      reg_class_t best_class)
+{
+  if (!flag_m68k_ira_promote)
+    return allocno_class;
+
+  /* If DATA_REGS is best but the class was widened to GENERAL_REGS,
+     narrow it back.  This prevents thread coalescing from pulling
+     data-register-preferring pseudos into address registers, which
+     would force reload to insert a copy.  */
+  if (best_class == DATA_REGS
+      && allocno_class == GENERAL_REGS)
+    return DATA_REGS;
+
+  /* When costs are equal (best_class == GENERAL_REGS) or IRA prefers
+     ADDR_REGS (best_class == ADDR_REGS) but the allocno class was
+     widened, and the pseudo is pointer-typed AND actually used as a
+     memory address base, prefer ADDR_REGS.
+
+     The REG_POINTER check alone is insufficient: many pointer pseudos
+     are only used in copies or arithmetic (e.g., saving a base pointer
+     for later reuse).  Promoting these fills address registers and
+     forces non-pointer pseudos into suboptimal data registers.
+     The pseudo_used_as_mem_address_p guard ensures we only promote
+     pseudos that genuinely need address registers for memory access.
+
+     We also handle best_class == ADDR_REGS to handle IRA's two-pass
+     cost computation: pass 0 may set best to ADDR_REGS (from this
+     hook), then pass 1 widens allocno_class back to GENERAL_REGS
+     but keeps best as ADDR_REGS.
+
+     ColdFire is excluded from all ADDR_REGS promotion: its ISA
+     constraints differ from classic 68k, and forcing ADDR_REGS can
+     create unsatisfiable allocation conflicts that cause IRA/LRA to
+     loop indefinitely.
+
+     For LRA mode on classic 68k, also promote pointer-derived pseudos
+     (e.g., loop induction variables computed from pointer values) that
+     only use addr-reg-compatible operations.  This compensates for
+     LRA's flat coloring keeping caller-save registers in the
+     profitable set.  */
+  if (!TARGET_COLDFIRE
+      && (best_class == GENERAL_REGS || best_class == ADDR_REGS)
+      && allocno_class == GENERAL_REGS
+      && ((REG_POINTER (regno_reg_rtx[regno])
+	   && pseudo_used_as_mem_address_p (regno))
+	  || (ira_use_lra_p
+	      && pseudo_pointer_derived_p (regno)
+	      && pseudo_only_addr_ops_p (regno))))
+    return ADDR_REGS;
+
+  /* Only consider forcing ADDR_REGS if that's the best class.  */
+  if (best_class != ADDR_REGS)
+    return allocno_class;
+
+  /* If allocno_class is already ADDR_REGS, no change needed.  */
+  if (allocno_class == ADDR_REGS)
+    return allocno_class;
+
+  /* Check if this pseudo is actually used as a memory address.
+     If so, force ADDR_REGS to avoid reload copies.  */
+  if (!TARGET_COLDFIRE && pseudo_used_as_mem_address_p (regno))
+    return ADDR_REGS;
+
+  /* Pseudo is only used for arithmetic/comparisons - let IRA decide.  */
+  return allocno_class;
 }
 
 /* Do not emit .note.GNU-stack by default.  */

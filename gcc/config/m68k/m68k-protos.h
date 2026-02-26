@@ -129,6 +129,13 @@ extern rtx m68k_legitimize_sibcall_address (rtx);
 extern int m68k_hard_regno_rename_ok(unsigned int, unsigned int);
 extern poly_int64 m68k_push_rounding (poly_int64);
 
+/* Functions from m68k-pass-regalloc.cc.  */
+class rtl_opt_pass;
+namespace gcc { class context; }
+extern rtl_opt_pass *make_m68k_pass_canon_scaled_index (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_break_false_dep (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_break_false_dep_cleanup (gcc::context *);
+
 #ifdef RTX_CODE
 #ifdef TREE_CODE
 void m68k_init_cumulative_args (CUMULATIVE_ARGS *, tree, rtx, tree, int);

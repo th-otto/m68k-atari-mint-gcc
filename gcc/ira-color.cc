@@ -3762,6 +3762,47 @@ color_pass (ira_loop_tree_node_t loop_tree_node)
        subloop_node = subloop_node->subloop_next)
     {
       ira_assert (subloop_node->bb == NULL);
+      /* Compute merge budget for pass-through allocnos (NREFS==0).
+	 When the child level is under register pressure, merging all
+	 zero-ref allocnos pre-assigns their parent registers, removing
+	 them from the coloring graph.  This can prevent IRA from
+	 spilling these cheap allocnos to make room for more expensive
+	 ones.  The budget limits merges so that enough zero-ref
+	 allocnos remain as spill candidates.  */
+      int nrefs0_budget = 0;
+      if (flag_ira_merge_passthrough)
+	{
+	  int nrefs0_count = 0;
+	  enum reg_class budget_pclass = NO_REGS;
+	  EXECUTE_IF_SET_IN_BITMAP (consideration_allocno_bitmap, 0, j, bi)
+	    {
+	      ira_allocno_t pa = ira_allocnos[j];
+	      int r = ALLOCNO_REGNO (pa);
+	      ira_allocno_t sa = subloop_node->regno_allocno_map[r];
+	      if (sa == NULL || ALLOCNO_CAP (sa) != NULL)
+		continue;
+	      if (ALLOCNO_MIGHT_CONFLICT_WITH_PARENT_P (sa))
+		continue;
+	      if (ALLOCNO_NREFS (sa) == 0
+		  && !ira_single_region_allocno_p (pa, sa))
+		{
+		  nrefs0_count++;
+		  if (budget_pclass == NO_REGS)
+		    budget_pclass
+		      = ira_pressure_class_translate[ALLOCNO_CLASS (pa)];
+		}
+	    }
+	  if (nrefs0_count > 0 && budget_pclass != NO_REGS)
+	    {
+	      int avail = ira_class_hard_regs_num[budget_pclass];
+	      int pressure = subloop_node->reg_pressure[budget_pclass];
+	      int deficit = pressure - avail;
+	      nrefs0_budget = (deficit > 0)
+		? nrefs0_count - deficit : nrefs0_count;
+	      if (nrefs0_budget < 0)
+		nrefs0_budget = 0;
+	    }
+	}
       EXECUTE_IF_SET_IN_BITMAP (consideration_allocno_bitmap, 0, j, bi)
         {
 	  a = ira_allocnos[j];
@@ -3784,7 +3825,22 @@ color_pass (ira_loop_tree_node_t loop_tree_node)
 	  ira_assert (ALLOCNO_CLASS (subloop_allocno) == rclass);
 	  ira_assert (bitmap_bit_p (subloop_node->all_allocnos,
 				    ALLOCNO_NUM (subloop_allocno)));
-	  if (ira_single_region_allocno_p (a, subloop_allocno)
+	  bool single_region
+	    = ira_single_region_allocno_p (a, subloop_allocno);
+	  /* Merge pass-through allocnos with their parent up to the
+	     budget.  This eliminates loop-boundary copies while leaving
+	     enough zero-ref allocnos in the coloring graph as cheap
+	     spill candidates when register pressure is high.  */
+	  bool merge_passthrough
+	    = (!single_region
+	       && flag_ira_merge_passthrough
+	       && ALLOCNO_NREFS (subloop_allocno) == 0
+	       && !ALLOCNO_MIGHT_CONFLICT_WITH_PARENT_P (subloop_allocno)
+	       && nrefs0_budget > 0);
+	  if (merge_passthrough)
+	    nrefs0_budget--;
+	  if (single_region
+	      || merge_passthrough
 	      || !ira_subloop_allocnos_can_differ_p (a, hard_regno >= 0,
 						     false))
 	    {
