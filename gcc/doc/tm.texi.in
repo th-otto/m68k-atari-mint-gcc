@@ -7893,6 +7893,10 @@ to by @var{ce_info}.
 
 @hook TARGET_DOLOOP_COST_FOR_ADDRESS
 
+@hook TARGET_DOLOOP_COST_FOR_COMPARE
+
+@hook TARGET_DOLOOP_MIN_ITERATIONS
+
 @hook TARGET_CAN_USE_DOLOOP_P
 
 @hook TARGET_INVALID_WITHIN_DOLOOP
@@ -7943,6 +7947,8 @@ lists.
 @hook TARGET_HAVE_CCMP
 
 @hook TARGET_LOOP_UNROLL_ADJUST
+
+@hook TARGET_PREFER_RUNTIME_UNROLL_TABLEJUMP
 
 @defmac POWI_MAX_MULTS
 If defined, this macro is interpreted as a signed integer C expression

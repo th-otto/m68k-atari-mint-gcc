@@ -136,6 +136,15 @@ extern rtl_opt_pass *make_m68k_pass_canon_scaled_index (gcc::context *);
 extern rtl_opt_pass *make_m68k_pass_break_false_dep (gcc::context *);
 extern rtl_opt_pass *make_m68k_pass_break_false_dep_cleanup (gcc::context *);
 
+/* Functions from m68k-doloop.cc.  */
+extern bool m68k_can_use_doloop_p (const widest_int &, const widest_int &,
+				   unsigned int, bool);
+extern machine_mode m68k_preferred_doloop_mode (machine_mode);
+extern bool m68k_predict_doloop_p (class loop *);
+extern const char *m68k_invalid_within_doloop (const rtx_insn *);
+extern bool m68k_doloop_exit_iv_has_body_uses (rtx);
+
+
 #ifdef RTX_CODE
 #ifdef TREE_CODE
 void m68k_init_cumulative_args (CUMULATIVE_ARGS *, tree, rtx, tree, int);

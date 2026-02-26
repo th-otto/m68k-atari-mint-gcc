@@ -263,7 +263,7 @@ static const struct m68k_cost_table m68k_cost_68000 = {
   /* shift_var_add */ 16,
   /* shift_mem */ 8,
   /* shift_large_add */ 0,
-  /* shift_speed_divisor */ 3,
+  /* shift_speed_divisor */ 2,
 
   /* plus costs */
   {

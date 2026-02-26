@@ -52,6 +52,9 @@ along with GCC; see the file COPYING3.  If not see
 #include "expr.h"
 #include "reload.h"
 #include "ira.h"
+#include "cfgloop.h"
+#include "gimple.h"
+#include "gimple-iterator.h"
 #include "tm_p.h"
 #include "target.h"
 #include "debug.h"
@@ -311,6 +314,41 @@ static void m68k_file_end (void);
 
 #undef TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS
 #define TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS m68k_ira_change_pseudo_allocno_class
+
+#undef TARGET_CAN_USE_DOLOOP_P
+#define TARGET_CAN_USE_DOLOOP_P m68k_can_use_doloop_p
+
+#undef TARGET_PREFERRED_DOLOOP_MODE
+#define TARGET_PREFERRED_DOLOOP_MODE m68k_preferred_doloop_mode
+
+#undef TARGET_PREDICT_DOLOOP_P
+#define TARGET_PREDICT_DOLOOP_P m68k_predict_doloop_p
+
+/* Credit for using doloop IV for loop exit comparison.
+   dbra is one instruction vs cmp.l + jne (two instructions).
+   TODO: Perhaps this should be COSTS_N_INSNS (-2) to more strongly
+   prefer dbra; more test cases and tuning needed.  */
+#undef TARGET_DOLOOP_COST_FOR_COMPARE
+#define TARGET_DOLOOP_COST_FOR_COMPARE (COSTS_N_INSNS (-1))
+
+/* Enable doloop for loops with 1+ iterations (default is 3).
+   The dbra instruction is always beneficial on m68k.  */
+#undef TARGET_DOLOOP_MIN_ITERATIONS
+#define TARGET_DOLOOP_MIN_ITERATIONS 1
+
+/* Allow doloop in loops containing function calls.
+   The default hook rejects CALL_P insns because some targets (TI DSPs) use
+   special hardware loop counters that are clobbered by calls.  m68k's dbra
+   uses a regular data register; when the loop has a call, IRA allocates the
+   counter to a callee-saved register, so calls cannot clobber it.  */
+#undef TARGET_INVALID_WITHIN_DOLOOP
+#define TARGET_INVALID_WITHIN_DOLOOP m68k_invalid_within_doloop
+
+/* Prefer jump table dispatch for runtime loop unrolling.
+   The serial compare cascade generates 12+ instructions on m68k for
+   unroll factor 8.  A jump table is 3 instructions + 16 bytes of data.  */
+#undef TARGET_PREFER_RUNTIME_UNROLL_TABLEJUMP
+#define TARGET_PREFER_RUNTIME_UNROLL_TABLEJUMP true
 
 #undef TARGET_ATTRIBUTE_TABLE
 #define TARGET_ATTRIBUTE_TABLE m68k_attribute_table
@@ -866,6 +904,14 @@ m68k_option_override_internal (bool main_args_p)
      merging eliminates these copies without increasing pressure.  */
   if (!OPTION_SET_P (flag_ira_merge_passthrough))
     flag_ira_merge_passthrough = 1;
+
+  /* Disable IV splitting in the loop unroller.  When enabled, the unroller
+     generates base+offset addressing for each unrolled iteration, which
+     prevents efficient post-increment addressing.  With this disabled,
+     the unroller chains increments, enabling move.l (%a0)+,(%a1)+ patterns
+     that are much more efficient on m68k.  */
+  if (!OPTION_SET_P (flag_split_ivs_in_unroller))
+    flag_split_ivs_in_unroller = 0;
 }
 
 /* Implement the TARGET_OPTION_OVERRIDE hook.  */
@@ -8272,6 +8318,10 @@ pseudo_used_as_mem_address_p (unsigned int regno)
     }
   return false;
 }
+
+/* Doloop hooks (m68k_can_use_doloop_p, m68k_preferred_doloop_mode,
+   m68k_predict_doloop_p, m68k_invalid_within_doloop) are implemented
+   in m68k-doloop.cc.  */
 
 /* Implement TARGET_IRA_CHANGE_PSEUDO_ALLOCNO_CLASS.
    Prevent IRA's allocno-class widening from defeating register-class

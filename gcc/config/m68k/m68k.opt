@@ -226,6 +226,14 @@ mm68k-insn-cost
 Target Var(flag_m68k_insn_cost) Init(1) Optimization
 Enable the m68k instruction cost hook that includes destination cost.
 
+mm68k-bitfield-xor
+Target Var(flag_m68k_bitfield_xor) Init(1) Optimization
+Enable the bitfield XOR optimization for BIT_NOT on bitfields.
+
+mm68k-doloop
+Target Var(flag_m68k_doloop) Init(1) Optimization
+Enable the m68k doloop (dbra) optimization.
+
 mm68k-ira-promote
 Target Var(flag_m68k_ira_promote) Init(1) Optimization
 Enable the m68k IRA pseudo allocno class promotion.

@@ -12,6 +12,11 @@ m68k-pass-regalloc.o: $(srcdir)/config/m68k/m68k-pass-regalloc.cc
 	$(COMPILE) $<
 	$(POSTCOMPILE)
 
+m68k-doloop.o: $(srcdir)/config/m68k/m68k-doloop.cc
+	$(COMPILE) $<
+	$(POSTCOMPILE)
+
+
 # Register the m68k-specific passes
 PASSES_EXTRA += $(srcdir)/config/m68k/m68k-passes.def
 

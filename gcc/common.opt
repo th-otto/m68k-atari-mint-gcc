@@ -2237,6 +2237,10 @@ fivopts
 Common Var(flag_ivopts) Init(1) Optimization
 Optimize induction variables on trees.
 
+fivopts-autoinc-step
+Common Var(flag_ivopts_autoinc_step) Init(1) Optimization
+When target supports auto-increment addressing, discount IV step costs in IVOPTS.
+
 fjump-tables
 Common Var(flag_jump_tables) Init(0) Optimization
 Use jump tables for sufficiently large switch statements.

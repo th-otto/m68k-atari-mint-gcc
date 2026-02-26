@@ -2822,6 +2822,16 @@ number of memory accesses.",
  unsigned, (unsigned nunroll, class loop *loop),
  NULL)
 
+/* Prefer jump table dispatch for runtime loop unrolling.  */
+DEFHOOKPOD
+(prefer_runtime_unroll_tablejump,
+ "Return true if the target prefers a jump table dispatch for the\n\
+remainder iterations of runtime-unrolled loops, instead of a serial\n\
+compare-and-branch cascade.  The jump table is constant-time whereas\n\
+the compare cascade is O(unroll_factor).  Only effective when the\n\
+target also supports @code{tablejump}.",
+ bool, false)
+
 /* True if X is a legitimate MODE-mode immediate operand.  */
 DEFHOOK
 (legitimate_constant_p,
@@ -4689,6 +4699,26 @@ expensive penalty.  This hook allows target owners to define the cost for\n\
 this escpecially for address IV uses.\n\
 The default value is zero.",
  int64_t, 0)
+
+DEFHOOKPOD
+(doloop_cost_for_compare,
+ "Cost adjustment applied when the doloop IV candidate is used for the\n\
+loop exit comparison.  A negative value credits targets where the doloop\n\
+instruction is cheaper than a regular compare and branch sequence.\n\
+For example, on m68k the @code{dbra} instruction replaces both compare\n\
+and branch, saving one instruction, so a value of -4 is appropriate.\n\
+The default value is zero.",
+ int64_t, 0)
+
+DEFHOOKPOD
+(doloop_min_iterations,
+ "Minimum number of estimated iterations for doloop optimization\n\
+to be considered profitable.  The doloop pass will reject loops\n\
+with fewer estimated iterations than this value.  Set this to a\n\
+lower value (e.g., 1) for targets like m68k where the dbra\n\
+instruction is always beneficial regardless of iteration count.\n\
+The default value is 3.",
+ int, 3)
 
 DEFHOOK
 (can_use_doloop_p,

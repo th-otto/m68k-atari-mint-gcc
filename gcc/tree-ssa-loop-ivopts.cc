@@ -4720,18 +4720,43 @@ get_address_cost (struct ivopts_data *data, struct iv_use *use,
 	  && ratio == 1
 	  && ptrdiff_tree_p (cand->iv->step, &ainc_step))
 	{
-	  poly_int64 ainc_offset = (aff_inv->offset).force_shwi ();
-
-	  if (stmt_after_increment (data->current_loop, cand, use->stmt))
-	    ainc_offset += ainc_step;
-	  cost = get_address_cost_ainc (ainc_step, ainc_offset,
-					addr_mode, mem_mode, as, speed);
-	  if (!cost.infinite_cost_p ())
+	  /* For auto-increment candidates, check if this use is in an inner
+	     loop relative to the auto-increment position.  Auto-increment
+	     only fires once per iteration of the loop containing the
+	     increment, so uses in inner nested loops cannot benefit from it
+	     and must use offset addressing.  The adjustment logic below
+	     (adding ainc_step when stmt_after_increment) would incorrectly
+	     make such uses appear valid for auto-increment.  */
+	  bool dominated_by_ainc_use = true;
+	  if ((cand->pos == IP_AFTER_USE || cand->pos == IP_BEFORE_USE)
+	      && cand->ainc_use != NULL
+	      && cand->ainc_use != use)
 	    {
-	      *can_autoinc = true;
-	      return cost;
+	      basic_block ainc_bb = gimple_bb (cand->ainc_use->stmt);
+	      basic_block use_bb = gimple_bb (use->stmt);
+	      /* If the use is in a deeper nested loop than the auto-inc
+		 position, auto-increment cannot be used for this access.  */
+	      if (use_bb->loop_father != ainc_bb->loop_father
+		  && flow_loop_nested_p (ainc_bb->loop_father,
+					 use_bb->loop_father))
+		dominated_by_ainc_use = false;
 	    }
-	  cost = no_cost;
+
+	  if (dominated_by_ainc_use)
+	    {
+	      poly_int64 ainc_offset = (aff_inv->offset).force_shwi ();
+
+	      if (stmt_after_increment (data->current_loop, cand, use->stmt))
+		ainc_offset += ainc_step;
+	      cost = get_address_cost_ainc (ainc_step, ainc_offset,
+					    addr_mode, mem_mode, as, speed);
+	      if (!cost.infinite_cost_p ())
+		{
+		  *can_autoinc = true;
+		  return cost;
+		}
+	      cost = no_cost;
+	    }
 	}
       if (!aff_combination_zero_p (aff_inv))
 	{
@@ -5567,9 +5592,14 @@ determine_group_iv_cost_cond (struct ivopts_data *data,
       inv_vars = inv_vars_elim;
       inv_vars_elim = NULL;
       inv_expr = inv_expr_elim;
-      /* For doloop candidate/use pair, adjust to zero cost.  */
-      if (group->doloop_p && cand->doloop_p && elim_cost.cost > no_cost.cost)
-	cost = no_cost;
+      /* For doloop candidate/use pair, adjust to zero cost, then apply
+	 target-specific credit for using doloop vs compare+branch.  */
+      if (group->doloop_p && cand->doloop_p)
+	{
+	  if (elim_cost.cost > no_cost.cost)
+	    cost = no_cost;
+	  cost += targetm.doloop_cost_for_compare;
+	}
     }
   else
     {
@@ -5992,6 +6022,27 @@ determine_iv_cost (struct ivopts_data *data, struct iv_cand *cand)
   /* Doloop decrement should be considered as zero cost.  */
   if (cand->doloop_p)
     cost_step = 0;
+  /* If the target supports auto-increment addressing and the IV step
+     matches a memory access size, the step can be absorbed into the
+     addressing mode (e.g., move.l (%a0)+,...) at no extra cost.  */
+  else if (flag_ivopts_autoinc_step
+	   && data->speed
+	   && tree_fits_shwi_p (cand->iv->step))
+    {
+      HOST_WIDE_INT step_val = tree_to_shwi (cand->iv->step);
+      if (step_val < 0)
+	step_val = -step_val;
+      opt_scalar_int_mode mem_mode
+	= int_mode_for_size (step_val * BITS_PER_UNIT, 0);
+      if (mem_mode.exists ()
+	  && (USE_LOAD_POST_INCREMENT (*mem_mode)
+	      || USE_STORE_POST_INCREMENT (*mem_mode)
+	      || USE_LOAD_PRE_DECREMENT (*mem_mode)
+	      || USE_STORE_PRE_DECREMENT (*mem_mode)))
+	cost_step = 0;
+      else
+	cost_step = add_cost (data->speed, TYPE_MODE (TREE_TYPE (base)));
+    }
   else
     cost_step = add_cost (data->speed, TYPE_MODE (TREE_TYPE (base)));
   cost = cost_step + adjust_setup_cost (data, cost_base.cost);
@@ -7170,15 +7221,37 @@ find_optimal_iv_set (struct ivopts_data *data)
 	       cost.cost, cost.complexity);
     }
 
-  /* Choose the one with the best cost.  */
-  if (origcost <= cost)
+  /* Choose the one with the best cost.
+     If costs are equal, prefer fewer IVs.  */
+  if (origcost < cost)
     {
       if (set)
-	iv_ca_free (&set);
+        iv_ca_free (&set);
       set = origset;
     }
-  else if (origset)
-    iv_ca_free (&origset);
+  else if (origcost == cost)
+    {
+      /* Equal cost - prefer fewer IV candidates.  */
+      unsigned orig_n_cands = iv_ca_n_cands (origset);
+      unsigned new_n_cands = iv_ca_n_cands (set);
+      
+      if (orig_n_cands <= new_n_cands)
+        {
+          if (set)
+            iv_ca_free (&set);
+          set = origset;
+        }
+      else
+        {
+          if (origset)
+            iv_ca_free (&origset);
+        }
+    }
+  else
+    {
+      if (origset)
+        iv_ca_free (&origset);
+    }
 
   for (i = 0; i < data->vgroups.length (); i++)
     {
