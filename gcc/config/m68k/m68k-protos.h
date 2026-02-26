@@ -145,6 +145,11 @@ extern const char *m68k_invalid_within_doloop (const rtx_insn *);
 extern bool m68k_doloop_exit_iv_has_body_uses (rtx);
 
 
+/* Functions from m68k-pass-memreorder.cc.  */
+class gimple_opt_pass;
+extern gimple_opt_pass *make_m68k_pass_reorder_mem (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_reorder_incr (gcc::context *);
+
 #ifdef RTX_CODE
 #ifdef TREE_CODE
 void m68k_init_cumulative_args (CUMULATIVE_ARGS *, tree, rtx, tree, int);

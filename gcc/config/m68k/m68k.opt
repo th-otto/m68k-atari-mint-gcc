@@ -226,6 +226,14 @@ mm68k-insn-cost
 Target Var(flag_m68k_insn_cost) Init(1) Optimization
 Enable the m68k instruction cost hook that includes destination cost.
 
+mm68k-reorder-mem
+Target Var(flag_m68k_reorder_mem) Init(1) Optimization
+Enable the m68k memory access reordering optimization pass.
+
+mm68k-autoinc
+Target Var(flag_m68k_autoinc) Init(1) Optimization
+Enable the m68k auto-increment optimization passes.
+
 mm68k-bitfield-xor
 Target Var(flag_m68k_bitfield_xor) Init(1) Optimization
 Enable the bitfield XOR optimization for BIT_NOT on bitfields.
