@@ -5657,6 +5657,12 @@ get_subtarget (rtx x)
 	  ? 0 : x);
 }
 
+/* Default flag_m68k_bitfield_xor to 0 on non-m68k targets so the
+   BIT_NOT_EXPR handling below is compiled out.  */
+#ifndef flag_m68k_bitfield_xor
+#define flag_m68k_bitfield_xor 0
+#endif
+
 /* A subroutine of expand_assignment.  Optimize FIELD op= VAL, where
    FIELD is a bitfield.  Returns true if the optimization was successful,
    and there's nothing else to do.  */
@@ -5698,14 +5704,39 @@ optimize_bitfield_assignment_op (poly_uint64 pbitsize,
     return false;
 
   srcstmt = get_gimple_for_ssa_name (src);
-  if (!srcstmt
-      || !is_gimple_assign (srcstmt)
-      || TREE_CODE_CLASS (gimple_assign_rhs_code (srcstmt)) != tcc_binary)
+  if (!srcstmt || !is_gimple_assign (srcstmt))
     return false;
 
   code = gimple_assign_rhs_code (srcstmt);
 
-  op0 = gimple_assign_rhs1 (srcstmt);
+  /* Handle BIT_NOT_EXPR by converting to BIT_XOR_EXPR with all-ones.
+     The tree optimizer canonicalizes "field ^= 1" on 1-bit fields to
+     BIT_NOT_EXPR, losing the XOR form.  The "field = ~field" case adds
+     a NOP_EXPR (truncation) wrapper, so trace through that too.  */
+  tree synth_op1 = NULL_TREE;
+  if (flag_m68k_bitfield_xor && CONVERT_EXPR_CODE_P (code))
+    {
+      tree inner = gimple_assign_rhs1 (srcstmt);
+      if (TREE_CODE (inner) == SSA_NAME)
+	{
+	  gimple *inner_stmt = get_gimple_for_ssa_name (inner);
+	  if (inner_stmt && is_gimple_assign (inner_stmt))
+	    {
+	      srcstmt = inner_stmt;
+	      code = gimple_assign_rhs_code (srcstmt);
+	    }
+	}
+    }
+  if (flag_m68k_bitfield_xor && code == BIT_NOT_EXPR)
+    {
+      code = BIT_XOR_EXPR;
+      synth_op1 = build_all_ones_cst (TREE_TYPE (gimple_assign_lhs (srcstmt)));
+      op0 = gimple_assign_rhs1 (srcstmt);
+    }
+  else if (TREE_CODE_CLASS (code) != tcc_binary)
+    return false;
+  else
+    op0 = gimple_assign_rhs1 (srcstmt);
 
   /* If OP0 is an SSA_NAME, then we want to walk the use-def chain
      to find its initialization.  Hopefully the initialization will
@@ -5716,14 +5747,30 @@ optimize_bitfield_assignment_op (poly_uint64 pbitsize,
 
       /* We want to eventually have OP0 be the same as TO, which
 	 should be a bitfield.  */
-      if (!op0stmt
-	  || !is_gimple_assign (op0stmt)
-	  || gimple_assign_rhs_code (op0stmt) != TREE_CODE (to))
+      if (!op0stmt || !is_gimple_assign (op0stmt))
+	return false;
+
+      /* For BIT_NOT_EXPR, the tree optimizer may insert a widening cast
+	 between the bitfield load and the NOT (e.g. _2 = (unsigned char) _1;
+	 _3 = ~_2).  Trace through a single NOP_EXPR/CONVERT_EXPR.  */
+      if (synth_op1
+	  && CONVERT_EXPR_CODE_P (gimple_assign_rhs_code (op0stmt)))
+	{
+	  op0 = gimple_assign_rhs1 (op0stmt);
+	  if (TREE_CODE (op0) == SSA_NAME)
+	    {
+	      op0stmt = get_gimple_for_ssa_name (op0);
+	      if (!op0stmt || !is_gimple_assign (op0stmt))
+		return false;
+	    }
+	}
+
+      if (gimple_assign_rhs_code (op0stmt) != TREE_CODE (to))
 	return false;
       op0 = gimple_assign_rhs1 (op0stmt);
     }
 
-  op1 = gimple_assign_rhs2 (srcstmt);
+  op1 = synth_op1 ? synth_op1 : gimple_assign_rhs2 (srcstmt);
 
   if (!operand_equal_p (to, op0, 0))
     return false;

@@ -161,6 +161,9 @@ extern gimple_opt_pass *make_m68k_pass_narrow_index_mult (gcc::context *);
 extern rtl_opt_pass *make_m68k_pass_elim_andi (gcc::context *);
 extern rtl_opt_pass *make_m68k_pass_highword_opt (gcc::context *);
 
+/* Functions from m68k-pass-miscopt.cc.  */
+extern rtl_opt_pass *make_m68k_pass_reorder_for_cc (gcc::context *);
+
 #ifdef RTX_CODE
 #ifdef TREE_CODE
 void m68k_init_cumulative_args (CUMULATIVE_ARGS *, tree, rtx, tree, int);
