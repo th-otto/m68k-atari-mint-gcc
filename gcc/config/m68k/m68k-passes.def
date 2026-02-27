@@ -113,3 +113,38 @@ INSERT_PASS_AFTER (pass_sched, 1, m68k_pass_opt_autoinc);
    Runs before peephole2.  */
 
 INSERT_PASS_BEFORE (pass_peephole2, 1, m68k_pass_normalize_autoinc);
+
+/* Narrow index multiply optimization for m68k .w indexing.
+
+   Narrows 32-bit multiplies to 16-bit when safe, enabling .w indexed
+   addressing which sign-extends automatically.  Handles both explicit
+   casts from narrow types and 32-bit values with VRP-constrained ranges.
+
+   Runs after VRP1 to see range constraints from [[assume(...)]].  */
+
+INSERT_PASS_AFTER (pass_vrp, 1, m68k_pass_narrow_index_mult);
+
+/* Eliminate redundant andi.l #65535 zero-extension instructions.
+
+   On M68K, word (.w) operations only modify the lower 16 bits, leaving
+   upper bits unchanged.  This pass detects patterns where a register is
+   defined by a word-sized operation, all subsequent operations are
+   word/byte operations, and an andi.l #65535 zero-extends for 32-bit use.
+   By inserting moveq #0 before the first definition, the upper bits
+   remain zero throughout, making the andi redundant.
+
+   Runs after rtl_dce (the last DCE pass) to prevent the inserted
+   moveq from being deleted as dead code.  */
+
+INSERT_PASS_AFTER (pass_fast_rtl_dce, 1, m68k_pass_elim_andi);
+
+/* Optimize high-word field access for small structs passed by value.
+
+   Extraction:  clr.w %d0; swap %d0  ->  swap %d0
+   Computation: swap %d0; ext.l %d0; add.w %d1,%d0  ->  swap %d0; add.w %d1,%d0
+   Insertion:   swap %d1; clr.w %d1; and.l #65535,%d0; or.l %d1,%d0
+                ->  swap %d0; move.w %d1,%d0; swap %d0
+
+   Runs after elim_andi to work on simplified code.  */
+
+INSERT_PASS_AFTER (pass_fast_rtl_dce, 1, m68k_pass_highword_opt);

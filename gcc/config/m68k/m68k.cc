@@ -331,6 +331,14 @@ static void m68k_file_end (void);
 #undef TARGET_DOLOOP_COST_FOR_COMPARE
 #define TARGET_DOLOOP_COST_FOR_COMPARE (COSTS_N_INSNS (-1))
 
+/* Penalize using the doloop IV candidate for generic (non-compare,
+   non-address) uses in the loop body.  Without this, IVOPTS may select
+   the doloop candidate as the sole IV for both exit test and body
+   computation.  Since doloop counts down, body values derived from a
+   forward-counting IV require expensive recomputation (e.g. muls).  */
+#undef TARGET_DOLOOP_COST_FOR_GENERIC
+#define TARGET_DOLOOP_COST_FOR_GENERIC (COSTS_N_INSNS (1))
+
 /* Enable doloop for loops with 1+ iterations (default is 3).
    The dbra instruction is always beneficial on m68k.  */
 #undef TARGET_DOLOOP_MIN_ITERATIONS

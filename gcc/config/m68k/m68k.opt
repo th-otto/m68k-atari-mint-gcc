@@ -226,6 +226,18 @@ mm68k-insn-cost
 Target Var(flag_m68k_insn_cost) Init(1) Optimization
 Enable the m68k instruction cost hook that includes destination cost.
 
+mm68k-narrow-index-mult
+Target Var(flag_m68k_narrow_index_mult) Init(1) Optimization
+Enable the m68k narrow index multiply optimization pass.
+
+mm68k-elim-andi
+Target Var(flag_m68k_elim_andi) Init(1) Optimization
+Enable the m68k redundant AND-immediate elimination pass.
+
+mm68k-highword-opt
+Target Var(flag_m68k_highword_opt) Init(1) Optimization
+Enable the m68k high-word field access optimization pass.
+
 mm68k-reorder-mem
 Target Var(flag_m68k_reorder_mem) Init(1) Optimization
 Enable the m68k memory access reordering optimization pass.

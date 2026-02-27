@@ -29,6 +29,10 @@ m68k-pass-autoinc.o: $(srcdir)/config/m68k/m68k-pass-autoinc.cc
 	$(COMPILE) $<
 	$(POSTCOMPILE)
 
+m68k-pass-shortopt.o: $(srcdir)/config/m68k/m68k-pass-shortopt.cc
+	$(COMPILE) $<
+	$(POSTCOMPILE)
+
 # Register the m68k-specific passes
 PASSES_EXTRA += $(srcdir)/config/m68k/m68k-passes.def
 
