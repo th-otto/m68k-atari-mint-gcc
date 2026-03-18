@@ -364,6 +364,12 @@ hook_bool_rtx_insn_true (rtx_insn *)
 }
 
 bool
+hook_bool_rtx_insn_uint_uint_true (rtx_insn *, unsigned int, unsigned int)
+{
+  return true;
+}
+
+bool
 hook_bool_rtx_false (rtx)
 {
   return false;

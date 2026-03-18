@@ -230,6 +230,10 @@ mm68k-narrow-index-mult
 Target Var(flag_m68k_narrow_index_mult) Init(1) Optimization
 Enable the m68k narrow index multiply optimization pass.
 
+mm68k-narrow-const-ops
+Target Var(flag_m68k_narrow_const_ops) Init(1) Optimization
+Narrow constants in bitwise operations to avoid 32-bit widening.
+
 mm68k-elim-andi
 Target Var(flag_m68k_elim_andi) Init(1) Optimization
 Enable the m68k redundant AND-immediate elimination pass.

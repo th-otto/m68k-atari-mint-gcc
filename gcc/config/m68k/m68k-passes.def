@@ -87,6 +87,19 @@ INSERT_PASS_AFTER (pass_iv_optimize, 1, m68k_pass_autoinc_split);
 
 INSERT_PASS_AFTER (pass_inc_dec, 1, m68k_pass_avail_copy_elim);
 
+/* Sink hoisted load + common store into branch BBs for RMW.
+
+   PRE hoists common loads to header BBs; pass_inc_dec converts them
+   to POST_INC.  The store in the merge block compensates with -offset.
+   This separates load/modify/store across BBs, preventing combine from
+   creating RMW.  This pass reassembles them into each branch BB so
+   combine can merge load+modify+store into a single RMW instruction
+   (e.g. or.w %d3,(%a0)+).
+
+   Runs after pass_inc_dec, before pass_combine.  */
+
+INSERT_PASS_BEFORE (pass_combine, 1, m68k_pass_sink_for_rmw);
+
 /* Pre-RA auto-increment optimization.
 
    Handles multi-step indexed sequences, cross-BB patterns, and increment
@@ -98,6 +111,16 @@ INSERT_PASS_AFTER (pass_inc_dec, 1, m68k_pass_avail_copy_elim);
    positions first.  */
 
 INSERT_PASS_AFTER (pass_sched, 1, m68k_pass_opt_autoinc);
+
+/* Sink POST_INC from loads to downstream compensating-offset accesses.
+   When PRE hoists a common load and pass_inc_dec converts it to POST_INC,
+   the downstream store compensates with a negative offset (e.g. -2(%a0)).
+   This pass strips POST_INC from the load and inserts addq before the
+   store, so normalize_autoinc can merge addq + store(-N) into store(POST_INC).
+
+   Runs before normalize_autoinc and peephole2.  */
+
+INSERT_PASS_BEFORE (pass_peephole2, 1, m68k_pass_sink_postinc);
 
 /* Post-RA auto-increment normalization (LRA decomposition recovery).
 
@@ -113,6 +136,17 @@ INSERT_PASS_AFTER (pass_sched, 1, m68k_pass_opt_autoinc);
    Runs before peephole2.  */
 
 INSERT_PASS_BEFORE (pass_peephole2, 1, m68k_pass_normalize_autoinc);
+
+/* Narrow constants in bitwise operations to avoid 32-bit widening.
+
+   C integer promotion widens short operands to int before bitwise ops.
+   forwprop+fold narrows AND back but not shifts, OR, or XOR.  This pass
+   narrows constants to match the truncation type, making entire operations
+   narrow (e.g. 32-bit shift becomes 16-bit shift).
+
+   Runs after forwprop1 which already narrowed AND via fold.  */
+
+INSERT_PASS_AFTER (pass_forwprop, 1, m68k_pass_narrow_const_ops);
 
 /* Narrow index multiply optimization for m68k .w indexing.
 
@@ -156,3 +190,5 @@ INSERT_PASS_AFTER (pass_fast_rtl_dce, 1, m68k_pass_highword_opt);
    Runs after peephole2.  */
 
 INSERT_PASS_AFTER (pass_peephole2, 1, m68k_pass_reorder_for_cc);
+
+

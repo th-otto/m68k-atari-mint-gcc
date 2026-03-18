@@ -232,6 +232,13 @@ m68k_simplify_cast_mult (gimple_stmt_iterator *gsi)
   if (narrow_prec != 8 && narrow_prec != 16)
     return false;
 
+  /* On 68020+, extb.l extends QI->SI in one instruction (4 cycles),
+     same cost as ext.w for QI->HI.  Narrowing 8-bit inputs to HI
+     gives no extension benefit and causes combine to produce worse
+     shift-based code instead of extb.l + add.l.  */
+  if (narrow_prec == 8 && TARGET_68020)
+    return false;
+
   /* Only optimize positive constants (normal array element sizes).
      Negative constants create RTL patterns the backend can't match.  */
   wide_int cst_val = wi::to_wide (rhs2);
@@ -289,11 +296,29 @@ m68k_narrow_wide_mult (gimple_stmt_iterator *gsi)
   if (!m68k_get_value_range (rhs1, stmt, &min_val, &max_val, false))
     return false;
 
-  /* Operand must fit in signed 16-bit.  */
+  /* Operand must fit in signed 16-bit [-32768, 32767].
+     The narrowing converts to signed short and back, so the value must
+     be representable as signed 16-bit to preserve semantics.
+
+     Use the correct signedness when comparing range bounds: unsigned
+     ranges have min/max as unsigned values, so comparing max_val > 32767
+     must use unsigned comparison.  Otherwise UINT_MAX (0xFFFFFFFF)
+     would be interpreted as -1 and incorrectly pass the check.  */
+  signop rsign = TYPE_SIGN (TREE_TYPE (rhs1));
   wide_int hi_min = wi::shwi (-32768, 32);
   wide_int hi_max = wi::shwi (32767, 32);
-  if (wi::lts_p (min_val, hi_min) || wi::gts_p (max_val, hi_max))
-    return false;
+  if (rsign == UNSIGNED)
+    {
+      /* Unsigned operand: values must be in [0, 32767] for signed short.
+	 min_val is unsigned so always >= 0.  */
+      if (wi::gtu_p (max_val, hi_max))
+	return false;
+    }
+  else
+    {
+      if (wi::lts_p (min_val, hi_min) || wi::gts_p (max_val, hi_max))
+	return false;
+    }
 
   /* Only optimize positive constants (normal array element sizes).
      Negative constants create RTL patterns the backend can't match.  */
@@ -301,7 +326,7 @@ m68k_narrow_wide_mult (gimple_stmt_iterator *gsi)
   if (wi::neg_p (cst_val, SIGNED))
     return false;
 
-  if (!m68k_product_fits_16bit (min_val, max_val, cst_val, 32, SIGNED))
+  if (!m68k_product_fits_16bit (min_val, max_val, cst_val, 32, rsign))
     return false;
 
   m68k_emit_narrow_mult (gsi, lhs, rhs1, rhs2, 32);
@@ -373,6 +398,328 @@ public:
 
 }; /* class m68k_pass_narrow_index_mult */
 
+
+/* =======================================================================
+   GIMPLE pass: m68k_pass_narrow_const_ops
+
+   C integer promotion widens short operands to int before bitwise
+   operations.  GCC's forwprop+fold narrows AND back (pulls widening
+   cast through), but does NOT narrow shifts, OR, or XOR.  This pass
+   narrows constants to match sibling operand types or result truncation
+   types, making entire operations narrow.
+
+   Example - bitmask lookup through a shift:
+     Before:                              After:
+       _7 = _1 & 15;        (short)        _7 = _1 & 15;       (unchanged)
+       _3 = (int) _7;       (widen)        _4 = (ushort)32768 >> _7;  (16-bit)
+       _4 = 32768 >> _3;    (32-bit)
+       _5 = (ushort) _4;    (truncate)
+
+   Runs after forwprop1 which already narrowed AND via fold.
+   ======================================================================= */
+
+/* Try to produce a narrow version of OTHER_OP in NARROW_TYPE.
+   Returns the narrowed tree, or NULL_TREE on failure.
+   If ALLOW_TRUNCATE is false, only reuse a pre-narrowed source or
+   narrow a fitting constant (no arbitrary truncation casts).  */
+
+static tree
+m68k_narrow_operand (gimple_stmt_iterator *gsi, tree other_op,
+		     tree narrow_type, unsigned narrow_prec,
+		     bool allow_truncate)
+{
+  signop narrow_sign = TYPE_SIGN (narrow_type);
+
+  if (TREE_CODE (other_op) == SSA_NAME)
+    {
+      /* 7a: other_op comes from a widening cast of a narrow source.  */
+      gimple *def = SSA_NAME_DEF_STMT (other_op);
+      if (is_gimple_assign (def))
+	{
+	  enum tree_code code = gimple_assign_rhs_code (def);
+	  if (code == NOP_EXPR || code == CONVERT_EXPR)
+	    {
+	      tree src = gimple_assign_rhs1 (def);
+	      tree src_type = TREE_TYPE (src);
+	      if (INTEGRAL_TYPE_P (src_type)
+		  && TYPE_PRECISION (src_type) <= narrow_prec)
+		{
+		  if (useless_type_conversion_p (narrow_type, src_type))
+		    return src;
+		  /* Same or smaller precision, different signedness.  */
+		  tree tmp = make_ssa_name (narrow_type);
+		  gimple *cast = gimple_build_assign (tmp, NOP_EXPR, src);
+		  gsi_insert_before (gsi, cast, GSI_SAME_STMT);
+		  return tmp;
+		}
+	    }
+	}
+
+      /* 7c: insert truncation cast.  */
+      if (!allow_truncate)
+	return NULL_TREE;
+
+      tree tmp = make_ssa_name (narrow_type);
+      gimple *cast = gimple_build_assign (tmp, NOP_EXPR, other_op);
+      gsi_insert_before (gsi, cast, GSI_SAME_STMT);
+      return tmp;
+    }
+  else if (TREE_CODE (other_op) == INTEGER_CST)
+    {
+      /* 7b: constant that fits in narrow_type.  */
+      if (!wi::fits_to_tree_p (wi::to_wide (other_op), narrow_type))
+	return NULL_TREE;
+      return fold_convert (narrow_type, other_op);
+    }
+
+  return NULL_TREE;
+}
+
+/* Try to narrow a bitwise or shift operation through truncation casts.
+
+   Finds: result = (narrow_type) wide_val
+   Where: wide_val = X OP CONST  (or CONST OP X)
+   And:   OP is BIT_AND, BIT_IOR, BIT_XOR, or RSHIFT_EXPR
+
+   When wide_val has multiple uses, all must be narrowing casts to the same
+   precision.  The operation is narrowed once (using unsigned type) and all
+   truncation uses are replaced with casts from the narrow result.  */
+
+static bool
+m68k_narrow_const_op (gimple_stmt_iterator *gsi)
+{
+  gimple *stmt = gsi_stmt (*gsi);
+
+  if (!is_gimple_assign (stmt))
+    return false;
+
+  enum tree_code stmt_code = gimple_assign_rhs_code (stmt);
+  if (stmt_code != NOP_EXPR && stmt_code != CONVERT_EXPR)
+    return false;
+
+  tree wide_val = gimple_assign_rhs1 (stmt);
+
+  if (TREE_CODE (wide_val) != SSA_NAME)
+    return false;
+
+  tree wide_type = TREE_TYPE (wide_val);
+
+  if (!INTEGRAL_TYPE_P (wide_type))
+    return false;
+
+  unsigned wide_prec = TYPE_PRECISION (wide_type);
+
+  /* Defining stmt must be a supported binary op.  */
+  gimple *def_stmt = SSA_NAME_DEF_STMT (wide_val);
+  if (!is_gimple_assign (def_stmt))
+    return false;
+
+  /* LSHIFT_EXPR is excluded: left-shifting widens, so truncating
+     operands first can lose significant high bits that shift into
+     the narrow result range.  */
+  enum tree_code op_code = gimple_assign_rhs_code (def_stmt);
+  if (op_code != BIT_AND_EXPR && op_code != BIT_IOR_EXPR
+      && op_code != BIT_XOR_EXPR && op_code != RSHIFT_EXPR)
+    return false;
+
+  tree rhs1 = gimple_assign_rhs1 (def_stmt);
+  tree rhs2 = gimple_assign_rhs2 (def_stmt);
+
+  /* Identify which operand is the constant.  */
+  tree const_op, other_op;
+  bool const_is_rhs2;
+  if (TREE_CODE (rhs2) == INTEGER_CST)
+    {
+      const_op = rhs2;
+      other_op = rhs1;
+      const_is_rhs2 = true;
+    }
+  else if (TREE_CODE (rhs1) == INTEGER_CST)
+    {
+      const_op = rhs1;
+      other_op = rhs2;
+      const_is_rhs2 = false;
+    }
+  else
+    return false;
+
+  /* All uses of wide_val must be narrowing casts to the same precision.  */
+  unsigned common_prec = 0;
+  {
+    use_operand_p use_p;
+    imm_use_iterator imm_iter;
+    FOR_EACH_IMM_USE_FAST (use_p, imm_iter, wide_val)
+      {
+	gimple *use = USE_STMT (use_p);
+	if (is_gimple_debug (use))
+	  continue;
+	if (!is_gimple_assign (use))
+	  return false;
+	enum tree_code code = gimple_assign_rhs_code (use);
+	if (code != NOP_EXPR && code != CONVERT_EXPR)
+	  return false;
+	tree lhs_type = TREE_TYPE (gimple_assign_lhs (use));
+	if (!INTEGRAL_TYPE_P (lhs_type))
+	  return false;
+	unsigned prec = TYPE_PRECISION (lhs_type);
+	if (prec >= wide_prec)
+	  return false;
+	if (common_prec == 0)
+	  common_prec = prec;
+	else if (prec != common_prec)
+	  return false;
+      }
+  }
+
+  if (common_prec != 8 && common_prec != 16)
+    return false;
+
+  /* Use unsigned narrow type: bitwise ops are sign-agnostic, and for
+     RSHIFT with unsigned constant the shift is logical in both types.  */
+  tree op_narrow_type = build_nonstandard_integer_type (common_prec, true);
+
+  /* Constant must fit in unsigned narrow type.  */
+  if (!wi::fits_to_tree_p (wi::to_wide (const_op), op_narrow_type))
+    return false;
+
+  /* For RSHIFT_EXPR, the first operand is the value being shifted.
+     Arbitrary truncation (case 7c) is not safe for the value operand
+     because high bits affect lower bits after shifting.  Only allow
+     truncation for the shift amount (rhs2).  */
+  bool allow_truncate = true;
+  if (op_code == RSHIFT_EXPR && const_is_rhs2)
+    allow_truncate = false;  /* other_op is rhs1 (value) */
+
+  /* Narrow the other operand, inserting before def_stmt.  */
+  gimple_stmt_iterator def_gsi = gsi_for_stmt (def_stmt);
+  tree narrow_other = m68k_narrow_operand (&def_gsi, other_op, op_narrow_type,
+					   common_prec, allow_truncate);
+  if (narrow_other == NULL_TREE)
+    return false;
+
+  /* Create the narrow binary op before def_stmt.  */
+  tree narrow_const = fold_convert (op_narrow_type, const_op);
+
+  tree new_rhs1, new_rhs2;
+  if (const_is_rhs2)
+    {
+      new_rhs1 = narrow_other;
+      new_rhs2 = narrow_const;
+    }
+  else
+    {
+      new_rhs1 = narrow_const;
+      new_rhs2 = narrow_other;
+    }
+
+  tree narrow_result = make_ssa_name (op_narrow_type);
+  gimple *narrow_op = gimple_build_assign (narrow_result, op_code,
+					   new_rhs1, new_rhs2);
+  gimple_set_location (narrow_op, gimple_location (def_stmt));
+  gsi_insert_before (&def_gsi, narrow_op, GSI_SAME_STMT);
+
+  /* Replace all truncation uses with casts from the narrow result.
+     Collect uses first since replacing modifies the use list.  */
+  auto_vec<gimple *> uses;
+  {
+    imm_use_iterator imm_iter;
+    gimple *use_stmt;
+    FOR_EACH_IMM_USE_STMT (use_stmt, imm_iter, wide_val)
+      {
+	if (!is_gimple_debug (use_stmt))
+	  uses.safe_push (use_stmt);
+      }
+  }
+
+  for (unsigned i = 0; i < uses.length (); i++)
+    {
+      gimple *use = uses[i];
+      tree use_lhs = gimple_assign_lhs (use);
+      tree use_type = TREE_TYPE (use_lhs);
+      gimple_stmt_iterator use_gsi = gsi_for_stmt (use);
+
+      gimple *replacement;
+      if (useless_type_conversion_p (use_type, op_narrow_type))
+	replacement = gimple_build_assign (use_lhs, narrow_result);
+      else
+	replacement = gimple_build_assign (use_lhs, NOP_EXPR,
+					   narrow_result);
+
+      gimple_set_location (replacement, gimple_location (use));
+      gsi_replace (&use_gsi, replacement, true);
+    }
+
+  /* Remove the now-dead wide binary op.  */
+  gsi_remove (&def_gsi, true);
+  release_defs (def_stmt);
+
+  if (dump_file && (dump_flags & TDF_DETAILS))
+    {
+      fprintf (dump_file, "m68k: Narrowed bitwise/shift op to %d-bit "
+	       "(%u uses):\n", common_prec, uses.length ());
+      print_gimple_stmt (dump_file, narrow_op, 0, TDF_SLIM);
+    }
+
+  return true;
+}
+
+/* Main function for the narrow_const_ops pass.  */
+
+static unsigned int
+m68k_narrow_const_ops (function *fun)
+{
+  unsigned int changes = 0;
+  basic_block bb;
+
+  FOR_EACH_BB_FN (bb, fun)
+    {
+      for (gimple_stmt_iterator gsi = gsi_start_bb (bb);
+	   !gsi_end_p (gsi); gsi_next (&gsi))
+	{
+	  if (m68k_narrow_const_op (&gsi))
+	    changes++;
+	}
+    }
+
+  return changes ? TODO_update_ssa : 0;
+}
+
+/* Pass data for m68k_pass_narrow_const_ops.  */
+
+const pass_data m68k_pass_data_narrow_const_ops =
+{
+  GIMPLE_PASS,		    /* type */
+  "m68k-narrow-const-ops",  /* name */
+  OPTGROUP_NONE,	    /* optinfo_flags */
+  TV_MACH_DEP,		    /* tv_id */
+  PROP_ssa,		    /* properties_required */
+  0,			    /* properties_provided */
+  0,			    /* properties_destroyed */
+  0,			    /* todo_flags_start */
+  0			    /* todo_flags_finish */
+};
+
+/* The pass class for narrow_const_ops.  */
+
+class m68k_pass_narrow_const_ops : public gimple_opt_pass
+{
+public:
+  m68k_pass_narrow_const_ops (gcc::context *ctxt)
+    : gimple_opt_pass (m68k_pass_data_narrow_const_ops, ctxt)
+  {}
+
+  bool gate (function *) final override
+  {
+    return optimize > 0 && flag_m68k_narrow_const_ops && !TARGET_COLDFIRE;
+  }
+
+  unsigned int execute (function *func) final override
+  {
+    return m68k_narrow_const_ops (func);
+  }
+
+}; /* class m68k_pass_narrow_const_ops */
+
 } /* Anonymous namespace for GIMPLE passes.  */
 
 /* Factory function for m68k_pass_narrow_index_mult.  */
@@ -381,6 +728,14 @@ gimple_opt_pass *
 make_m68k_pass_narrow_index_mult (gcc::context *ctxt)
 {
   return new m68k_pass_narrow_index_mult (ctxt);
+}
+
+/* Factory function for m68k_pass_narrow_const_ops.  */
+
+gimple_opt_pass *
+make_m68k_pass_narrow_const_ops (gcc::context *ctxt)
+{
+  return new m68k_pass_narrow_const_ops (ctxt);
 }
 
 

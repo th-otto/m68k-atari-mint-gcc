@@ -36,6 +36,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "expr.h"
 #include "dumpfile.h"
 #include "explow.h"
+#include "expmed.h"
 
 /* This pass performs loop unrolling.  We only perform this
    optimization on innermost loops (with single exception) because
@@ -1119,14 +1120,15 @@ unroll_loop_runtime_iterations (class loop *loop)
       start_sequence ();
 
       /* Scale niter by the table entry size.  Perform the multiply in
-	 niter's native mode (e.g. HImode for -mshort) so the AND mask
-	 from the modulo computation stays in the narrower mode.  */
+	 niter's native mode.  The backend can narrow the index to
+	 CASE_VECTOR_MODE later if its addressing modes support it
+	 (e.g. m68k's .w index extension via sign_extend).  */
       int entry_size = GET_MODE_SIZE (CASE_VECTOR_MODE);
       machine_mode niter_mode = GET_MODE (niter);
-      rtx scaled_niter = expand_simple_binop (niter_mode, MULT,
+      rtx scaled_niter = expand_mult (niter_mode,
 	  copy_rtx (niter),
 	  gen_int_mode (entry_size, niter_mode),
-	  NULL_RTX, 0, OPTAB_LIB_WIDEN);
+	  NULL_RTX, 0);
 
       /* Build tablejump address: (PLUS (SIGN_EXTEND scaled_niter) label).
 	 Using SIGN_EXTEND as part of the address expression (not a
@@ -1162,6 +1164,11 @@ unroll_loop_runtime_iterations (class loop *loop)
 
       rtx_insn *seq = get_insns ();
       end_sequence ();
+
+      /* Unshare the sequence.  expand_mult's synth_mult can create
+	 shared SUBREGs (e.g. x*2 expanded as a DImode shift produces
+	 shared (subreg:SI (reg:DI) 0) in dest and src).  */
+      unshare_all_rtl_in_chain (seq);
 
       /* Insert the tablejump computation as a new block before swtch.  */
       basic_block tj_bb

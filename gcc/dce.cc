@@ -1103,8 +1103,22 @@ fast_dce (bool word_level)
 
   dead_debug_global_init (&global_debug, NULL);
 
+  int dce_iteration = 0;
   while (global_changed)
     {
+      dce_iteration++;
+      if (dce_iteration > n_blocks)
+	{
+	  /* Liveness failed to converge — this can happen when a reload
+	     spill fill creates a circular liveness dependency (a load of
+	     a register that is conditionally needed depending on its own
+	     liveness).  All useful deletions have been done by now;
+	     break to avoid an infinite loop.  */
+	  if (dump_file)
+	    fprintf (dump_file, "fast_dce: convergence limit reached "
+		     "(%d iterations)\n", dce_iteration);
+	  break;
+	}
       global_changed = false;
 
       for (i = 0; i < n_blocks; i++)
@@ -1136,10 +1150,6 @@ fast_dce (bool word_level)
 	      edge_iterator ei;
 	      FOR_EACH_EDGE (e, ei, bb->preds)
 		if (bitmap_bit_p (processed, e->src->index))
-		  /* Be tricky about when we need to iterate the
-		     analysis.  We only have redo the analysis if the
-		     bitmaps change at the top of a block that is the
-		     entry to a loop.  */
 		  global_changed = true;
 		else
 		  bitmap_set_bit (redo_out, e->src->index);

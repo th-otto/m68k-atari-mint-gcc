@@ -846,6 +846,681 @@ m68k_normalize_autoinc (function *func)
   return 0;
 }
 
+/* =======================================================================
+   RTL pass: m68k_pass_sink_for_rmw
+
+   Pre-RA pass that sinks a hoisted load and duplicates a common store
+   into branch BBs, enabling combine to merge load+modify+store into
+   a single read-modify-write (RMW) instruction.
+
+   PRE hoists common loads to header BBs.  pass_inc_dec converts them
+   to POST_INC.  The store in the merge block uses a compensating
+   negative offset.  This separates load/modify/store across BBs,
+   preventing combine from creating RMW.
+
+   This pass reassembles them:
+
+     Header:  (set val (mem (post_inc ptr)))     ; hoisted load
+              branch
+     Branch:  (set out (ior val mask))            ; modify
+     Merge:   (set (mem (plus ptr -size)) out)   ; compensating store
+
+   →
+
+     Header:  branch
+     Branch:  (set val (mem ptr))                 ; sunk load
+              (set out (ior val mask))             ; modify
+              (set (mem ptr) out)                  ; sunk store
+              (set ptr (plus ptr size))            ; sunk increment
+
+   Then combine merges load+modify+store → (set (mem ptr) (ior (mem ptr) mask))
+   and the autoinc pass adds POST_INC → or.w %d3,(%a0)+
+
+   Runs after pass_inc_dec, before pass_combine.
+   ======================================================================= */
+
+/* Check if INSN is a modify of REG_VAL using IOR/AND/XOR.
+   Returns the operation's other operand (the mask) via *PMASK,
+   and the output register via *POUT.  */
+
+static bool
+is_rmw_modify_p (rtx_insn *insn, int val_regno, rtx *pmask, rtx *pout)
+{
+  rtx set = single_set (insn);
+  if (!set)
+    return false;
+
+  rtx dst = SET_DEST (set);
+  rtx src = SET_SRC (set);
+
+  if (!REG_P (dst))
+    return false;
+
+  enum rtx_code code = GET_CODE (src);
+  if (code != IOR && code != AND && code != XOR)
+    return false;
+
+  rtx op0 = XEXP (src, 0);
+  rtx op1 = XEXP (src, 1);
+
+  if (REG_P (op0) && (int) REGNO (op0) == val_regno)
+    {
+      *pmask = op1;
+      *pout = dst;
+      return true;
+    }
+  if (REG_P (op1) && (int) REGNO (op1) == val_regno)
+    {
+      *pmask = op0;
+      *pout = dst;
+      return true;
+    }
+  return false;
+}
+
+static unsigned int
+m68k_sink_for_rmw (function *func)
+{
+  unsigned int changes = 0;
+  basic_block bb;
+
+  FOR_EACH_BB_FN (bb, func)
+    {
+      /* Header BB must end with a conditional branch.  */
+      rtx_insn *branch = BB_END (bb);
+      if (!JUMP_P (branch) || !any_condjump_p (branch))
+	continue;
+
+      /* Must have exactly 2 successors.  */
+      if (EDGE_COUNT (bb->succs) != 2)
+	continue;
+
+      /* Find a load with POST_INC in this BB.  */
+      rtx_insn *load_insn = nullptr;
+      int val_regno = -1;
+      int ptr_regno = -1;
+      machine_mode load_mode = VOIDmode;
+      int load_size = 0;
+
+      for (rtx_insn *insn = BB_HEAD (bb); ; insn = NEXT_INSN (insn))
+	{
+	  if (NONDEBUG_INSN_P (insn))
+	    {
+	      rtx set = single_set (insn);
+	      if (set && REG_P (SET_DEST (set))
+		  && MEM_P (SET_SRC (set))
+		  && !MEM_VOLATILE_P (SET_SRC (set)))
+		{
+		  rtx addr = XEXP (SET_SRC (set), 0);
+		  if (GET_CODE (addr) == POST_INC
+		      && REG_P (XEXP (addr, 0)))
+		    {
+		      load_insn = insn;
+		      val_regno = REGNO (SET_DEST (set));
+		      ptr_regno = REGNO (XEXP (addr, 0));
+		      load_mode = GET_MODE (SET_SRC (set));
+		      load_size = GET_MODE_SIZE (load_mode);
+		      break;
+		    }
+		}
+	    }
+	  if (insn == BB_END (bb))
+	    break;
+	}
+
+      if (!load_insn || val_regno == ptr_regno)
+	continue;
+
+      /* Verify: ptr_reg not used in header after the load,
+	 and val_reg not used in the branch condition.  */
+      rtx ptr_reg = gen_rtx_REG (Pmode, ptr_regno);
+      rtx val_reg = gen_rtx_REG (load_mode, val_regno);
+      bool safe = true;
+      for (rtx_insn *insn = NEXT_INSN (load_insn); ;
+	   insn = NEXT_INSN (insn))
+	{
+	  if (NONDEBUG_INSN_P (insn)
+	      && reg_mentioned_p (ptr_reg, PATTERN (insn)))
+	    { safe = false; break; }
+	  if (insn == BB_END (bb))
+	    break;
+	}
+      if (safe && reg_mentioned_p (val_reg, PATTERN (branch)))
+	safe = false;
+      if (!safe)
+	continue;
+
+      /* Check each branch successor: must have a single modify insn
+	 using val_reg, and a single successor (the merge BB).  */
+      edge e0 = EDGE_SUCC (bb, 0);
+      edge e1 = EDGE_SUCC (bb, 1);
+      basic_block succ0 = e0->dest;
+      basic_block succ1 = e1->dest;
+
+      /* Each successor must have exactly 1 successor
+	 (leading to the merge BB).  */
+      if (EDGE_COUNT (succ0->succs) != 1
+	  || EDGE_COUNT (succ1->succs) != 1)
+	continue;
+
+      basic_block merge0 = EDGE_SUCC (succ0, 0)->dest;
+      basic_block merge1 = EDGE_SUCC (succ1, 0)->dest;
+
+      /* Both branches must lead to the same merge BB.  */
+      if (merge0 != merge1)
+	continue;
+
+      basic_block merge_bb = merge0;
+
+      /* Merge BB must have exactly 2 predecessors.  */
+      if (EDGE_COUNT (merge_bb->preds) != 2)
+	continue;
+
+      /* Find the modify insn in each successor.  */
+      rtx_insn *mod0 = nullptr, *mod1 = nullptr;
+      rtx mask0 = nullptr, mask1 = nullptr;
+      rtx out0 = nullptr, out1 = nullptr;
+
+      for (rtx_insn *insn = BB_HEAD (succ0); ; insn = NEXT_INSN (insn))
+	{
+	  if (NONDEBUG_INSN_P (insn))
+	    {
+	      if (is_rmw_modify_p (insn, val_regno, &mask0, &out0))
+		mod0 = insn;
+	      break;
+	    }
+	  if (insn == BB_END (succ0))
+	    break;
+	}
+
+      for (rtx_insn *insn = BB_HEAD (succ1); ; insn = NEXT_INSN (insn))
+	{
+	  if (NONDEBUG_INSN_P (insn))
+	    {
+	      if (is_rmw_modify_p (insn, val_regno, &mask1, &out1))
+		mod1 = insn;
+	      break;
+	    }
+	  if (insn == BB_END (succ1))
+	    break;
+	}
+
+      if (!mod0 || !mod1)
+	continue;
+
+      /* Both modifies must write to the same output pseudo.  */
+      if (!REG_P (out0) || !REG_P (out1)
+	  || REGNO (out0) != REGNO (out1))
+	continue;
+
+      int out_regno = REGNO (out0);
+
+      /* Find the store in the merge BB: must be the first real insn,
+	 storing out_reg to (plus ptr_reg -load_size).  */
+      rtx_insn *store_insn = nullptr;
+      for (rtx_insn *insn = BB_HEAD (merge_bb); ;
+	   insn = NEXT_INSN (insn))
+	{
+	  if (NONDEBUG_INSN_P (insn))
+	    {
+	      rtx set = single_set (insn);
+	      if (set && MEM_P (SET_DEST (set))
+		  && !MEM_VOLATILE_P (SET_DEST (set))
+		  && REG_P (SET_SRC (set))
+		  && (int) REGNO (SET_SRC (set)) == out_regno)
+		{
+		  int mem_regno;
+		  HOST_WIDE_INT mem_offset;
+		  if (m68k_mem_reg_offset_p (SET_DEST (set),
+					     &mem_regno, &mem_offset)
+		      && mem_regno == ptr_regno
+		      && mem_offset == -load_size)
+		    store_insn = insn;
+		}
+	      break;
+	    }
+	  if (insn == BB_END (merge_bb))
+	    break;
+	}
+
+      if (!store_insn)
+	continue;
+
+      /* out_reg must be dead after the store.  */
+      if (!find_reg_note (store_insn, REG_DEAD, out0))
+	continue;
+
+      /* All conditions met — transform.  */
+
+      /* Step 1: Strip POST_INC from the load.  Extract the original
+	 pseudo RTXes — reuse them in emitted insns so IRA/LRA track
+	 a single pseudo instance (not duplicates from gen_rtx_REG).  */
+      rtx load_set = single_set (load_insn);
+      rtx orig_val_reg = SET_DEST (load_set);
+      rtx load_mem = SET_SRC (load_set);
+      rtx orig_postinc_addr = XEXP (load_mem, 0);
+      rtx orig_ptr_reg = XEXP (orig_postinc_addr, 0);
+
+      /* Replace (post_inc ptr) with plain ptr.  */
+      XEXP (load_mem, 0) = orig_ptr_reg;
+      rtx inc_note = find_reg_note (load_insn, REG_INC, nullptr);
+      if (inc_note)
+	remove_note (load_insn, inc_note);
+      INSN_CODE (load_insn) = -1;
+      recog_memoized (load_insn);
+
+      /* Get the original store's output register.  */
+      rtx store_set = single_set (store_insn);
+      rtx orig_out_reg = SET_SRC (store_set);
+      rtx orig_store_mem = SET_DEST (store_set);
+
+      /* Step 2: For each branch, emit load + store + increment.  */
+      for (int i = 0; i < 2; i++)
+	{
+	  rtx_insn *mod_insn = (i == 0) ? mod0 : mod1;
+
+	  /* Emit plain load before the modify.  Reuse the pseudo
+	     RTXes from the original insns.  */
+	  rtx new_mem = gen_rtx_MEM (load_mode, orig_ptr_reg);
+	  MEM_COPY_ATTRIBUTES (new_mem, load_mem);
+	  rtx new_load_pat = gen_rtx_SET (orig_val_reg, new_mem);
+	  rtx_insn *ld = emit_insn_before (new_load_pat, mod_insn);
+	  INSN_CODE (ld) = -1;
+	  recog_memoized (ld);
+
+	  /* Emit plain store after the modify.  */
+	  rtx st_mem = gen_rtx_MEM (load_mode, orig_ptr_reg);
+	  MEM_COPY_ATTRIBUTES (st_mem, orig_store_mem);
+	  rtx new_store_pat = gen_rtx_SET (st_mem, orig_out_reg);
+	  rtx_insn *st = emit_insn_after (new_store_pat, mod_insn);
+	  INSN_CODE (st) = -1;
+	  recog_memoized (st);
+
+	  /* Emit increment after the store.  The SET_DEST and the
+	     first PLUS operand must be the SAME RTX pointer so the
+	     "0" matching constraint is satisfied.  */
+	  rtx new_incr_pat = gen_rtx_SET (
+	    orig_ptr_reg,
+	    gen_rtx_PLUS (Pmode, orig_ptr_reg, GEN_INT (load_size)));
+	  rtx_insn *inc = emit_insn_after (new_incr_pat, st);
+	  INSN_CODE (inc) = -1;
+	  recog_memoized (inc);
+	}
+
+      /* Step 3: Delete original load from header and store from merge.  */
+      delete_insn (load_insn);
+      delete_insn (store_insn);
+
+      changes++;
+
+      if (dump_file)
+	fprintf (dump_file,
+		 "m68k-sink-for-rmw: sank load+store from bb %d/bb %d "
+		 "into bb %d and bb %d\n",
+		 bb->index, merge_bb->index,
+		 succ0->index, succ1->index);
+    }
+
+  if (changes > 0)
+    {
+      /* Rebuild the entire insn stream's DF info so subsequent
+	 passes (combine, IRA) see correct defs/uses/liveness.  */
+      df_insn_rescan_all ();
+    }
+
+  if (dump_file && changes > 0)
+    fprintf (dump_file, "m68k-sink-for-rmw: %d transformations\n", changes);
+
+  return 0;
+}
+
+/* Pass data for m68k_pass_sink_for_rmw.  */
+
+const pass_data m68k_pass_data_sink_for_rmw =
+{
+  RTL_PASS,		       /* type */
+  "m68k-sink-for-rmw",	       /* name */
+  OPTGROUP_NONE,	       /* optinfo_flags */
+  TV_MACH_DEP,		       /* tv_id */
+  0,			       /* properties_required */
+  0,			       /* properties_provided */
+  0,			       /* properties_destroyed */
+  0,			       /* todo_flags_start */
+  0			       /* todo_flags_finish */
+};
+
+class m68k_pass_sink_for_rmw : public rtl_opt_pass
+{
+public:
+  m68k_pass_sink_for_rmw (gcc::context *ctxt)
+    : rtl_opt_pass (m68k_pass_data_sink_for_rmw, ctxt)
+  {}
+
+  bool gate (function *) final override
+  {
+    return optimize > 0 && flag_m68k_autoinc && !TARGET_COLDFIRE;
+  }
+
+  unsigned int execute (function *func) final override
+  {
+    return m68k_sink_for_rmw (func);
+  }
+
+}; /* class m68k_pass_sink_for_rmw */
+
+/* =======================================================================
+   RTL pass: m68k_pass_sink_postinc
+
+   Moves a POST_INC side-effect from a load to a downstream BB where
+   the compensating negative-offset access is.  Then normalize_autoinc
+   (which runs after this pass) merges addq + store(-offset) into
+   store(POST_INC).
+
+   Problem: PRE hoists a common load to the loop header and pass_inc_dec
+   converts it to POST_INC.  The store in a downstream merge block then
+   compensates with a negative offset (e.g. -2(%a0)).  This wastes cycles
+   on the offset addressing mode.
+
+   Transformation:
+     Source BB:
+       (set reg (mem (post_inc ptr)))     ; load with POST_INC
+       ...                                ; insns not using ptr
+     Target BB (post-dominator):
+       (set (mem (plus ptr -N)) val)      ; store with compensating offset
+
+   Becomes:
+     Source BB:
+       (set reg (mem ptr))                ; plain load, no side-effect
+     Target BB:
+       (set ptr (plus ptr N))             ; inserted addq
+       (set (mem (plus ptr -N)) val)      ; store (normalize_autoinc merges)
+
+   Runs post-RA, before normalize_autoinc and peephole2.
+   ======================================================================= */
+
+/* Scan BB for uses of REGNO.  Returns:
+   - The first insn with a MEM using REGNO at negative offset -INCR
+     (a postinc candidate), via *OUT_INSN.  Returns 1.
+   - If REGNO is referenced but no candidate found, returns -1.
+   - If REGNO is not referenced at all, returns 0.  */
+
+static int
+scan_bb_for_postinc_target (basic_block bb, int regno, HOST_WIDE_INT incr,
+			    rtx_insn **out_insn)
+{
+  rtx reg = gen_rtx_REG (Pmode, regno);
+  bool reg_seen = false;
+
+  for (rtx_insn *insn = BB_HEAD (bb); ; insn = NEXT_INSN (insn))
+    {
+      if (NONDEBUG_INSN_P (insn))
+	{
+	  rtx set = single_set (insn);
+	  if (set)
+	    {
+	      rtx *mem_loc = nullptr;
+	      int count = find_postinc_candidate (&PATTERN (insn), regno,
+						  incr, &mem_loc);
+	      if (count == 1 && mem_loc)
+		{
+		  *out_insn = insn;
+		  return 1;
+		}
+	    }
+	  if (!reg_seen
+	      && reg_mentioned_p (reg, PATTERN (insn)))
+	    reg_seen = true;
+	}
+      if (insn == BB_END (bb))
+	break;
+    }
+
+  return reg_seen ? -1 : 0;
+}
+
+static unsigned int
+m68k_sink_postinc (function *func)
+{
+  unsigned int changes = 0;
+  basic_block bb;
+  bool pdom_valid = false;
+
+  FOR_EACH_BB_FN (bb, func)
+    {
+      /* Find a load with POST_INC in this BB.  */
+      rtx_insn *load_insn = nullptr;
+      int ptr_regno = -1;
+      HOST_WIDE_INT incr = 0;
+
+      for (rtx_insn *insn = BB_HEAD (bb); ; insn = NEXT_INSN (insn))
+	{
+	  if (NONDEBUG_INSN_P (insn))
+	    {
+	      rtx set = single_set (insn);
+	      if (set && REG_P (SET_DEST (set)) && MEM_P (SET_SRC (set))
+		  && !MEM_VOLATILE_P (SET_SRC (set)))
+		{
+		  rtx addr = XEXP (SET_SRC (set), 0);
+		  if (GET_CODE (addr) == POST_INC
+		      && REG_P (XEXP (addr, 0)))
+		    {
+		      load_insn = insn;
+		      ptr_regno = REGNO (XEXP (addr, 0));
+		      incr = GET_MODE_SIZE (GET_MODE (SET_SRC (set)));
+		      break;
+		    }
+		}
+	    }
+	  if (insn == BB_END (bb))
+	    break;
+	}
+
+      if (!load_insn)
+	continue;
+
+      /* Must be an address register (post-RA).  */
+      if (ptr_regno < 8 || ptr_regno > 15)
+	continue;
+
+      /* Verify: ptr not used in source BB after the load.  */
+      rtx ptr_reg = gen_rtx_REG (Pmode, ptr_regno);
+      bool ptr_used_after = false;
+      for (rtx_insn *insn = NEXT_INSN (load_insn); ;
+	   insn = NEXT_INSN (insn))
+	{
+	  if (NONDEBUG_INSN_P (insn)
+	      && reg_mentioned_p (ptr_reg, PATTERN (insn)))
+	    {
+	      ptr_used_after = true;
+	      break;
+	    }
+	  if (insn == BB_END (bb))
+	    break;
+	}
+
+      if (ptr_used_after)
+	continue;
+
+      /* Walk successor BBs to find where ptr is used with -incr offset.
+	 Use BFS limited to a small number of BBs.  */
+      basic_block target_bb = nullptr;
+      rtx_insn *target_insn = nullptr;
+      bool valid = true;
+
+      auto_vec<basic_block> worklist;
+      auto_bitmap visited;
+      bitmap_set_bit (visited, bb->index);
+
+      edge e;
+      edge_iterator ei;
+      FOR_EACH_EDGE (e, ei, bb->succs)
+	{
+	  basic_block dest = e->dest;
+	  if (dest == EXIT_BLOCK_PTR_FOR_FN (func)
+	      || bitmap_bit_p (visited, dest->index))
+	    continue;
+	  worklist.safe_push (dest);
+	  bitmap_set_bit (visited, dest->index);
+	}
+
+      while (!worklist.is_empty () && valid)
+	{
+	  basic_block cur = worklist.pop ();
+
+	  /* Scan this BB for ptr usage: postinc candidate, other
+	     reference, or not referenced at all.  */
+	  rtx_insn *neg_insn = nullptr;
+	  int scan = scan_bb_for_postinc_target (cur, ptr_regno, incr,
+						 &neg_insn);
+	  if (scan == 1)
+	    {
+	      if (target_bb && target_bb != cur)
+		{
+		  /* Multiple target BBs — too complex.  */
+		  valid = false;
+		  break;
+		}
+	      target_bb = cur;
+	      if (!target_insn)
+		target_insn = neg_insn;
+	    }
+	  else if (scan == -1)
+	    {
+	      /* ptr used without -incr offset — unsafe.  */
+	      valid = false;
+	      break;
+	    }
+	  else
+	    {
+	      /* ptr not used here, continue to successors.  */
+	      FOR_EACH_EDGE (e, ei, cur->succs)
+		{
+		  basic_block dest = e->dest;
+		  if (dest == EXIT_BLOCK_PTR_FOR_FN (func)
+		      || bitmap_bit_p (visited, dest->index))
+		    continue;
+		  worklist.safe_push (dest);
+		  bitmap_set_bit (visited, dest->index);
+		}
+	    }
+	}
+
+      if (!valid || !target_bb || !target_insn)
+	continue;
+
+      /* Target BB must post-dominate source BB — ensures the increment
+	 happens on every path from the load.  */
+      if (!pdom_valid)
+	{
+	  calculate_dominance_info (CDI_POST_DOMINATORS);
+	  pdom_valid = true;
+	}
+      if (!dominated_by_p (CDI_POST_DOMINATORS, bb, target_bb))
+	continue;
+
+      /* Strip POST_INC from the load: (mem (post_inc ptr)) → (mem ptr).
+	 Save the original for rollback.  */
+      rtx load_src = SET_SRC (single_set (load_insn));
+      rtx orig_addr = XEXP (load_src, 0);
+      rtx plain_addr = copy_rtx (XEXP (orig_addr, 0));
+
+      XEXP (load_src, 0) = plain_addr;
+
+      /* Remove REG_INC note.  */
+      rtx inc_note = find_reg_note (load_insn, REG_INC, nullptr);
+
+      if (inc_note)
+	remove_note (load_insn, inc_note);
+
+      /* Revalidate the modified load.  */
+      INSN_CODE (load_insn) = -1;
+      if (recog_memoized (load_insn) < 0)
+	{
+	  /* Rollback.  */
+	  XEXP (load_src, 0) = orig_addr;
+	  if (inc_note)
+	    add_reg_note (load_insn, REG_INC, ptr_reg);
+	  INSN_CODE (load_insn) = -1;
+	  recog_memoized (load_insn);
+	  continue;
+	}
+
+      /* Insert addq before the target insn in the target BB.  */
+      rtx add_set = gen_rtx_SET (copy_rtx (ptr_reg),
+				 gen_rtx_PLUS (Pmode,
+					       copy_rtx (ptr_reg),
+					       GEN_INT (incr)));
+      rtx_insn *add_insn = emit_insn_before (add_set, target_insn);
+
+      INSN_CODE (add_insn) = -1;
+      if (recog_memoized (add_insn) < 0)
+	{
+	  /* Rollback.  */
+	  delete_insn (add_insn);
+	  XEXP (load_src, 0) = orig_addr;
+	  if (inc_note)
+	    add_reg_note (load_insn, REG_INC, ptr_reg);
+	  INSN_CODE (load_insn) = -1;
+	  recog_memoized (load_insn);
+	  continue;
+	}
+
+      df_insn_rescan (load_insn);
+      df_insn_rescan (add_insn);
+      changes++;
+
+      if (dump_file)
+	fprintf (dump_file,
+		 "m68k-sink-postinc: moved POST_INC r%d from bb %d "
+		 "to addq in bb %d\n",
+		 ptr_regno, bb->index, target_bb->index);
+    }
+
+  if (pdom_valid)
+    free_dominance_info (CDI_POST_DOMINATORS);
+
+  if (dump_file && changes > 0)
+    fprintf (dump_file, "m68k-sink-postinc: %d transformations\n", changes);
+
+  return 0;
+}
+
+/* Pass data for m68k_pass_sink_postinc.  */
+
+const pass_data m68k_pass_data_sink_postinc =
+{
+  RTL_PASS,		      /* type */
+  "m68k-sink-postinc",	      /* name */
+  OPTGROUP_NONE,	      /* optinfo_flags */
+  TV_MACH_DEP,		      /* tv_id */
+  0,			      /* properties_required */
+  0,			      /* properties_provided */
+  0,			      /* properties_destroyed */
+  0,			      /* todo_flags_start */
+  TODO_df_finish	      /* todo_flags_finish */
+};
+
+/* The pass class for sink_postinc.  */
+
+class m68k_pass_sink_postinc : public rtl_opt_pass
+{
+public:
+  m68k_pass_sink_postinc (gcc::context *ctxt)
+    : rtl_opt_pass (m68k_pass_data_sink_postinc, ctxt)
+  {}
+
+  bool gate (function *) final override
+  {
+    return optimize > 0 && flag_m68k_autoinc;
+  }
+
+  unsigned int execute (function *func) final override
+  {
+    return m68k_sink_postinc (func);
+  }
+
+}; /* class m68k_pass_sink_postinc */
+
 /* Pass data for m68k_pass_normalize_autoinc.  */
 
 const pass_data m68k_pass_data_normalize_autoinc =
@@ -1716,6 +2391,18 @@ gimple_opt_pass *
 make_m68k_pass_autoinc_split (gcc::context *ctxt)
 {
   return new m68k_pass_autoinc_split (ctxt);
+}
+
+rtl_opt_pass *
+make_m68k_pass_sink_for_rmw (gcc::context *ctxt)
+{
+  return new m68k_pass_sink_for_rmw (ctxt);
+}
+
+rtl_opt_pass *
+make_m68k_pass_sink_postinc (gcc::context *ctxt)
+{
+  return new m68k_pass_sink_postinc (ctxt);
 }
 
 rtl_opt_pass *

@@ -2328,9 +2328,25 @@ find_interesting_uses_address (struct ivopts_data *data, gimple *stmt,
     }
 
   civ = alloc_iv (data, base, step);
-  /* Fail if base object of this memory reference is unknown.  */
+  /* Fail if base object of this memory reference is unknown.
+     PR66768: IVOPTS may replace a literal base with a computed IV,
+     losing non-default address space qualifiers.
+
+     When the target sets ivopts_allow_const_ptr_address_use and the
+     address is in the default address space, assign a synthetic
+     base_object so the use is classified as REFERENCE ADDRESS instead
+     of GENERIC.  This lets IVOPTS evaluate TARGET_ADDRESS_COST for
+     the memory access, enabling better IV decisions on targets where
+     indexed addressing is much more expensive than autoincrement.  */
   if (civ->base_object == NULL_TREE)
-    goto fail;
+    {
+      if (targetm.ivopts_allow_const_ptr_address_use
+	  && TREE_CODE (civ->base) == INTEGER_CST
+	  && TYPE_ADDR_SPACE (TREE_TYPE (civ->base)) == ADDR_SPACE_GENERIC)
+	civ->base_object = fold_convert (ptr_type_node, civ->base);
+      else
+	goto fail;
+    }
 
   record_group_use (data, op_p, civ, stmt, USE_REF_ADDRESS, TREE_TYPE (*op_p));
   return;
@@ -5589,6 +5605,17 @@ determine_group_iv_cost_cond (struct ivopts_data *data,
       /* The bound is a loop invariant, so it will be only computed
 	 once.  */
       elim_cost.cost = adjust_setup_cost (data, elim_cost.cost);
+      /* On targets with detailed cost models (e.g., accurate per-
+	 instruction cycle timings), the elimination bound cost can
+	 cross the integer-division rounding boundary even for simple
+	 2-3 instruction setup sequences.  When the adjusted cost is
+	 small (just 1), the bound is effectively free over many
+	 iterations — the rounding artifact should not tip candidate
+	 assignment from pointer-based IVs (tight bne back-branch
+	 loops) to counter-based IVs (loose beq/bra loops).  Halve
+	 the adjusted cost to absorb this rounding.  */
+      if (flag_ivopts_autoinc_step)
+	elim_cost.cost /= 2;
     }
 
   /* When the condition is a comparison of the candidate IV against
@@ -5624,13 +5651,12 @@ determine_group_iv_cost_cond (struct ivopts_data *data,
       inv_vars = inv_vars_elim;
       inv_vars_elim = NULL;
       inv_expr = inv_expr_elim;
-      /* For doloop candidate/use pair, adjust to zero cost, then apply
-	 target-specific credit for using doloop vs compare+branch.  */
+      /* For doloop candidate/use pair, zero the setup cost since
+	 dbra absorbs the comparison.  */
       if (group->doloop_p && cand->doloop_p)
 	{
 	  if (elim_cost.cost > no_cost.cost)
 	    cost = no_cost;
-	  cost += targetm.doloop_cost_for_compare;
 	}
     }
   else
@@ -5642,6 +5668,15 @@ determine_group_iv_cost_cond (struct ivopts_data *data,
       comp = ERROR_MARK;
       inv_expr = inv_expr_express;
     }
+
+  /* Add per-iteration comparison instruction cost.  For doloop
+     candidates the hook returns 0 (comparison absorbed into dbra).
+     For pointer-typed IVs on targets with split register files,
+     the hook may return a higher cost (e.g., cmpa vs cmp).  */
+  if (!cost.infinite_cost_p ())
+    cost.cost += targetm.iv_compare_cost (TREE_TYPE (cand->iv->base),
+					  group->doloop_p && cand->doloop_p,
+					  data->speed);
 
   if (inv_expr)
     {
@@ -6054,27 +6089,6 @@ determine_iv_cost (struct ivopts_data *data, struct iv_cand *cand)
   /* Doloop decrement should be considered as zero cost.  */
   if (cand->doloop_p)
     cost_step = 0;
-  /* If the target supports auto-increment addressing and the IV step
-     matches a memory access size, the step can be absorbed into the
-     addressing mode (e.g., move.l (%a0)+,...) at no extra cost.  */
-  else if (flag_ivopts_autoinc_step
-	   && data->speed
-	   && tree_fits_shwi_p (cand->iv->step))
-    {
-      HOST_WIDE_INT step_val = tree_to_shwi (cand->iv->step);
-      if (step_val < 0)
-	step_val = -step_val;
-      opt_scalar_int_mode mem_mode
-	= int_mode_for_size (step_val * BITS_PER_UNIT, 0);
-      if (mem_mode.exists ()
-	  && (USE_LOAD_POST_INCREMENT (*mem_mode)
-	      || USE_STORE_POST_INCREMENT (*mem_mode)
-	      || USE_LOAD_PRE_DECREMENT (*mem_mode)
-	      || USE_STORE_PRE_DECREMENT (*mem_mode)))
-	cost_step = 0;
-      else
-	cost_step = add_cost (data->speed, TYPE_MODE (TREE_TYPE (base)));
-    }
   else
     cost_step = add_cost (data->speed, TYPE_MODE (TREE_TYPE (base)));
   cost = cost_step + adjust_setup_cost (data, cost_base.cost);

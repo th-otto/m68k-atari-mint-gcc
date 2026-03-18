@@ -470,9 +470,6 @@ extern enum reg_class regno_reg_class[];
 #define INDEX_REG_CLASS GENERAL_REGS
 #define BASE_REG_CLASS ADDR_REGS
 
-#define PREFERRED_RELOAD_CLASS(X,CLASS) \
-  m68k_preferred_reload_class (X, CLASS)
-
 /* On the m68k, this is the size of MODE in words,
    except in the FP regs, where a single reg is always enough.  */
 #define CLASS_MAX_NREGS(CLASS, MODE)	\

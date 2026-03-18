@@ -87,6 +87,7 @@ extern bool m68k_illegitimate_symbolic_constant_p (rtx);
 extern bool m68k_legitimate_constant_p (machine_mode, rtx);
 extern bool m68k_matches_q_p (rtx);
 extern bool m68k_matches_u_p (rtx);
+extern bool m68k_tablejump_fits_word_index_p (rtx);
 extern rtx legitimize_pic_address (rtx, machine_mode, rtx);
 extern rtx m68k_legitimize_tls_address (rtx);
 extern bool m68k_tls_reference_p (rtx, bool);
@@ -117,7 +118,6 @@ extern enum attr_op_mem m68k_sched_attr_op_mem (rtx_insn *);
 
 extern enum reg_class m68k_secondary_reload_class (enum reg_class,
 						   machine_mode, rtx);
-extern enum reg_class m68k_preferred_reload_class (rtx, enum reg_class);
 extern void m68k_expand_prologue (void);
 extern bool m68k_use_return_insn (void);
 extern void m68k_expand_epilogue (bool);
@@ -152,12 +152,15 @@ extern rtl_opt_pass *make_m68k_pass_reorder_incr (gcc::context *);
 
 /* Functions from m68k-pass-autoinc.cc.  */
 extern gimple_opt_pass *make_m68k_pass_autoinc_split (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_sink_for_rmw (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_sink_postinc (gcc::context *);
 extern rtl_opt_pass *make_m68k_pass_normalize_autoinc (gcc::context *);
 extern rtl_opt_pass *make_m68k_pass_opt_autoinc (gcc::context *);
 extern rtl_opt_pass *make_m68k_pass_avail_copy_elim (gcc::context *);
 
 /* Functions from m68k-pass-shortopt.cc.  */
 extern gimple_opt_pass *make_m68k_pass_narrow_index_mult (gcc::context *);
+extern gimple_opt_pass *make_m68k_pass_narrow_const_ops (gcc::context *);
 extern rtl_opt_pass *make_m68k_pass_elim_andi (gcc::context *);
 extern rtl_opt_pass *make_m68k_pass_highword_opt (gcc::context *);
 
