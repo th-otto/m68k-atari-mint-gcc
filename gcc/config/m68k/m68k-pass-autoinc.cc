@@ -1709,6 +1709,34 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
   if (fixup_insns.is_empty ())
     return false;
 
+  /* On 68040, consecutive POST_INC accesses to the same address register
+     cause a 1-cycle pipeline interlock per instruction — the address
+     register writeback hasn't completed before the next instruction reads
+     it.  Offset addressing (base+displacement) avoids the stall.  Skip
+     the conversion when we have multiple consecutive memory instructions
+     with no intervening work.  Loop autoincrements are not affected — the
+     loop body provides enough separation between iterations.
+     Note: 68060 does NOT stall here — POST_INC is a zero-stall producer
+     on 68060 (MC68060UM §4.2).  Dual-issue is already impossible for
+     consecutive memory ops (test 4: at most one data access per pair).  */
+  if (TUNE_68040)
+    {
+      bool all_consecutive = true;
+      rtx_insn *prev = first_insn;
+      for (rtx_insn *insn : fixup_insns)
+	{
+	  rtx_insn *next = next_nonnote_nondebug_insn_bb (prev);
+	  if (next != insn)
+	    {
+	      all_consecutive = false;
+	      break;
+	    }
+	  prev = insn;
+	}
+      if (all_consecutive)
+	return false;
+    }
+
   HOST_WIDE_INT add_incr = 0;
   if (add_insn)
     {

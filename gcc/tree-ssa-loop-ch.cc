@@ -808,7 +808,8 @@ ch_base::copy_headers (function *fun)
   for (auto loop : loops_list (cfun, 0))
     {
       int initial_limit = optimize_loop_for_speed_p (loop)
-			  ? param_max_loop_header_insns : 0;
+			  ? param_max_loop_header_insns
+			  : param_max_loop_header_insns_for_size;
       int remaining_limit = initial_limit;
       if (dump_file && (dump_flags & TDF_DETAILS))
 	fprintf (dump_file,

@@ -167,10 +167,12 @@ INSERT_PASS_AFTER (pass_vrp, 1, m68k_pass_narrow_index_mult);
    By inserting moveq #0 before the first definition, the upper bits
    remain zero throughout, making the andi redundant.
 
-   Runs after rtl_dce (the last DCE pass) to prevent the inserted
-   moveq from being deleted as dead code.  */
+   The inserted moveq/clr relies on m68k partial-register-write semantics
+   (sub-word ops preserve upper bits) which GCC's RTL does not model.
+   Must run after ALL passes that perform dead code elimination or
+   liveness-based instruction removal, including sched2.  */
 
-INSERT_PASS_AFTER (pass_fast_rtl_dce, 1, m68k_pass_elim_andi);
+INSERT_PASS_AFTER (pass_sched2, 1, m68k_pass_elim_andi);
 
 /* Optimize high-word field access for small structs passed by value.
 
@@ -181,7 +183,7 @@ INSERT_PASS_AFTER (pass_fast_rtl_dce, 1, m68k_pass_elim_andi);
 
    Runs after elim_andi to work on simplified code.  */
 
-INSERT_PASS_AFTER (pass_fast_rtl_dce, 1, m68k_pass_highword_opt);
+INSERT_PASS_AFTER (pass_sched2, 1, m68k_pass_highword_opt);
 
 /* Reorder loads so the register tested by a conditional branch is set
    by the immediately preceding instruction.  m68k moves set CC, so the

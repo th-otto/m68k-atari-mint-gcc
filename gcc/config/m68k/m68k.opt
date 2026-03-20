@@ -273,3 +273,7 @@ Enable the m68k IRA pseudo allocno class promotion.
 mm68k-break-false-dep
 Target Var(flag_m68k_break_false_dep) Init(1) Optimization
 Break false partial-write live ranges before IRA.
+
+msched=
+Target RejectNegative Joined Enum(uarch_type) Var(m68k_sched_option) Init(unk_arch)
+Schedule instructions for the specified target CPU or architecture.

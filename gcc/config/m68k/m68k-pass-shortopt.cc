@@ -783,7 +783,18 @@ namespace {
    This pass also performs cross-basic-block optimization using dataflow
    analysis to trace definitions across block boundaries.
 
-   Runs after fast_rtl_dce to avoid DCE deleting inserted moveq.
+   IMPORTANT: The inserted moveq/clr is a "future zero-extend" — it
+   pre-clears upper bits that later sub-word operations will preserve
+   through m68k partial-register-write semantics.  GCC's RTL does NOT
+   model partial writes: (set (reg:HI %d0) ...) looks like a full def
+   of %d0 to every dataflow-based pass.  Any pass that performs dead
+   store elimination or liveness analysis (DCE, sched2, etc.) will see
+   the moveq as a dead store killed by the subsequent move.w, and
+   delete it — leaving garbage in the upper bits.
+
+   The moveq MUST NOT be deleted as long as the later sub-word move
+   exists.  This pass must therefore run AFTER all passes that can
+   remove instructions based on liveness, including sched2.
    ======================================================================= */
 
 /* Extension type being optimized.  */
@@ -2140,8 +2151,10 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
 	      break;
 	    }
 
-	  /* For SI mode register, use moveq #0.
-	     For HI mode (byte-to-word), need to clear just the word.  */
+	  /* Insert a "future zero-extend": clear the register so that the
+	     subsequent sub-word move preserves zeros in the upper bits.
+	     This clear MUST NOT be deleted by any later pass — see the
+	     pass header comment for why.  */
 	  rtx clear_reg;
 	  if (cand.ext_type == EXT_BYTE_TO_WORD)
 	    clear_reg = gen_rtx_REG (HImode, regno);

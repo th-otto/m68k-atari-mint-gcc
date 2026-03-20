@@ -130,6 +130,11 @@
   (and (match_code "const_int")
        (match_test "ival < -0x8000 || ival > 0x7FFF")))
 
+(define_constraint "Cp"
+  "Any integer constant, for 68040+ where pipeline prefers immediate ALU."
+  (and (match_code "const_int")
+       (match_test "TUNE_68040_60")))
+
 (define_constraint "Cu"
   "16-bit offset for wrapped symbols"
   (and (match_code "const")

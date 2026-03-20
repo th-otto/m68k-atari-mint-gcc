@@ -660,6 +660,10 @@ The maximum number of RTL nodes that can be recorded as combiner's last value.
 Common Joined UInteger Var(param_max_loop_header_insns) Init(20) Param Optimization
 The maximum number of insns in loop header duplicated by the copy loop headers pass.
 
+-param=max-loop-header-insns-for-size=
+Common Joined UInteger Var(param_max_loop_header_insns_for_size) Init(0) Param Optimization
+The maximum number of insns in loop header duplicated by the copy loop headers pass when optimizing for size.
+
 -param=max-modulo-backtrack-attempts=
 Common Joined UInteger Var(param_max_modulo_backtrack_attempts) Init(40) Param Optimization
 The maximum number of backtrack attempts the scheduler should make when modulo scheduling a loop.
