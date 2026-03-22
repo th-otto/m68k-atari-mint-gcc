@@ -169,10 +169,12 @@ INSERT_PASS_AFTER (pass_vrp, 1, m68k_pass_narrow_index_mult);
 
    The inserted moveq/clr relies on m68k partial-register-write semantics
    (sub-word ops preserve upper bits) which GCC's RTL does not model.
-   Must run after ALL passes that perform dead code elimination or
-   liveness-based instruction removal, including sched2.  */
+   The pass rewrites subsequent sub-word operations to use strict_low_part,
+   so GCC's dataflow correctly sees the upper bits as live.  This allows
+   the pass to safely run before sched2, where the 68060 scheduler can
+   reorder the moveq for better pipelining.  */
 
-INSERT_PASS_AFTER (pass_sched2, 1, m68k_pass_elim_andi);
+INSERT_PASS_BEFORE (pass_sched2, 1, m68k_pass_elim_andi);
 
 /* Optimize high-word field access for small structs passed by value.
 

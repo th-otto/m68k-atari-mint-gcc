@@ -793,8 +793,9 @@ namespace {
    delete it — leaving garbage in the upper bits.
 
    The moveq MUST NOT be deleted as long as the later sub-word move
-   exists.  This pass must therefore run AFTER all passes that can
-   remove instructions based on liveness, including sched2.
+   exists.  The pass rewrites subsequent sub-word operations to use
+   strict_low_part, so GCC's dataflow correctly sees the upper bits
+   as live.  This allows the pass to run before sched2.
    ======================================================================= */
 
 /* Extension type being optimized.  */
@@ -1188,6 +1189,16 @@ uses_reg_wider_than_p (rtx x, unsigned regno, machine_mode max_mode)
     {
       machine_mode m = GET_MODE (x);
       if (GET_MODE_SIZE (m) > GET_MODE_SIZE (max_mode))
+	return true;
+    }
+
+  /* A SUBREG widening our register reads all bits of the inner reg.
+     E.g., (subreg:SI (reg:HI d1) 0) reads all 32 bits of d1.  */
+  if (code == SUBREG && REG_P (SUBREG_REG (x))
+      && REGNO (SUBREG_REG (x)) == regno)
+    {
+      machine_mode outer = GET_MODE (x);
+      if (GET_MODE_SIZE (outer) > GET_MODE_SIZE (max_mode))
 	return true;
     }
 
@@ -1651,6 +1662,140 @@ find_cross_bb_definitions (basic_block bb, unsigned regno,
   return !def_insns->is_empty ();
 }
 
+/* Rewrite sub-word definitions of REGNO from START_INSN (inclusive)
+   to END_INSN (exclusive) to use strict_low_part.  This tells GCC's
+   dataflow that these instructions only write the low part of the
+   register, preserving the upper bits set by a preceding moveq #0.
+   Without this, GCC treats (set (reg:HI) ...) as a full write and
+   DCE deletes the moveq as dead.
+
+   EXT_TYPE determines which modes to convert:
+     EXT_WORD_TO_LONG: convert HImode sets (and QImode sets)
+     EXT_BYTE_TO_LONG: convert QImode sets
+     EXT_BYTE_TO_WORD: convert QImode sets
+
+   Returns true if all conversions succeeded.  */
+
+static bool
+rewrite_subword_defs_to_strict_low_part (rtx_insn *start_insn,
+					 rtx_insn *end_insn,
+					 unsigned int regno,
+					 enum extension_type ext_type)
+{
+  /* Determine the outer mode (the mode of the pre-cleared register).  */
+  machine_mode outer_mode
+    = (ext_type == EXT_BYTE_TO_WORD) ? HImode : SImode;
+
+  /* Start from start_insn itself (inclusive) — the first definition
+     also needs strict_low_part conversion.  */
+  for (rtx_insn *insn = start_insn;
+       insn && insn != end_insn;
+       insn = NEXT_INSN (insn))
+    {
+      if (!NONDEBUG_INSN_P (insn))
+	continue;
+
+      /* Skip call insns — function calls write the full return register
+	 per the calling convention, not a partial write.  */
+      if (CALL_P (insn))
+	continue;
+
+      rtx pat = PATTERN (insn);
+      if (GET_CODE (pat) != SET)
+	continue;
+
+      rtx dest = SET_DEST (pat);
+
+      /* Skip if not a plain register set on our register.  */
+      if (!REG_P (dest) || REGNO (dest) != regno)
+	continue;
+
+      machine_mode dest_mode = GET_MODE (dest);
+
+      /* Skip if already SImode (or the outer mode) — no conversion needed.  */
+      if (dest_mode == outer_mode || dest_mode == SImode)
+	continue;
+
+      /* Determine if this mode should be converted.  */
+      bool should_convert = false;
+      if (ext_type == EXT_WORD_TO_LONG
+	  && (dest_mode == HImode || dest_mode == QImode))
+	should_convert = true;
+      else if ((ext_type == EXT_BYTE_TO_LONG || ext_type == EXT_BYTE_TO_WORD)
+	       && dest_mode == QImode)
+	should_convert = true;
+
+      if (!should_convert)
+	continue;
+
+      /* Build strict_low_part replacement:
+	 (set (strict_low_part (subreg:MODE (reg:OUTER_MODE REGNO) OFFSET))
+	      src_with_subreg_refs)
+	 Also rewrite (reg:MODE REGNO) references in the source to use
+	 the same subreg form, so match_dup 0 in strict_low_part
+	 arithmetic patterns can match.  */
+      poly_uint64 offset = subreg_lowpart_offset (dest_mode, outer_mode);
+
+      rtx outer_reg = gen_rtx_REG (outer_mode, regno);
+      rtx subreg = gen_rtx_SUBREG (dest_mode, outer_reg, offset);
+      rtx slp = gen_rtx_STRICT_LOW_PART (VOIDmode, subreg);
+
+      /* Replace (reg:MODE REGNO) with the subreg in the source.
+	 Walks the top-level operands of the source expression, which
+	 covers all m68k strict_low_part arithmetic patterns (binary
+	 ops like plus:HI have the reg at position 0 or 1, unary ops
+	 like neg:HI have it at position 0).  */
+      rtx new_src = copy_rtx (SET_SRC (pat));
+      const char *fmt = GET_RTX_FORMAT (GET_CODE (new_src));
+      for (int i = 0; i < GET_RTX_LENGTH (GET_CODE (new_src)); i++)
+	{
+	  if (fmt[i] == 'e')
+	    {
+	      rtx op = XEXP (new_src, i);
+	      if (REG_P (op) && REGNO (op) == regno
+		  && GET_MODE (op) == dest_mode)
+		XEXP (new_src, i) = copy_rtx (subreg);
+	    }
+	}
+
+      rtx new_pat = gen_rtx_SET (slp, new_src);
+
+      /* Try to recognize the new pattern.  */
+      rtx old_pat = PATTERN (insn);
+      PATTERN (insn) = new_pat;
+      INSN_CODE (insn) = -1;
+      if (recog_memoized (insn) >= 0
+	  && (extract_insn (insn),
+	      constrain_operands (1, get_preferred_alternatives (insn))))
+	{
+	  /* Rescan the insn so DF sees the strict_low_part USE of the
+	     upper bits.  Without this, sched2's fast DCE uses stale DF
+	     info and incorrectly deletes the preceding moveq pre-clear.  */
+	  df_insn_rescan (insn);
+	  if (dump_file)
+	    {
+	      fprintf (dump_file, "  Converted to strict_low_part: ");
+	      print_rtl_single (dump_file, insn);
+	    }
+	}
+      else
+	{
+	  /* Revert — this insn can't use strict_low_part.  */
+	  PATTERN (insn) = old_pat;
+	  INSN_CODE (insn) = -1;
+	  recog_memoized (insn);
+	  if (dump_file)
+	    {
+	      fprintf (dump_file, "  FAILED strict_low_part for: ");
+	      print_rtl_single (dump_file, insn);
+	    }
+	  return false;
+	}
+    }
+
+  return true;
+}
+
 /* Try to eliminate andi instructions in a basic block by inserting
    moveq #0 before the first appropriately-sized definition.
    ALREADY_CLEARED_BEFORE tracks def_insns that already have moveq inserted
@@ -1703,6 +1848,7 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
       for (andi_candidate &cand : candidates)
     {
       unsigned regno = REGNO (cand.reg);
+
       bool found_def = false;
       bool already_cleared = false;
 
@@ -2188,6 +2334,31 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
 	{
 	  /* Remove any insns we inserted.  Use delete_insn() to properly
 	     update the dataflow framework.  */
+	  for (rtx_insn *ins : inserted_insns)
+	    delete_insn (ins);
+	  continue;
+	}
+
+      /* Rewrite sub-word definitions between each def_insn and the andi
+	 to use strict_low_part.  This tells GCC the upper bits are
+	 preserved, preventing DCE from deleting the moveq pre-clear.
+	 Only needed when running before sched2 (which has fast DCE).  */
+      for (rtx_insn *def_insn : cand.def_insns)
+	{
+	  if (!rewrite_subword_defs_to_strict_low_part (
+		 def_insn, cand.andi_insn, REGNO (cand.reg),
+		 cand.ext_type))
+	    {
+	      if (dump_file)
+		fprintf (dump_file, "  strict_low_part rewrite failed, "
+			 "reverting\n");
+	      all_succeeded = false;
+	      break;
+	    }
+	}
+
+      if (!all_succeeded)
+	{
 	  for (rtx_insn *ins : inserted_insns)
 	    delete_insn (ins);
 	  continue;
