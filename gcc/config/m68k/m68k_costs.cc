@@ -103,12 +103,6 @@ struct m68k_cost_table {
   /* CALL costs: [reg, disp, abs, fallback] */
   int8_t call[4];
 
-  /* CONST_INT costs: [moveq, word, long] */
-  int8_t const_int[3];
-
-  /* Synthetic constant costs: [word, long] (moveq+op) */
-  int8_t const_synth[2];
-  bool const_use_synth;       /* use synthetic constants? */
   bool const_fallthrough;     /* return false for CONST? */
 
   /* Register costs: [opno0, opno1] */
@@ -121,7 +115,6 @@ struct m68k_cost_table {
   int8_t mem[6][2];
   int8_t dreg_penalty;        /* penalty for Dn as address base */
   int8_t mem_long_add;        /* extra cost for long mode */
-  int8_t mem_predec_src_add;  /* extra for PRE_DEC as source */
 
   /* Extensions: [sign, zero_word, zero_long, truncate] */
   int8_t extend[4];
@@ -215,12 +208,6 @@ static const struct m68k_cost_table m68k_cost_68000 = {
   /* call: [reg, disp, abs, fallback] */
   { 16, 18, 20, 22 },
 
-  /* const_int: [moveq, word, long] */
-  { 4, 8, 12 },
-
-  /* const_synth: [word, long] */
-  { 8, 10 },
-  /* const_use_synth */ true,
   /* const_fallthrough */ true,
 
   /* reg_cost: [opno0, opno1] - 68000: source=0, dest=cost */
@@ -241,7 +228,6 @@ static const struct m68k_cost_table m68k_cost_68000 = {
   },
   /* dreg_penalty */ 0,
   /* mem_long_add */ 4,
-  /* mem_predec_src_add */ 0,
 
   /* extend: [sign, zero_word, zero_long, truncate] */
   { 8, 8, 8, 0 },
@@ -339,13 +325,6 @@ static const struct m68k_cost_table m68k_cost_68020 = {
      JSR (An): JEA=2 + base=7 = 9; JSR (d16,An): 9; JSR xxx.L: 7 */
   { 9, 9, 7, 13 },
 
-  /* const_int: [moveq, word, long] — UNUSED, see CONST_INT in cost function.
-     NCC: MOVEQ = 2; MOVE.W #imm,Dn = 4; MOVE.L #imm,Dn = 6 */
-  { 2, 4, 6 },
-
-  /* const_synth: [word, long] - not used */
-  { 2, 4 },
-  /* const_use_synth */ false,
   /* const_fallthrough */ false,
 
   /* reg_cost: [opno0, opno1] - same for both */
@@ -374,7 +353,6 @@ static const struct m68k_cost_table m68k_cost_68020 = {
   },
   /* dreg_penalty */ 5,
   /* mem_long_add */ 0,
-  /* mem_predec_src_add */ 0,
 
   /* extend: [sign, zero_word, zero_long, truncate]
      EXT = 4 NCC */
@@ -491,13 +469,6 @@ static const struct m68k_cost_table m68k_cost_68040 = {
      JSR xxx: calc=1 + exec=1 ≈ 2 */
   { 5, 6, 5, 10 },
 
-  /* const_int: [moveq, word, long]
-     MOVEQ = calc 1 + exec 1 = 2 → 0 scaled */
-  { 0, 0, 0 },
-
-  /* const_synth: [word, long] - not used */
-  { 0, 0 },
-  /* const_use_synth */ false,
   /* const_fallthrough */ false,
 
   /* reg_cost: [opno0, opno1] - same for both */
@@ -523,7 +494,6 @@ static const struct m68k_cost_table m68k_cost_68040 = {
   },
   /* dreg_penalty */ 4,
   /* mem_long_add */ 0,
-  /* mem_predec_src_add */ 0,
 
   /* extend: [sign, zero_word, zero_long, truncate]
      EXT.W = calc 1 + exec 2 = 3; EXT.L = calc 1 + exec 1 = 2 */
@@ -635,13 +605,6 @@ static const struct m68k_cost_table m68k_cost_68060 = {
      predicted: JSR = 1(0/1), so avg ≈ 2 + RTS overhead */
   { 5, 4, 4, 8 },
 
-  /* const_int: [moveq, word, long]
-     MOVEQ = 1(0/0); all immediates pipelined → effectively free */
-  { 0, 0, 0 },
-
-  /* const_synth: [word, long] - not used */
-  { 0, 0 },
-  /* const_use_synth */ false,
   /* const_fallthrough */ false,
 
   /* reg_cost: [opno0, opno1] - same for both */
@@ -672,7 +635,6 @@ static const struct m68k_cost_table m68k_cost_68060 = {
   },
   /* dreg_penalty */ 3,
   /* mem_long_add */ 0,
-  /* mem_predec_src_add */ 0,
 
   /* extend: [sign, zero_word, zero_long, truncate]
      EXT = 1(0/0); EXTB.L = 1(0/0) */
@@ -1107,10 +1069,6 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
       }
 
     case SYMBOL_REF:
-      *total = GET_MODE_SIZE (mode) > 2 ? costs->addr_ref[1]
-					: costs->addr_ref[0];
-      return true;
-
     case LABEL_REF:
       *total = GET_MODE_SIZE (mode) > 2 ? costs->addr_ref[1]
 					: costs->addr_ref[0];
@@ -1131,8 +1089,7 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 
     case SUBREG:
     case STRICT_LOW_PART:
-      /* SUBREG is essentially free - just accessing part of a register.
-	 Use subreg_cost from table (0 for all CPUs). */
+      /* SUBREG is essentially free — just accessing part of a register.  */
       *total = costs->subreg_cost;
       return true;
 
@@ -1278,9 +1235,6 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	/* Add cost for long mode memory access (68000 16-bit bus) */
 	if (costs->mem_long_add && mode != QImode && mode != HImode)
 	  *total += costs->mem_long_add;
-	/* Add cost for PRE_DEC source operand (68000 timing) */
-	if (costs->mem_predec_src_add && opno && GET_CODE (addr) == PRE_DEC)
-	  *total += costs->mem_predec_src_add;
 	return true;
       }
 
@@ -1330,7 +1284,7 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	if (costs->plus.lea_indexed
 	    && GET_CODE (op0) == PLUS
 	    && CONST_INT_P (op1)
-	    && (unsigned) (INTVAL (op1) + 128) < 255
+	    && (unsigned) (INTVAL (op1) + 128) < 256
 	    && REG_P (XEXP (op0, 0))
 	    && REG_P (XEXP (op0, 1)))
 	  {
@@ -1350,7 +1304,7 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 		return true;
 	      }
 	    if (CONST_INT_P (op1)
-		&& (unsigned) (INTVAL (op1) + 32768) < 65535)
+		&& (unsigned) (INTVAL (op1) + 32768) < 65536)
 	      {
 		*total = costs->plus.lea_disp;
 		return true;
@@ -1379,7 +1333,7 @@ m68k_rtx_costs_unified (rtx x, machine_mode mode, int outer_code, int opno,
 	    if (REG_P (op0)
 		&& ((val >= -128 && val <= 127)
 		    || (ADDRESS_REGNO_P (REGNO (op0))
-			&& (unsigned) (val + 32768) < 65535)))
+			&& (unsigned) (val + 32768) < 65536)))
 	      *total = costs->plus.reg_const[effective_idx];
 	    else
 	      {
@@ -1811,7 +1765,8 @@ m68k_register_move_cost_impl (reg_class_t from, reg_class_t to)
    word since data is fetched in one bus cycle.  */
 
 int
-m68k_memory_move_cost_impl (machine_mode mode, reg_class_t rclass, bool in)
+m68k_memory_move_cost_impl (machine_mode mode, reg_class_t rclass,
+			    bool in ATTRIBUTE_UNUSED)
 {
   /* FP register spills go through memory and may need a temporary
      integer register, making them significantly more expensive.  */

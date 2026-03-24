@@ -637,8 +637,8 @@ make_m68k_pass_canon_scaled_index (gcc::context *ctxt)
 namespace {
 
 /* Return the 32-bit bitmask of bits written by SET_DEST for pseudo REGNO,
-   or 0 if this is not a partial write to REGNO.  Returns -1 (all bits)
-   if this is a full write to REGNO (meaning old value IS live).  */
+   or 0 if this is not a partial write to REGNO.  Returns 0xFFFFFFFF
+   if this is a full write (meaning old value is NOT live).  */
 
 static unsigned int
 partial_write_mask (rtx set, unsigned int regno)
@@ -802,7 +802,7 @@ m68k_break_false_dep (function *func)
 
 	  /* Insert clobber before the first partial write.  */
 	  rtx clobber = gen_rtx_CLOBBER (VOIDmode,
-					 gen_rtx_REG (SImode, regno));
+					 regno_reg_rtx[regno]);
 	  rtx_insn *clobber_insn = emit_insn_before (clobber, first_partial);
 	  df_insn_rescan (clobber_insn);
 	  changes++;

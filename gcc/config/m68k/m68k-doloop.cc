@@ -368,10 +368,11 @@ m68k_invalid_within_doloop (const rtx_insn *insn)
 /* Register count threshold.  When the exit IV has body uses AND the
    total number of distinct pseudo registers in the loop reaches this,
    adding a doloop counter will likely cause spills.
-   m68k has 5 caller-saved registers (d0, d1, d2, a0, a1).  With body
-   uses, the doloop counter is redundant — once the loop body needs
-   more pseudos than the caller-saved set can hold, the extra counter
-   eats into callee-saved registers and risks spills.  */
+   m68k has 4 caller-saved GPRs in the default ABI (d0, d1, a0, a1),
+   5 with -mfastcall (adds d2).  With body uses, the doloop counter
+   is redundant — once the loop body needs more pseudos than the
+   caller-saved set can hold, the extra counter eats into callee-saved
+   registers and risks spills.  */
 static const int DOLOOP_REG_COUNT_THRESHOLD = 5;
 
 /* Find the loop from a doloop_end label operand.  The doloop pass passes

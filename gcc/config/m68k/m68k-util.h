@@ -21,9 +21,15 @@
 #define GCC_M68K_UTIL_H
 
 /* Check if RTX is a MEM with (plus (reg) (const_int)) address.
-   Sets *PREGNO and *POFFSET on success.  */
+   Sets *PREGNO and *POFFSET on success.  Does NOT match bare (mem (reg)).  */
 extern bool m68k_mem_reg_offset_p (rtx x, int *pregno,
 				   HOST_WIDE_INT *poffset);
+
+/* Check if RTX is a MEM with base register + optional constant offset.
+   Handles both (mem (reg)) at offset 0 and (mem (plus (reg) (const_int))).
+   Sets *PREGNO and *POFFSET on success.  */
+extern bool m68k_mem_base_offset_p (rtx x, int *pregno,
+				    HOST_WIDE_INT *poffset);
 
 /* Check if INSN is a LEA or ADD that increments a register:
    (set (reg) (plus (reg) (const_int))) where dest == src.

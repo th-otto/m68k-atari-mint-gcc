@@ -58,6 +58,27 @@ m68k_mem_reg_offset_p (rtx x, int *pregno, HOST_WIDE_INT *poffset)
   return false;
 }
 
+/* Check if RTX is a MEM with base register + optional constant offset.
+   Handles both (mem (reg)) at offset 0 and (mem (plus (reg) (const_int))).  */
+
+bool
+m68k_mem_base_offset_p (rtx x, int *pregno, HOST_WIDE_INT *poffset)
+{
+  if (m68k_mem_reg_offset_p (x, pregno, poffset))
+    return true;
+  if (MEM_P (x))
+    {
+      rtx addr = XEXP (x, 0);
+      if (REG_P (addr))
+	{
+	  *pregno = REGNO (addr);
+	  *poffset = 0;
+	  return true;
+	}
+    }
+  return false;
+}
+
 /* Check if INSN is a LEA or ADD that increments a register.
    Returns the register number and increment value.  */
 

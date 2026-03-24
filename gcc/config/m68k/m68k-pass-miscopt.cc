@@ -267,7 +267,6 @@ try_cross_bb_sink (basic_block bb, rtx_insn *branch, rtx tested_reg)
 static unsigned int
 m68k_reorder_for_cc (function *func)
 {
-  bool changed = false;
   basic_block bb;
 
   df_analyze ();
@@ -287,8 +286,7 @@ m68k_reorder_for_cc (function *func)
       if (!prev)
 	{
 	  /* BB has only the branch — try cross-BB sink.  */
-	  if (try_cross_bb_sink (bb, branch, tested_reg))
-	    changed = true;
+	  try_cross_bb_sink (bb, branch, tested_reg);
 	  continue;
 	}
 
@@ -312,20 +310,10 @@ m68k_reorder_for_cc (function *func)
 	}
 
       if (target_load)
-	{
-	  if (try_within_bb_reorder (bb, target_load, branch, tested_reg))
-	    changed = true;
-	}
+	try_within_bb_reorder (bb, target_load, branch, tested_reg);
       else
-	{
-	  /* No definition in this BB — try cross-BB sink.  */
-	  if (try_cross_bb_sink (bb, branch, tested_reg))
-	    changed = true;
-	}
+	try_cross_bb_sink (bb, branch, tested_reg);
     }
-
-  if (changed)
-    df_analyze ();
 
   return 0;
 }

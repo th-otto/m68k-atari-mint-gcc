@@ -114,17 +114,15 @@ static bool
 get_mem_ref_base_offset (tree mem, tree *base_out, HOST_WIDE_INT *offset_out,
 			 HOST_WIDE_INT *size_out)
 {
-  /* Use get_ref_base_and_extent to handle all memory reference types.  */
   poly_int64 offset, size, max_size;
   bool reverse;
 
   tree base = get_ref_base_and_extent (mem, &offset, &size, &max_size, &reverse);
 
-  /* We need constant offset and size.  */
   if (!offset.is_constant () || !size.is_constant ())
     return false;
 
-  /* Size must match max_size (no variable-sized access).  */
+  /* Reject variable-sized accesses.  */
   if (!known_eq (size, max_size))
     return false;
 
@@ -136,7 +134,6 @@ get_mem_ref_base_offset (tree mem, tree *base_out, HOST_WIDE_INT *offset_out,
       tree ptr = TREE_OPERAND (base, 0);
       tree mem_offset = TREE_OPERAND (base, 1);
 
-      /* Only handle SSA name pointers.  */
       if (TREE_CODE (ptr) != SSA_NAME)
 	return false;
 
@@ -534,7 +531,6 @@ reorder_mem_accesses (auto_vec<reorder_mem_info> &accesses)
 
   unsigned n = accesses.length ();
 
-  /* Sort by offset.  */
   accesses.qsort (compare_reorder_offset);
 
   /* Find the earliest original position - this is our insertion point.  */
@@ -561,10 +557,7 @@ reorder_mem_accesses (auto_vec<reorder_mem_info> &accesses)
       gimple *stmt = accesses[i].stmt;
 
       if (stmt == gsi_stmt (insert_gsi))
-	{
-	  /* Already in position.  */
-	  gsi_next (&insert_gsi);
-	}
+	gsi_next (&insert_gsi);
       else
 	{
 	  /* Move to current position.  */
@@ -923,10 +916,10 @@ process_sequential_refs (auto_vec<seq_mem_ref> &refs, int base_regno)
 	return false;
     }
 
-  /* Thresholds.  */
+  /* Threshold: need 3+ accesses when starting at offset 0 (first access
+     is already 2 bytes without displacement, so savings start at 3).
+     For nonzero first offset, n >= 2 is guaranteed by the check above.  */
   if (first_offset == 0 && n < 3)
-    return false;
-  if (first_offset != 0 && n < 2)
     return false;
 
   HOST_WIDE_INT total = n * stride;
@@ -985,7 +978,6 @@ process_sequential_refs (auto_vec<seq_mem_ref> &refs, int base_regno)
 	  prev_insn = refs[i].insn;
 	}
     }
-  /* Validate the last insn.  */
   if (prev_insn)
     {
       INSN_CODE (prev_insn) = -1;
@@ -1013,6 +1005,7 @@ process_sequential_refs (auto_vec<seq_mem_ref> &refs, int base_regno)
       *refs[i].mem_loc = old_mems[i];
       INSN_CODE (refs[i].insn) = -1;
       recog_memoized (refs[i].insn);
+      df_insn_rescan (refs[i].insn);
     }
   delete_insn (lea_insn);
   return false;
@@ -1045,6 +1038,21 @@ try_sequential_access_to_postinc (basic_block bb)
     {
       if (!NONDEBUG_INSN_P (insn))
 	continue;
+
+      /* Jumps and calls break runs — we can't insert insns around them
+	 without breaking the CFG (jumps must stay at BB_END, calls have
+	 side effects and clobber lists).  */
+      if (JUMP_P (insn) || CALL_P (insn))
+	{
+	  if (!refs.is_empty ())
+	    {
+	      if (process_sequential_refs (refs, current_base))
+		changed = true;
+	      refs.truncate (0);
+	    }
+	  current_base = -1;
+	  continue;
+	}
 
       /* Collect MEMs from this insn for all possible base registers.  */
       auto_vec<seq_mem_ref> insn_refs;
@@ -1223,7 +1231,9 @@ m68k_reorder_incr (function *func)
 	for (insn = BB_HEAD (bb); insn != NEXT_INSN (BB_END (bb)); insn = next)
 	  {
 	    next = NEXT_INSN (insn);
-	    if (!NONDEBUG_INSN_P (insn))
+	    /* Only split plain insns — not jumps (must stay at BB_END)
+	       or calls (clobber lists, side effects).  */
+	    if (!NONJUMP_INSN_P (insn))
 	      continue;
 	    rtx set = single_set (insn);
 	    if (!set)
@@ -1240,10 +1250,8 @@ m68k_reorder_incr (function *func)
 
 	    int r0, r1;
 	    HOST_WIDE_INT off0 = 0, off1 = 0;
-	    bool m0 = (m68k_mem_reg_offset_p (op0, &r0, &off0)
-		       || (REG_P (XEXP (op0, 0)) && (r0 = REGNO (XEXP (op0, 0)), off0 = 0, true)));
-	    bool m1 = (m68k_mem_reg_offset_p (op1, &r1, &off1)
-		       || (REG_P (XEXP (op1, 0)) && (r1 = REGNO (XEXP (op1, 0)), off1 = 0, true)));
+	    bool m0 = m68k_mem_base_offset_p (op0, &r0, &off0);
+	    bool m1 = m68k_mem_base_offset_p (op1, &r1, &off1);
 
 	    if (!m0 || !m1 || r0 != r1)
 	      continue;

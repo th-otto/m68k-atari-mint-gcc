@@ -1430,49 +1430,6 @@ struct andi_candidate {
    For word-to-long: byte and word operations are safe.
    For byte-to-long/word: only byte operations are safe.  */
 
-static bool
-effect_compatible_with_ext (enum insn_reg_effect effect,
-			    enum extension_type ext_type)
-{
-  switch (ext_type)
-    {
-    case EXT_WORD_TO_LONG:
-      /* Word operations preserve upper 16 bits.  */
-      return (effect == EFFECT_MODIFIES_WORD
-	      || effect == EFFECT_MODIFIES_BYTE
-	      || effect == EFFECT_NO_EFFECT);
-
-    case EXT_BYTE_TO_LONG:
-    case EXT_BYTE_TO_WORD:
-      /* Only byte operations preserve upper 24/8 bits.  */
-      return (effect == EFFECT_MODIFIES_BYTE
-	      || effect == EFFECT_NO_EFFECT);
-
-    default:
-      return false;
-    }
-}
-
-/* Check if a definition effect is the right size for the extension type.  */
-
-static bool
-definition_matches_ext (enum insn_reg_effect effect,
-			enum extension_type ext_type)
-{
-  switch (ext_type)
-    {
-    case EXT_WORD_TO_LONG:
-      return effect == EFFECT_DEFINES_WORD;
-
-    case EXT_BYTE_TO_LONG:
-    case EXT_BYTE_TO_WORD:
-      return effect == EFFECT_DEFINES_BYTE;
-
-    default:
-      return false;
-    }
-}
-
 /* Classify instruction effect with consideration for extension type.
    For byte extensions, word-mode uses are also problematic.  */
 
@@ -2384,7 +2341,8 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
   if (dump_file)
     fprintf (dump_file, "  Pass 4: Scanning for memory ANDI patterns\n");
 
-  FOR_BB_INSNS (bb, insn)
+  rtx_insn *next_insn;
+  FOR_BB_INSNS_SAFE (bb, insn, next_insn)
     {
       if (!NONJUMP_INSN_P (insn))
 	continue;
@@ -2849,16 +2807,17 @@ highword_optimize_extraction (basic_block bb)
 	  if (!NONDEBUG_INSN_P (scan))
 	    continue;
 
-	  /* If register is redefined, we're safe - upper bits reset.  */
-	  if (reg_set_p (shift_reg, scan))
-	    break;
-
-	  /* If register is used in SImode, upper bits matter.  */
+	  /* Check SImode use BEFORE redef — an insn like add.l %d0,%d0
+	     both reads and writes, and the read needs correct upper bits.  */
 	  if (uses_reg_as_long_p (PATTERN (scan), regno))
 	    {
 	      upper_bits_matter = true;
 	      break;
 	    }
+
+	  /* If register is redefined without SImode use, upper bits reset.  */
+	  if (reg_set_p (shift_reg, scan))
+	    break;
 	}
 
       /* Also check if reg is live out of BB - be conservative.  */
@@ -2904,9 +2863,13 @@ highword_optimize_extraction (basic_block bb)
 				 gen_rtx_ROTATE (SImode, shift_reg,
 						 GEN_INT (16)));
       rtx_insn *new_insn = emit_insn_before (new_pat, insn);
-      INSN_CODE (new_insn) = -1;  /* Force recog.  */
+      INSN_CODE (new_insn) = -1;
+      if (recog_memoized (new_insn) < 0)
+	{
+	  delete_insn (new_insn);
+	  continue;
+	}
 
-      /* Delete the old shift insn.  */
       delete_insn (insn);
 
       /* Update df info.  */

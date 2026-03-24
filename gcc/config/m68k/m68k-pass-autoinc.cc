@@ -30,7 +30,6 @@
 #include "tree-pass.h"
 #include "ssa.h"
 #include "gimple-iterator.h"
-#include "gimple-walk.h"
 #include "gimple-pretty-print.h"
 #include "cfgloop.h"
 #include "tree-ssa-loop.h"
@@ -41,12 +40,8 @@
 #include "tree-phinodes.h"
 #include "ssa-iterators.h"
 #include "stor-layout.h"
-#include "gimple-range.h"
 #include "context.h"
-#include "tree-ssa-alias.h"
 #include "tree-cfg.h"
-#include "tree-dfa.h"
-#include "tree-into-ssa.h"
 #include "df.h"
 #include "memmodel.h"
 #include "rtl-iter.h"
@@ -57,10 +52,6 @@
 #include "recog.h"
 #include "cfgrtl.h"
 #include "m68k-util.h"
-
-/* ======================================================================
-   GIMPLE pass: m68k_pass_autoinc_split
-   ====================================================================== */
 
 namespace {
 
@@ -356,15 +347,16 @@ split_combined_increment (class loop *loop ATTRIBUTE_UNUSED,
 
   if (dump_file)
     {
-      fprintf (dump_file, "Splitting combined increment: step %ld -> %u x %ld\n",
-               (long)iv_info->step, n, (long)elem_size);
+      fprintf (dump_file, "Splitting combined increment: step "
+	       HOST_WIDE_INT_PRINT_DEC " -> %u x " HOST_WIDE_INT_PRINT_DEC "\n",
+               iv_info->step, n, elem_size);
     }
 
   /* Create intermediate pointer SSA names.  */
   tree ptr_type = TREE_TYPE (iv_info->phi_result);
   tree *new_ptrs = XALLOCAVEC (tree, n);
 
-  new_ptrs[0] = iv_info->phi_result;  /* First access uses original PHI result */
+  new_ptrs[0] = iv_info->phi_result;
 
   /* Process each access except the last.  */
   for (unsigned i = 0; i < n - 1; i++)
@@ -499,9 +491,10 @@ process_loop (class loop *loop)
         {
           fprintf (dump_file, "\nFound splittable pattern in loop %d:\n",
                    loop->num);
-          fprintf (dump_file, "  %u accesses, step %ld, elem_size %ld\n",
-                   iv_info.accesses.length (), (long)iv_info.step,
-                   (long)elem_size);
+          fprintf (dump_file, "  %u accesses, step " HOST_WIDE_INT_PRINT_DEC
+		   ", elem_size " HOST_WIDE_INT_PRINT_DEC "\n",
+                   iv_info.accesses.length (), iv_info.step,
+                   elem_size);
         }
 
       /* Perform the transformation.  */
@@ -1326,17 +1319,20 @@ m68k_sink_postinc (function *func)
       /* Verify: ptr not used in source BB after the load.  */
       rtx ptr_reg = gen_rtx_REG (Pmode, ptr_regno);
       bool ptr_used_after = false;
-      for (rtx_insn *insn = NEXT_INSN (load_insn); ;
-	   insn = NEXT_INSN (insn))
+      if (load_insn != BB_END (bb))
 	{
-	  if (NONDEBUG_INSN_P (insn)
-	      && reg_mentioned_p (ptr_reg, PATTERN (insn)))
+	  for (rtx_insn *insn = NEXT_INSN (load_insn); ;
+	       insn = NEXT_INSN (insn))
 	    {
-	      ptr_used_after = true;
-	      break;
+	      if (NONDEBUG_INSN_P (insn)
+		  && reg_mentioned_p (ptr_reg, PATTERN (insn)))
+		{
+		  ptr_used_after = true;
+		  break;
+		}
+	      if (insn == BB_END (bb))
+		break;
 	    }
-	  if (insn == BB_END (bb))
-	    break;
 	}
 
       if (ptr_used_after)
@@ -1599,14 +1595,10 @@ validate_insn (rtx_insn *insn)
   return constrain_operands (0, get_enabled_alternatives (insn));
 }
 
-/* Try to convert a memory access and subsequent offset accesses to POST_INC
-   on pseudos (pre-RA version).
-
-   Same logic as try_convert_to_postinc but:
-   - No hard-reg range check (works on any pseudo)
-   - Uses strict=0 for constraint validation
-   - Handles the case where no add insn exists by checking live_out
-
+/* Try to convert a sequence of offset-addressed memory accesses through
+   the same register into POST_INC addressing.  Pre-RA: works on any
+   pseudo, uses strict=0 for constraint validation.  If no explicit
+   increment exists, checks live_out to determine if one is needed.
    Returns true if any transformation was made.  */
 
 static bool
@@ -1712,12 +1704,8 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
 	  rtx op1 = XEXP (src, 1);
 	  int r0 = -1, r1 = -1;
 	  HOST_WIDE_INT off0 = 0, off1 = 0;
-	  bool m0 = MEM_P (op0)
-	    && (mem_reg_p (op0, &r0)
-		|| m68k_mem_reg_offset_p (op0, &r0, &off0));
-	  bool m1 = MEM_P (op1)
-	    && (mem_reg_p (op1, &r1)
-		|| m68k_mem_reg_offset_p (op1, &r1, &off1));
+	  bool m0 = m68k_mem_base_offset_p (op0, &r0, &off0);
+	  bool m1 = m68k_mem_base_offset_p (op1, &r1, &off1);
 
 	  if (m0 && r0 == regno && off0 == expected_offset && !m1)
 	    {
@@ -1752,7 +1740,7 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
      Note: 68060 does NOT stall here — POST_INC is a zero-stall producer
      on 68060 (MC68060UM §4.2).  Dual-issue is already impossible for
      consecutive memory ops (test 4: at most one data access per pair).  */
-  if (TUNE_68040)
+  if (TUNE_68040 && !TUNE_68060)
     {
       bool all_consecutive = true;
       rtx_insn *prev = first_insn;
@@ -1892,9 +1880,19 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
 
       if (!validate_insn (insn))
 	{
+	  /* Revert this insn and first_insn.  Earlier fixup insns are left
+	     with adjusted offsets — they are still valid (just not POST_INC)
+	     and will be rechecked on the next iteration if applicable.  */
 	  *mem_loc = old_mem;
 	  INSN_CODE (insn) = -1;
 	  recog_memoized (insn);
+	  /* Revert first_insn's POST_INC back to the original MEM.  */
+	  *mem_ptr = mem;
+	  remove_reg_equal_equiv_notes (first_insn);
+	  remove_note (first_insn, find_reg_note (first_insn, REG_INC, reg));
+	  INSN_CODE (first_insn) = -1;
+	  recog_memoized (first_insn);
+	  df_insn_rescan (first_insn);
 	  return false;
 	}
 
@@ -1941,13 +1939,9 @@ reg_dead_on_other_edges (basic_block pred, basic_block bb, int regno)
   return true;
 }
 
-/* Try to convert a load in a predecessor BB followed by an increment at the
-   top of this BB into a post-increment load.  Pre-RA version that works
-   on pseudos.
-
-   Same pattern as try_cross_bb_postinc but:
-   - No hard-reg range check
-   - Uses strict=0 for constraint validation  */
+/* Try to convert a load in a predecessor BB followed by an increment at
+   the top of this BB into a post-increment load.  Pre-RA: works on any
+   pseudo, uses strict=0 for constraint validation.  */
 
 static bool
 try_cross_bb_postinc (basic_block bb)

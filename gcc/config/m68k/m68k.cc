@@ -2376,6 +2376,10 @@ m68k_asm_final_postscan_insn (FILE *, rtx_insn *insn, rtx [], int)
   rtx set = single_set (insn);
   rtx dest = SET_DEST (set);
   rtx src = SET_SRC (set);
+  /* Unwrap strict_low_part — a move.b to strict_low_part(reg) sets
+     CC for the register just like a plain move.b to reg.  */
+  if (GET_CODE (dest) == STRICT_LOW_PART)
+    dest = XEXP (dest, 0);
   if (side_effects_p (dest))
       dest = NULL_RTX;
 
