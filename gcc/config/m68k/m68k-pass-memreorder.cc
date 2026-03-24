@@ -50,6 +50,7 @@
 #include "emit-rtl.h"
 #include "recog.h"
 #include "cfgrtl.h"
+#include "rtl-iter.h"
 #include "context.h"
 #include "tree-ssa-alias.h"
 #include "tree-cfg.h"
@@ -890,6 +891,263 @@ make_m68k_pass_reorder_mem (gcc::context *ctxt)
    Runs after scheduling (where the patterns form), before IRA.
    ======================================================================= */
 
+/* Record of a MEM found during BB scanning.  */
+
+struct seq_mem_ref {
+  rtx_insn *insn;       /* Containing insn.  */
+  rtx *mem_loc;          /* Pointer to the MEM rtx within the insn pattern.  */
+  HOST_WIDE_INT offset;  /* Offset from base register.  */
+  machine_mode mode;     /* Access mode (SImode, HImode, etc.).  */
+};
+
+/* Process a group of sequential MEMs from the same base register.
+   REFS must be sorted by offset with fixed stride.
+   Inserts lea + rewrites + addq for POST_INC conversion.  */
+
+static bool
+process_sequential_refs (auto_vec<seq_mem_ref> &refs, int base_regno)
+{
+  int n = refs.length ();
+  if (n < 2)
+    return false;
+
+  HOST_WIDE_INT first_offset = refs[0].offset;
+  HOST_WIDE_INT stride = GET_MODE_SIZE (refs[0].mode);
+
+  /* Verify sequential ascending offsets and uniform stride.  */
+  for (int i = 1; i < n; i++)
+    {
+      if (refs[i].offset != first_offset + i * stride)
+	return false;
+      if (GET_MODE_SIZE (refs[i].mode) != stride)
+	return false;
+    }
+
+  /* Thresholds.  */
+  if (first_offset == 0 && n < 3)
+    return false;
+  if (first_offset != 0 && n < 2)
+    return false;
+
+  HOST_WIDE_INT total = n * stride;
+
+  if (dump_file)
+    fprintf (dump_file, "  Sequential run: %d MEMs at %s+%ld, "
+	     "stride %ld, total %ld\n",
+	     n, reg_names[base_regno], (long) first_offset,
+	     (long) stride, (long) total);
+
+  /* Create pseudo pointer and lea.  */
+  rtx pseudo = gen_reg_rtx (Pmode);
+  rtx base_reg = gen_rtx_REG (Pmode, base_regno);
+  rtx lea_src = (first_offset != 0)
+    ? gen_rtx_PLUS (Pmode, base_reg, GEN_INT (first_offset))
+    : base_reg;
+
+  rtx_insn *lea_insn = emit_insn_before (gen_rtx_SET (pseudo, lea_src),
+					  refs[0].insn);
+  INSN_CODE (lea_insn) = -1;
+  if (recog_memoized (lea_insn) < 0)
+    {
+      delete_insn (lea_insn);
+      return false;
+    }
+
+  /* Track old MEMs for revert on failure.  */
+  auto_vec<rtx> old_mems;
+  for (int i = 0; i < n; i++)
+    old_mems.safe_push (*refs[i].mem_loc);
+
+  /* Rewrite each MEM address.  Multiple MEMs per insn are handled
+     naturally since each ref has its own mem_loc pointer.  */
+  rtx_insn *prev_insn = NULL;
+  for (int i = 0; i < n; i++)
+    {
+      HOST_WIDE_INT new_offset = refs[i].offset - first_offset;
+      rtx new_addr = (new_offset == 0)
+	? pseudo
+	: gen_rtx_PLUS (Pmode, pseudo, GEN_INT (new_offset));
+
+      *refs[i].mem_loc = replace_equiv_address_nv (*refs[i].mem_loc,
+						   new_addr);
+
+      /* Validate the insn after all its MEMs for this insn are rewritten.
+	 (An insn may have multiple refs — validate once after all are done.)  */
+      if (refs[i].insn != prev_insn)
+	{
+	  if (prev_insn)
+	    {
+	      INSN_CODE (prev_insn) = -1;
+	      if (recog_memoized (prev_insn) < 0)
+		goto revert;
+	      df_insn_rescan (prev_insn);
+	    }
+	  prev_insn = refs[i].insn;
+	}
+    }
+  /* Validate the last insn.  */
+  if (prev_insn)
+    {
+      INSN_CODE (prev_insn) = -1;
+      if (recog_memoized (prev_insn) < 0)
+	goto revert;
+      df_insn_rescan (prev_insn);
+    }
+
+  /* Insert increment after the last insn.  */
+  {
+    rtx_insn *last_insn = refs[n - 1].insn;
+    rtx_insn *incr_insn = emit_insn_after (
+      gen_rtx_SET (pseudo, gen_rtx_PLUS (Pmode, pseudo, GEN_INT (total))),
+      last_insn);
+    INSN_CODE (incr_insn) = -1;
+    if (recog_memoized (incr_insn) < 0)
+      delete_insn (incr_insn);
+  }
+
+  return true;
+
+ revert:
+  for (int i = 0; i < n; i++)
+    {
+      *refs[i].mem_loc = old_mems[i];
+      INSN_CODE (refs[i].insn) = -1;
+      recog_memoized (refs[i].insn);
+    }
+  delete_insn (lea_insn);
+  return false;
+}
+
+/* Detect sequential memory accesses at ascending offsets from the same
+   hard register and synthesize a pointer + increment pattern.  This
+   enables downstream opt_autoinc to convert to POST_INC addressing.
+
+   Walks ALL sub-expressions of each insn to find MEMs at any nesting
+   depth (stores, loads, arithmetic with MEM operands, combined insns
+   with multiple MEMs).  Groups them by base register and offset.
+
+   Thresholds: N >= 3 if first offset is 0, N >= 2 if first offset > 0.  */
+
+static bool
+try_sequential_access_to_postinc (basic_block bb)
+{
+  bool changed = false;
+
+  /* Phase 1: Collect all MEMs with hard-register base + const offset.
+     Group by base register.  Use a simple approach: collect for one
+     base at a time, process when a different base or non-MEM insn
+     is encountered.  */
+  auto_vec<seq_mem_ref> refs;
+  int current_base = -1;
+
+  rtx_insn *insn;
+  FOR_BB_INSNS (bb, insn)
+    {
+      if (!NONDEBUG_INSN_P (insn))
+	continue;
+
+      /* Collect MEMs from this insn for all possible base registers.  */
+      auto_vec<seq_mem_ref> insn_refs;
+      subrtx_ptr_iterator::array_type array;
+      FOR_EACH_SUBRTX_PTR (iter, array, &PATTERN (insn), NONCONST)
+	{
+	  rtx *loc = *iter;
+	  rtx x = *loc;
+	  if (!MEM_P (x))
+	    continue;
+
+	  rtx addr = XEXP (x, 0);
+	  int regno = -1;
+	  HOST_WIDE_INT offset = 0;
+
+	  if (REG_P (addr) && REGNO (addr) < FIRST_PSEUDO_REGISTER)
+	    {
+	      regno = REGNO (addr);
+	      offset = 0;
+	    }
+	  else if (GET_CODE (addr) == PLUS
+		   && REG_P (XEXP (addr, 0))
+		   && REGNO (XEXP (addr, 0)) < FIRST_PSEUDO_REGISTER
+		   && CONST_INT_P (XEXP (addr, 1)))
+	    {
+	      regno = REGNO (XEXP (addr, 0));
+	      offset = INTVAL (XEXP (addr, 1));
+	    }
+
+	  if (regno >= 0)
+	    {
+	      seq_mem_ref ref = { insn, loc, offset, GET_MODE (x) };
+	      insn_refs.safe_push (ref);
+	    }
+	  iter.skip_subrtxes ();
+	}
+
+      /* Check if this insn's MEMs extend the current run.  */
+      if (insn_refs.is_empty ()
+	  || (current_base >= 0
+	      && !refs.is_empty ()
+	      && insn_refs[0].offset <= refs.last ().offset))
+	{
+	  /* No MEMs, or non-ascending — process current run.  */
+	  if (!refs.is_empty ())
+	    {
+	      if (process_sequential_refs (refs, current_base))
+		changed = true;
+	      refs.truncate (0);
+	    }
+	  if (insn_refs.is_empty ())
+	    {
+	      current_base = -1;
+	      continue;
+	    }
+	}
+
+      /* Determine base register from this insn's refs.  */
+      int insn_base = -1;
+      for (unsigned j = 0; j < insn_refs.length (); j++)
+	{
+	  rtx addr = XEXP (*insn_refs[j].mem_loc, 0);
+	  int r = REG_P (addr) ? REGNO (addr) : REGNO (XEXP (addr, 0));
+	  if (insn_base < 0)
+	    insn_base = r;
+	  else if (r != insn_base)
+	    { insn_base = -1; break; }
+	}
+
+      if (insn_base < 0)
+	{
+	  if (!refs.is_empty ())
+	    {
+	      if (process_sequential_refs (refs, current_base))
+		changed = true;
+	      refs.truncate (0);
+	    }
+	  current_base = -1;
+	  continue;
+	}
+
+      /* Start or extend run.  */
+      if (current_base != insn_base && !refs.is_empty ())
+	{
+	  if (process_sequential_refs (refs, current_base))
+	    changed = true;
+	  refs.truncate (0);
+	}
+      current_base = insn_base;
+
+      for (unsigned j = 0; j < insn_refs.length (); j++)
+	refs.safe_push (insn_refs[j]);
+
+    }
+
+  /* Process remaining run.  */
+  if (!refs.is_empty ())
+    if (process_sequential_refs (refs, current_base))
+      changed = true;
+
+  return changed;
+}
+
 namespace {
 
 /* Main function for the reorder_incr pass.  Iterates until stable.  */
@@ -945,6 +1203,82 @@ m68k_reorder_incr (function *func)
 	}
     }
   while (made_changes);
+
+  /* Phase 2: Detect sequential base+offset accesses on hard registers
+     and synthesize pointer + increment patterns.  */
+  {
+    basic_block bb;
+    FOR_EACH_BB_FN (bb, func)
+      try_sequential_access_to_postinc (bb);
+  }
+
+  /* Phase 3: Split combined insns with two MEMs from the same base at
+     consecutive offsets into separate load + op insns.  This enables
+     opt_autoinc to convert each MEM to POST_INC individually.  */
+  {
+    basic_block bb;
+    FOR_EACH_BB_FN (bb, func)
+      {
+	rtx_insn *insn, *next;
+	for (insn = BB_HEAD (bb); insn != NEXT_INSN (BB_END (bb)); insn = next)
+	  {
+	    next = NEXT_INSN (insn);
+	    if (!NONDEBUG_INSN_P (insn))
+	      continue;
+	    rtx set = single_set (insn);
+	    if (!set)
+	      continue;
+	    rtx src = SET_SRC (set);
+	    if (GET_RTX_CLASS (GET_CODE (src)) != RTX_COMM_ARITH
+		&& GET_RTX_CLASS (GET_CODE (src)) != RTX_BIN_ARITH)
+	      continue;
+
+	    rtx op0 = XEXP (src, 0);
+	    rtx op1 = XEXP (src, 1);
+	    if (!MEM_P (op0) || !MEM_P (op1))
+	      continue;
+
+	    int r0, r1;
+	    HOST_WIDE_INT off0 = 0, off1 = 0;
+	    bool m0 = (m68k_mem_reg_offset_p (op0, &r0, &off0)
+		       || (REG_P (XEXP (op0, 0)) && (r0 = REGNO (XEXP (op0, 0)), off0 = 0, true)));
+	    bool m1 = (m68k_mem_reg_offset_p (op1, &r1, &off1)
+		       || (REG_P (XEXP (op1, 0)) && (r1 = REGNO (XEXP (op1, 0)), off1 = 0, true)));
+
+	    if (!m0 || !m1 || r0 != r1)
+	      continue;
+
+	    int stride = GET_MODE_SIZE (GET_MODE (op0));
+	    if (off1 != off0 + stride)
+	      continue;
+
+	    machine_mode mode = GET_MODE (op0);
+	    rtx tmp = gen_reg_rtx (mode);
+	    rtx_insn *load_insn = emit_insn_before (gen_rtx_SET (tmp, op0), insn);
+	    INSN_CODE (load_insn) = -1;
+	    if (recog_memoized (load_insn) < 0)
+	      {
+		delete_insn (load_insn);
+		continue;
+	      }
+
+	    rtx old_op0 = XEXP (src, 0);
+	    XEXP (src, 0) = tmp;
+	    INSN_CODE (insn) = -1;
+	    if (recog_memoized (insn) < 0)
+	      {
+		XEXP (src, 0) = old_op0;
+		INSN_CODE (insn) = -1;
+		recog_memoized (insn);
+		delete_insn (load_insn);
+		continue;
+	      }
+
+	    df_insn_rescan (load_insn);
+	    df_insn_rescan (insn);
+	  }
+      }
+  }
 
   return 0;
 }

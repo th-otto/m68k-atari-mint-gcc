@@ -49,6 +49,7 @@
 #include "tree-into-ssa.h"
 #include "df.h"
 #include "memmodel.h"
+#include "rtl-iter.h"
 #include "tm_p.h"
 #include "insn-config.h"
 #include "regs.h"
@@ -1700,6 +1701,38 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
 	    return false;
 	}
 
+      /* Check for a single nested MEM at the expected offset inside
+	 a binary/commutative expression (e.g., add.l d(%pseudo),%dN).
+	 Combined insns with two MEMs are split by reorder_incr
+	 before this pass, so only single-MEM cases need handling.  */
+      if (GET_RTX_CLASS (GET_CODE (src)) == RTX_COMM_ARITH
+	  || GET_RTX_CLASS (GET_CODE (src)) == RTX_BIN_ARITH)
+	{
+	  rtx op0 = XEXP (src, 0);
+	  rtx op1 = XEXP (src, 1);
+	  int r0 = -1, r1 = -1;
+	  HOST_WIDE_INT off0 = 0, off1 = 0;
+	  bool m0 = MEM_P (op0)
+	    && (mem_reg_p (op0, &r0)
+		|| m68k_mem_reg_offset_p (op0, &r0, &off0));
+	  bool m1 = MEM_P (op1)
+	    && (mem_reg_p (op1, &r1)
+		|| m68k_mem_reg_offset_p (op1, &r1, &off1));
+
+	  if (m0 && r0 == regno && off0 == expected_offset && !m1)
+	    {
+	      fixup_insns.safe_push (insn);
+	      expected_offset += size;
+	      continue;
+	    }
+	  else if (m1 && r1 == regno && off1 == expected_offset && !m0)
+	    {
+	      fixup_insns.safe_push (insn);
+	      expected_offset += size;
+	      continue;
+	    }
+	}
+
       /* If the register is used but not in a recognizable pattern, abort.  */
       if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), PATTERN (insn)))
 	return false;
@@ -1765,19 +1798,30 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
   rtx postinc_mem = gen_rtx_MEM (mode, postinc_addr);
   MEM_COPY_ATTRIBUTES (postinc_mem, mem);
 
-  rtx set = single_set (first_insn);
-  if (is_dest)
-    SET_DEST (set) = postinc_mem;
-  else
-    SET_SRC (set) = postinc_mem;
+  /* Find and replace the specific MEM within the insn pattern.
+     For top-level MEMs, this replaces SET_SRC or SET_DEST directly.
+     For nested MEMs (inside PLUS etc.), it finds the exact MEM rtx.  */
+  rtx *mem_ptr = NULL;
+  {
+    subrtx_ptr_iterator::array_type array;
+    FOR_EACH_SUBRTX_PTR (iter, array, &PATTERN (first_insn), NONCONST)
+      {
+	if (**iter == mem)
+	  {
+	    mem_ptr = *iter;
+	    break;
+	  }
+      }
+  }
+  if (!mem_ptr)
+    return false;
+
+  *mem_ptr = postinc_mem;
 
   /* Validate pre-RA: recog + constraints with strict=0.  */
   if (!validate_insn (first_insn))
     {
-      if (is_dest)
-	SET_DEST (set) = mem;
-      else
-	SET_SRC (set) = mem;
+      *mem_ptr = mem;
       INSN_CODE (first_insn) = -1;
       recog_memoized (first_insn);
       return false;
@@ -1786,13 +1830,37 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
   add_reg_note (first_insn, REG_INC, reg);
   df_insn_rescan (first_insn);
 
-  /* 2. Fix up subsequent instructions — reduce their offsets.  */
+  /* 2. Fix up subsequent instructions — reduce their offsets.
+     Find the MEM at any nesting depth (handles both top-level and
+     nested MEMs from split combined insns).  */
   HOST_WIDE_INT current_adj = size;
   for (rtx_insn *insn : fixup_insns)
     {
+      /* Find the MEM that references our register.  */
+      rtx *mem_loc = NULL;
       rtx set = single_set (insn);
-      rtx *mem_loc = is_dest ? &SET_DEST (set) : &SET_SRC (set);
-      if (!MEM_P (*mem_loc))
+      if (set)
+	{
+	  /* Try top-level first (common case).  */
+	  if (is_dest && MEM_P (SET_DEST (set)))
+	    mem_loc = &SET_DEST (set);
+	  else if (!is_dest && MEM_P (SET_SRC (set)))
+	    mem_loc = &SET_SRC (set);
+	  else
+	    {
+	      /* Search nested — check binary op operands.  */
+	      rtx src = SET_SRC (set);
+	      if (GET_RTX_CLASS (GET_CODE (src)) == RTX_COMM_ARITH
+		  || GET_RTX_CLASS (GET_CODE (src)) == RTX_BIN_ARITH)
+		{
+		  if (MEM_P (XEXP (src, 0)))
+		    mem_loc = &XEXP (src, 0);
+		  else if (MEM_P (XEXP (src, 1)))
+		    mem_loc = &XEXP (src, 1);
+		}
+	    }
+	}
+      if (!mem_loc || !MEM_P (*mem_loc))
 	continue;
 
       rtx old_mem = *mem_loc;
@@ -1801,7 +1869,10 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
 
       int mem_regno;
       HOST_WIDE_INT old_offset;
-      if (!m68k_mem_reg_offset_p (old_mem, &mem_regno, &old_offset))
+      /* Handle both bare (reg) at offset 0 and (plus reg offset).  */
+      if (mem_reg_p (old_mem, &mem_regno))
+	old_offset = 0;
+      else if (!m68k_mem_reg_offset_p (old_mem, &mem_regno, &old_offset))
 	continue;
 
       HOST_WIDE_INT new_offset = old_offset - current_adj;
@@ -2088,7 +2159,9 @@ m68k_opt_autoinc (function *func)
 {
   unsigned int changes = 0;
 
-  /* Phase 1: Cross-BB post-increment conversion.  Repeat until stable.  */
+  /* Phase 1: Cross-BB post-increment conversion.  Repeat until stable.
+     Note: Sequential access detection and combined-insn splitting run
+     in m68k_pass_reorder_incr which is ordered before this pass.  */
   {
     bool made_changes;
     do
@@ -2189,6 +2262,29 @@ m68k_opt_autoinc (function *func)
 		  {
 		    changes++;
 		    bb_changed = true;
+		  }
+	      }
+	    /* Also check nested MEMs in compound source expressions.  */
+	    else if (GET_RTX_CLASS (GET_CODE (src)) == RTX_COMM_ARITH
+		     || GET_RTX_CLASS (GET_CODE (src)) == RTX_BIN_ARITH)
+	      {
+		rtx op0 = XEXP (src, 0);
+		rtx op1 = XEXP (src, 1);
+		if (MEM_P (op0) && mem_reg_p (op0, &regno))
+		  {
+		    if (try_convert_to_postinc (bb, insn, op0, 0))
+		      {
+			changes++;
+			bb_changed = true;
+		      }
+		  }
+		else if (MEM_P (op1) && mem_reg_p (op1, &regno))
+		  {
+		    if (try_convert_to_postinc (bb, insn, op1, 0))
+		      {
+			changes++;
+			bb_changed = true;
+		      }
 		  }
 	      }
 

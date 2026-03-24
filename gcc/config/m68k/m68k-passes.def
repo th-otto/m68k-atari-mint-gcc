@@ -66,6 +66,27 @@ INSERT_PASS_BEFORE (pass_store_merging, 1, m68k_pass_reorder_mem);
 
    Runs after scheduling (where patterns form), before IRA.  */
 
+/* Pre-RA auto-increment optimization.
+
+   Handles multi-step indexed sequences, cross-BB patterns, and increment
+   repositioning on pseudos.  Runs after combine/scheduling so POST_INC
+   patterns are visible to IRA for better register allocation.
+
+   Placed after pass_sched.  Must run AFTER reorder_incr (below).  */
+
+INSERT_PASS_AFTER (pass_sched, 1, m68k_pass_opt_autoinc);
+
+/* Increment normalization and sequential access detection.
+
+   Normalizes increment positions (moves past negative-offset accesses).
+   Also detects sequential base+offset accesses on hard registers and
+   synthesizes pointer + increment patterns for POST_INC conversion.
+   Splits combined insns with multiple MEMs at consecutive offsets.
+
+   Runs after scheduling, before opt_autoinc.  INSERT_PASS_AFTER at the
+   same point inserts in reverse file order — this entry (later in file)
+   gets the earlier pass number, so it runs first.  */
+
 INSERT_PASS_AFTER (pass_sched, 1, m68k_pass_reorder_incr);
 
 /* Split combined pointer increments to enable auto-increment addressing.
@@ -99,18 +120,6 @@ INSERT_PASS_AFTER (pass_inc_dec, 1, m68k_pass_avail_copy_elim);
    Runs after pass_inc_dec, before pass_combine.  */
 
 INSERT_PASS_BEFORE (pass_combine, 1, m68k_pass_sink_for_rmw);
-
-/* Pre-RA auto-increment optimization.
-
-   Handles multi-step indexed sequences, cross-BB patterns, and increment
-   repositioning on pseudos.  Runs after combine/scheduling so POST_INC
-   patterns are visible to IRA for better register allocation.
-
-   Placed after pass_sched to catch patterns created by combine
-   and scheduling.  Runs after reorder_incr which normalizes increment
-   positions first.  */
-
-INSERT_PASS_AFTER (pass_sched, 1, m68k_pass_opt_autoinc);
 
 /* Sink POST_INC from loads to downstream compensating-offset accesses.
    When PRE hoists a common load and pass_inc_dec converts it to POST_INC,
