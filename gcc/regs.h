@@ -20,6 +20,16 @@ along with GCC; see the file COPYING3.  If not see
 #ifndef GCC_REGS_H
 #define GCC_REGS_H
 
+/* Operand use-context flags for TARGET_PREFERRED_RELOAD_CLASS_FOR_USE.
+   These describe how an operand is used in an instruction, allowing the
+   target to prefer different register classes based on context (e.g.,
+   data registers for comparisons on split-register-file targets).  */
+#define REG_USE_SET      (1 << 0)  /* Simple assignment target.  */
+#define REG_USE_MEM      (1 << 1)  /* Memory address component.  */
+#define REG_USE_ARITH    (1 << 2)  /* Arithmetic operand.  */
+#define REG_USE_COMPARE  (1 << 3)  /* Comparison operand.  */
+#define REG_USE_OTHER    (1 << 4)  /* Other use.  */
+
 #define REG_BYTES(R) mode_size[(int) GET_MODE (R)]
 
 /* When you only have the mode of a pseudo register before it has a hard

@@ -2822,6 +2822,16 @@ number of memory accesses.",
  unsigned, (unsigned nunroll, class loop *loop),
  NULL)
 
+/* Prefer jump table dispatch for runtime loop unrolling.  */
+DEFHOOKPOD
+(prefer_runtime_unroll_tablejump,
+ "Return true if the target prefers a jump table dispatch for the\n\
+remainder iterations of runtime-unrolled loops, instead of a serial\n\
+compare-and-branch cascade.  The jump table is constant-time whereas\n\
+the compare cascade is O(unroll_factor).  Only effective when the\n\
+target also supports @code{tablejump}.",
+ bool, false)
+
 /* True if X is a legitimate MODE-mode immediate operand.  */
 DEFHOOK
 (legitimate_constant_p,
@@ -4070,6 +4080,17 @@ registers on machines with lots of registers.",
  int, (rtx address, machine_mode mode, addr_space_t as, bool speed),
  default_address_cost)
 
+DEFHOOKPOD
+(ivopts_allow_const_ptr_address_use,
+ "Return true if IVOPTS should classify constant-base pointer IVs\n\
+(e.g., @code{(short*)0xffff8240}) as @code{REFERENCE ADDRESS} uses\n\
+instead of @code{GENERIC} uses.  This allows IVOPTS to evaluate\n\
+@code{TARGET_ADDRESS_COST} for the memory access and make better\n\
+IV elimination decisions on targets where indexed addressing is\n\
+significantly more expensive than autoincrement addressing.\n\
+The default value is false.",
+ bool, false)
+
 /* Compute a cost for INSN.  */
 DEFHOOK
 (insn_cost,
@@ -4689,6 +4710,33 @@ expensive penalty.  This hook allows target owners to define the cost for\n\
 this escpecially for address IV uses.\n\
 The default value is zero.",
  int64_t, 0)
+
+DEFHOOK
+(iv_compare_cost,
+ "Return the per-iteration cost of the loop exit comparison when an IV\n\
+candidate of tree type @var{type} is used.  @var{doloop_p} is true when\n\
+the comparison is absorbed into a decrement-and-branch instruction\n\
+(e.g., @code{dbra} on m68k).\n\
+\n\
+On targets with split register files, pointer-typed IVs may require a\n\
+more expensive comparison instruction than integer-typed IVs.  For\n\
+example, on m68k 68020+, @code{cmpa.l} (address register) costs 4 NCC\n\
+while @code{cmp.l} (data register) costs 2 NCC.\n\
+\n\
+The return value is added to the COMPARE group elimination cost and is\n\
+not amortized over loop iterations.  The default returns zero.",
+ int, (tree type, bool doloop_p, bool speed),
+ default_iv_compare_cost)
+
+DEFHOOKPOD
+(doloop_min_iterations,
+ "Minimum number of estimated iterations for doloop optimization\n\
+to be considered profitable.  The doloop pass will reject loops\n\
+with fewer estimated iterations than this value.  Set this to a\n\
+lower value (e.g., 1) for targets like m68k where the dbra\n\
+instruction is always beneficial regardless of iteration count.\n\
+The default value is 3.",
+ int, 3)
 
 DEFHOOK
 (can_use_doloop_p,
@@ -5789,6 +5837,23 @@ DEFHOOK
  reg_class_t, (int, reg_class_t, reg_class_t),
  default_ira_change_pseudo_allocno_class)
 
+DEFHOOK
+(preferred_reload_class_for_use,
+ "Like @code{TARGET_PREFERRED_RELOAD_CLASS} but additionally receives\n\
+@var{src_use} and @var{dst_use} flags indicating how the operand is used\n\
+on the source and destination sides of the instruction.  Flags include\n\
+@code{REG_USE_SET} (simple assignment), @code{REG_USE_MEM} (memory address\n\
+component), @code{REG_USE_ARITH} (arithmetic operand),\n\
+@code{REG_USE_COMPARE} (comparison operand), and @code{REG_USE_OTHER}.\n\
+\n\
+On targets with split register files, this allows preferring data\n\
+registers for comparison operands while still requiring address\n\
+registers for memory base operands.\n\
+\n\
+The default calls @code{TARGET_PREFERRED_RELOAD_CLASS}.",
+ reg_class_t, (rtx x, reg_class_t rclass, int src_use, int dst_use),
+ default_preferred_reload_class_for_use)
+
 /* Return true if we use LRA instead of reload.  */
 DEFHOOK
 (lra_p,
@@ -6158,6 +6223,15 @@ smaller than instructions using @code{GENERIC_REGS}.  By returning\n\
 be reduced.",
  reg_class_t, (reg_class_t rclass),
  default_preferred_rename_class)
+
+DEFHOOK
+(register_rename_profitable_p,
+ "Return true if renaming hard register @var{old_reg} to @var{new_reg}\n\
+in @var{insn} is profitable.  Called by the register renaming pass for\n\
+each instruction in a rename chain.  If any instruction returns false,\n\
+the rename is rejected.  The default returns true.",
+ bool, (rtx_insn *insn, unsigned int old_reg, unsigned int new_reg),
+ hook_bool_rtx_insn_uint_uint_true)
 
 /* This target hook allows the backend to avoid unsafe substitution
    during register allocation.  */

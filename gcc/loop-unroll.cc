@@ -35,6 +35,8 @@ along with GCC; see the file COPYING3.  If not see
 #include "dojump.h"
 #include "expr.h"
 #include "dumpfile.h"
+#include "explow.h"
+#include "expmed.h"
 
 /* This pass performs loop unrolling.  We only perform this
    optimization on innermost loops (with single exception) because
@@ -894,6 +896,12 @@ unroll_loop_runtime_iterations (class loop *loop)
   struct opt_info *opt_info = NULL;
   bool ok;
 
+  bool use_tablejump = (targetm.prefer_runtime_unroll_tablejump
+			&& targetm.have_tablejump ());
+  rtx precomputed_trip_count = NULL_RTX;
+  auto_vec<basic_block> peel_preheaders;
+  auto_vec<unsigned> peel_jvals;
+
   if (flag_split_ivs_in_unroller
       || flag_variable_expansion_in_unroller)
     opt_info = analyze_insns_in_loop (loop);
@@ -994,7 +1002,7 @@ unroll_loop_runtime_iterations (class loop *loop)
     {
       /* Peel the copy.  */
       bitmap_clear (wont_exit);
-      if (i != n_peel - 1 || !last_may_exit)
+      if (use_tablejump || i != n_peel - 1 || !last_may_exit)
 	bitmap_set_bit (wont_exit, 1);
       ok = duplicate_loop_body_to_header_edge (loop, loop_preheader_edge (loop),
 					       1, wont_exit, desc->out_edge,
@@ -1009,46 +1017,252 @@ unroll_loop_runtime_iterations (class loop *loop)
       preheader = split_edge (loop_preheader_edge (loop));
       /* Add in count of edge from switch block.  */
       preheader->count += iter_count;
-      branch_code = compare_and_jump_seq (copy_rtx (niter),
-					  gen_int_mode (j, desc->mode), EQ,
-					  block_label (preheader), p, NULL);
 
-      /* We rely on the fact that the compare and jump cannot be optimized out,
-	 and hence the cfg we create is correct.  */
-      gcc_assert (branch_code != NULL_RTX);
+      if (use_tablejump)
+	{
+	  peel_preheaders.safe_push (preheader);
+	  peel_jvals.safe_push (j);
+	}
+      else
+	{
+	  branch_code = compare_and_jump_seq (copy_rtx (niter),
+					      gen_int_mode (j, desc->mode), EQ,
+					      block_label (preheader), p,
+					      NULL);
 
-      swtch = split_edge_and_insert (single_pred_edge (swtch), branch_code);
-      set_immediate_dominator (CDI_DOMINATORS, preheader, swtch);
-      single_succ_edge (swtch)->probability = p.invert ();
-      new_count += iter_count;
-      swtch->count = new_count;
-      e = make_edge (swtch, preheader,
-		     single_succ_edge (swtch)->flags & EDGE_IRREDUCIBLE_LOOP);
-      e->probability = p;
+	  /* We rely on the fact that the compare and jump cannot be
+	     optimized out, and hence the cfg we create is correct.  */
+	  gcc_assert (branch_code != NULL_RTX);
+
+	  swtch = split_edge_and_insert (single_pred_edge (swtch),
+					 branch_code);
+	  set_immediate_dominator (CDI_DOMINATORS, preheader, swtch);
+	  single_succ_edge (swtch)->probability = p.invert ();
+	  new_count += iter_count;
+	  swtch->count = new_count;
+	  e = make_edge (swtch, preheader,
+			 single_succ_edge (swtch)->flags
+			   & EDGE_IRREDUCIBLE_LOOP);
+	  e->probability = p;
+	}
     }
 
   if (extra_zero_check)
     {
       /* Add branch for zero iterations.  */
-      p = profile_probability::always () / (max_unroll + 1);
-      swtch = ezc_swtch;
       preheader = split_edge (loop_preheader_edge (loop));
-      /* Recompute count adjustments since initial peel copy may
-	 have exited and reduced those values that were computed above.  */
-      iter_count = swtch->count / (max_unroll + 1);
-      /* Add in count of edge from switch block.  */
-      preheader->count += iter_count;
-      branch_code = compare_and_jump_seq (copy_rtx (niter), const0_rtx, EQ,
-					  block_label (preheader), p,
-					  NULL);
-      gcc_assert (branch_code != NULL_RTX);
 
-      swtch = split_edge_and_insert (single_succ_edge (swtch), branch_code);
-      set_immediate_dominator (CDI_DOMINATORS, preheader, swtch);
-      single_succ_edge (swtch)->probability = p.invert ();
-      e = make_edge (swtch, preheader,
-		     single_succ_edge (swtch)->flags & EDGE_IRREDUCIBLE_LOOP);
-      e->probability = p;
+      if (use_tablejump)
+	{
+	  iter_count = ezc_swtch->count / (max_unroll + 1);
+	  preheader->count += iter_count;
+	  peel_preheaders.safe_push (preheader);
+	  peel_jvals.safe_push (0);
+	}
+      else
+	{
+	  p = profile_probability::always () / (max_unroll + 1);
+	  swtch = ezc_swtch;
+	  /* Recompute count adjustments since initial peel copy may
+	     have exited and reduced those values that were computed
+	     above.  */
+	  iter_count = swtch->count / (max_unroll + 1);
+	  /* Add in count of edge from switch block.  */
+	  preheader->count += iter_count;
+	  branch_code = compare_and_jump_seq (copy_rtx (niter), const0_rtx,
+					      EQ, block_label (preheader),
+					      p, NULL);
+	  gcc_assert (branch_code != NULL_RTX);
+
+	  swtch = split_edge_and_insert (single_succ_edge (swtch),
+					 branch_code);
+	  set_immediate_dominator (CDI_DOMINATORS, preheader, swtch);
+	  single_succ_edge (swtch)->probability = p.invert ();
+	  e = make_edge (swtch, preheader,
+			 single_succ_edge (swtch)->flags
+			   & EDGE_IRREDUCIBLE_LOOP);
+	  e->probability = p;
+	}
+    }
+
+  if (use_tablejump)
+    {
+      /* Build a single jump-table block that dispatches to the correct
+	 peel entry point, replacing the O(n) compare-and-branch cascade.
+
+	 swtch's current successor is the "all peels" target — the entry
+	 point when niter % (max_unroll+1) == max_unroll, meaning all
+	 peeled copies should execute.  The table covers indices
+	 0..max_unroll; uncollected indices map to all_peels_bb.  */
+      basic_block all_peels_bb = single_succ (swtch);
+      int ncases = max_unroll + 1;
+      rtx_code_label *table_label = gen_label_rtx ();
+
+      /* Build label vector: default all to all_peels_bb, then override
+	 with collected peel preheaders.  */
+      auto_vec<rtx> labelvec (ncases);
+      for (int k = 0; k < ncases; k++)
+	labelvec.quick_push (gen_rtx_LABEL_REF (Pmode,
+						 block_label (all_peels_bb)));
+      for (unsigned k = 0; k < peel_preheaders.length (); k++)
+	labelvec[peel_jvals[k]]
+	  = gen_rtx_LABEL_REF (Pmode, block_label (peel_preheaders[k]));
+
+      /* Bump LABEL_NUSES for each target label so they survive until
+	 rebuild_jump_labels properly accounts for the table.  */
+      for (int k = 0; k < ncases; k++)
+	++LABEL_NUSES (XEXP (labelvec[k], 0));
+
+      /* Emit the tablejump RTL (mirrors do_tablejump in expr.cc).
+	 The jump_insn sequence goes into the block; the table label
+	 and ADDR_DIFF_VEC are placed after BB_END as inter-block
+	 insns (required for cfglayout mode).  */
+      start_sequence ();
+
+      /* Scale niter by the table entry size.  Perform the multiply in
+	 niter's native mode.  The backend can narrow the index to
+	 CASE_VECTOR_MODE later if its addressing modes support it
+	 (e.g. m68k's .w index extension via sign_extend).  */
+      int entry_size = GET_MODE_SIZE (CASE_VECTOR_MODE);
+      machine_mode niter_mode = GET_MODE (niter);
+      rtx scaled_niter = expand_mult (niter_mode,
+	  copy_rtx (niter),
+	  gen_int_mode (entry_size, niter_mode),
+	  NULL_RTX, 0);
+
+      /* Build tablejump address: (PLUS (SIGN_EXTEND scaled_niter) label).
+	 Using SIGN_EXTEND as part of the address expression (not a
+	 separate insn) keeps the AND+MULT chain in the narrow mode.
+	 On m68k, m68k_decompose_index strips SIGN_EXTEND of HImode,
+	 producing a .w index suffix.  Other targets legitimize the
+	 address normally via memory_address().  */
+      rtx index_reg;
+      if (GET_MODE (scaled_niter) != Pmode)
+	index_reg = gen_rtx_SIGN_EXTEND (Pmode, scaled_niter);
+      else
+	index_reg = scaled_niter;
+
+      rtx index = gen_rtx_PLUS (Pmode, index_reg,
+	  gen_rtx_LABEL_REF (Pmode, table_label));
+
+#ifdef PIC_CASE_VECTOR_ADDRESS
+      if (flag_pic)
+	index = PIC_CASE_VECTOR_ADDRESS (index);
+      else
+#endif
+	index = memory_address (CASE_VECTOR_MODE, index);
+
+      rtx temp = gen_reg_rtx (CASE_VECTOR_MODE);
+      convert_move (temp, gen_const_mem (CASE_VECTOR_MODE, index), 0);
+      rtx_insn *tj_insn
+	= emit_jump_insn (targetm.gen_tablejump (temp, table_label));
+
+      /* Set JUMP_LABEL so tablejump_p() recognizes this insn before
+	 rebuild_jump_labels runs (needed by fixup_reorder_chain).  */
+      JUMP_LABEL (tj_insn) = table_label;
+      ++LABEL_NUSES (table_label);
+
+      rtx_insn *seq = get_insns ();
+      end_sequence ();
+
+      /* Unshare the sequence.  expand_mult's synth_mult can create
+	 shared SUBREGs (e.g. x*2 expanded as a DImode shift produces
+	 shared (subreg:SI (reg:DI) 0) in dest and src).  */
+      unshare_all_rtl_in_chain (seq);
+
+      /* Insert the tablejump computation as a new block before swtch.  */
+      basic_block tj_bb
+	= split_edge_and_insert (single_pred_edge (swtch), seq);
+
+      /* Build the table label + ADDR_DIFF_VEC as a separate sequence
+	 and attach it as BB_FOOTER of the tablejump block.  In
+	 cfglayout mode, BB_FOOTER holds inter-block insns that belong
+	 to a block but come after BB_END; fixup_reorder_chain will
+	 splice them into the insn chain when leaving cfglayout mode.  */
+      start_sequence ();
+      emit_label (table_label);
+      emit_jump_table_data (gen_rtx_ADDR_DIFF_VEC (CASE_VECTOR_MODE,
+	  gen_rtx_LABEL_REF (Pmode, table_label),
+	  gen_rtvec_v (ncases, labelvec.address ()),
+	  const0_rtx, const0_rtx));
+      emit_barrier ();
+      rtx_insn *table_seq = get_insns ();
+      end_sequence ();
+
+      BB_FOOTER (tj_bb) = table_seq;
+      SET_PREV_INSN (table_seq) = NULL;
+
+      /* Fix up CFG: tj_bb currently has one fallthrough edge to swtch.
+	 The tablejump doesn't fall through — clear the flag and set
+	 uniform probability.  Then add edges to each peel preheader.  */
+      edge swtch_edge = single_succ_edge (tj_bb);
+      swtch_edge->flags &= ~EDGE_FALLTHRU;
+      p = profile_probability::always () / ncases;
+      swtch_edge->probability = p;
+
+      unsigned irr = swtch_edge->flags & EDGE_IRREDUCIBLE_LOOP;
+      for (unsigned k = 0; k < peel_preheaders.length (); k++)
+	{
+	  e = make_edge (tj_bb, peel_preheaders[k], irr);
+	  e->probability = p;
+	  dom_bbs.safe_push (peel_preheaders[k]);
+	}
+      dom_bbs.safe_push (all_peels_bb);
+      dom_bbs.safe_push (swtch);
+      dom_bbs.safe_push (tj_bb);
+    }
+
+  if (use_tablejump && last_may_exit)
+    {
+      /* The tablejump dispatches to the correct peel entry, so the
+	 exit check in the last peel is redundant (suppressed above).
+	 Guard the main loop: skip it when all iterations were handled
+	 by the peels (old_niter < max_unroll + 1).
+
+	 Compute the main-loop trip count (old_niter / (max_unroll+1))
+	 here and branch to exit if zero.  This folds the guard
+	 comparison into the shift: on m68k, lsr sets Z, so the branch
+	 can use the flags directly without a separate compare.  The
+	 result is reused as niter_expr, avoiding a redundant division
+	 in the loop preheader.  */
+      int shift = exact_log2 (max_unroll + 1);
+      gcc_assert (shift > 0);
+
+      p = profile_probability::always () / (max_unroll + 1);
+      rtx_code_label *exit_label = block_label (desc->out_edge->dest);
+
+      start_sequence ();
+      precomputed_trip_count = expand_simple_binop (
+	  desc->mode, LSHIFTRT, copy_rtx (old_niter),
+	  gen_int_mode (shift, desc->mode),
+	  NULL_RTX, 1, OPTAB_LIB_WIDEN);
+      do_compare_rtx_and_jump (precomputed_trip_count, const0_rtx,
+			       EQ, 0, desc->mode, NULL_RTX, NULL,
+			       exit_label,
+			       profile_probability::uninitialized ());
+      rtx_jump_insn *jump = as_a<rtx_jump_insn *> (get_last_insn ());
+      jump->set_jump_target (exit_label);
+      LABEL_NUSES (exit_label)++;
+      add_reg_br_prob_note (jump, p);
+      rtx_insn *guard_seq = get_insns ();
+      end_sequence ();
+
+      /* expand_simple_binop for DImode LSHIFTRT on targets without a
+	 DImode shift pattern (e.g. ColdFire) expands via
+	 expand_subword_shift, which can produce insns with shared
+	 subreg RTX between SET_DEST and SET_SRC (the same subreg
+	 object used as both input and output of a PLUS).  Fix this
+	 to satisfy verify_rtl_sharing.  */
+      unshare_all_rtl_in_chain (guard_seq);
+
+      basic_block guard_bb = split_edge_and_insert (
+	  loop_preheader_edge (loop), guard_seq);
+      single_succ_edge (guard_bb)->probability = p.invert ();
+      unsigned irr
+	= single_succ_edge (guard_bb)->flags & EDGE_IRREDUCIBLE_LOOP;
+      edge guard_exit = make_edge (guard_bb, desc->out_edge->dest, irr);
+      guard_exit->probability = p;
+      dom_bbs.safe_push (guard_bb);
     }
 
   /* Recount dominators for outer blocks.  */
@@ -1099,9 +1313,12 @@ unroll_loop_runtime_iterations (class loop *loop)
      of the loop.  After passing through the above code, we see that
      the correct new number of iterations is this:  */
   gcc_assert (!desc->const_iter);
-  desc->niter_expr =
-    simplify_gen_binary (UDIV, desc->mode, old_niter,
-			 gen_int_mode (max_unroll + 1, desc->mode));
+  if (precomputed_trip_count)
+    desc->niter_expr = precomputed_trip_count;
+  else
+    desc->niter_expr =
+      simplify_gen_binary (UDIV, desc->mode, old_niter,
+			   gen_int_mode (max_unroll + 1, desc->mode));
   loop->nb_iterations_upper_bound
     = wi::udiv_trunc (loop->nb_iterations_upper_bound, max_unroll + 1);
   if (loop->any_estimate)

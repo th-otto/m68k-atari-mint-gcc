@@ -20,6 +20,19 @@ along with GCC; see the file COPYING3.  If not see
 /* Define functions defined in aux-output.c and used in templates.  */
 
 #ifdef RTX_CODE
+
+/* Decomposed m68k address.  */
+struct m68k_address {
+  enum rtx_code code;
+  rtx base;
+  rtx index;
+  rtx offset;
+  int scale;
+};
+
+extern bool m68k_decompose_address (machine_mode, rtx, bool,
+				    struct m68k_address *);
+
 extern enum m68k_function_kind m68k_get_function_kind (tree);
 extern HOST_WIDE_INT m68k_initial_elimination_offset (int from, int to);
 
@@ -74,6 +87,7 @@ extern bool m68k_illegitimate_symbolic_constant_p (rtx);
 extern bool m68k_legitimate_constant_p (machine_mode, rtx);
 extern bool m68k_matches_q_p (rtx);
 extern bool m68k_matches_u_p (rtx);
+extern bool m68k_tablejump_fits_word_index_p (rtx);
 extern rtx legitimize_pic_address (rtx, machine_mode, rtx);
 extern rtx m68k_legitimize_tls_address (rtx);
 extern bool m68k_tls_reference_p (rtx, bool);
@@ -104,7 +118,6 @@ extern enum attr_op_mem m68k_sched_attr_op_mem (rtx_insn *);
 
 extern enum reg_class m68k_secondary_reload_class (enum reg_class,
 						   machine_mode, rtx);
-extern enum reg_class m68k_preferred_reload_class (rtx, enum reg_class);
 extern void m68k_expand_prologue (void);
 extern bool m68k_use_return_insn (void);
 extern void m68k_expand_epilogue (bool);
@@ -115,6 +128,44 @@ extern rtx m68k_legitimize_call_address (rtx);
 extern rtx m68k_legitimize_sibcall_address (rtx);
 extern int m68k_hard_regno_rename_ok(unsigned int, unsigned int);
 extern poly_int64 m68k_push_rounding (poly_int64);
+
+/* Functions from m68k-pass-regalloc.cc.  */
+class rtl_opt_pass;
+namespace gcc { class context; }
+extern rtl_opt_pass *make_m68k_pass_canon_scaled_index (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_break_false_dep (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_break_false_dep_cleanup (gcc::context *);
+
+/* Functions from m68k-doloop.cc.  */
+extern bool m68k_can_use_doloop_p (const widest_int &, const widest_int &,
+				   unsigned int, bool);
+extern machine_mode m68k_preferred_doloop_mode (machine_mode);
+extern bool m68k_predict_doloop_p (class loop *);
+extern const char *m68k_invalid_within_doloop (const rtx_insn *);
+extern bool m68k_doloop_exit_iv_has_body_uses (rtx);
+
+
+/* Functions from m68k-pass-memreorder.cc.  */
+class gimple_opt_pass;
+extern gimple_opt_pass *make_m68k_pass_reorder_mem (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_reorder_incr (gcc::context *);
+
+/* Functions from m68k-pass-autoinc.cc.  */
+extern gimple_opt_pass *make_m68k_pass_autoinc_split (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_sink_for_rmw (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_sink_postinc (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_normalize_autoinc (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_opt_autoinc (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_avail_copy_elim (gcc::context *);
+
+/* Functions from m68k-pass-shortopt.cc.  */
+extern gimple_opt_pass *make_m68k_pass_narrow_index_mult (gcc::context *);
+extern gimple_opt_pass *make_m68k_pass_narrow_const_ops (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_elim_andi (gcc::context *);
+extern rtl_opt_pass *make_m68k_pass_highword_opt (gcc::context *);
+
+/* Functions from m68k-pass-miscopt.cc.  */
+extern rtl_opt_pass *make_m68k_pass_reorder_for_cc (gcc::context *);
 
 #ifdef RTX_CODE
 #ifdef TREE_CODE

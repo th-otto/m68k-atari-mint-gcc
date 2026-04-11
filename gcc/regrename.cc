@@ -437,6 +437,23 @@ find_rename_reg (du_head_p this_head, enum reg_class super_class,
 	  if (!check_new_reg_p (old_reg, new_reg, this_head, *unavailable))
 	    continue;
 
+	  /* Ask target if the rename is profitable for all insns in
+	     the chain.  */
+	  {
+	    bool profitable = true;
+	    for (du_chain *tmp = this_head->first; tmp; tmp = tmp->next_use)
+	      {
+		if (!targetm.register_rename_profitable_p (tmp->insn,
+							   old_reg, new_reg))
+		  {
+		    profitable = false;
+		    break;
+		  }
+	      }
+	    if (!profitable)
+	      continue;
+	  }
+
 	  if (!best_rename)
 	    return new_reg;
 

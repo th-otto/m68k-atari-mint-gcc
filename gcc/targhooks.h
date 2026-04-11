@@ -91,6 +91,9 @@ extern bool default_fixed_point_supported_p (void);
 extern bool default_has_ifunc_p (void);
 
 extern bool default_predict_doloop_p (class loop *);
+extern int default_iv_compare_cost (tree, bool, bool);
+extern reg_class_t default_preferred_reload_class_for_use (rtx, reg_class_t,
+							   int, int);
 extern machine_mode default_preferred_doloop_mode (machine_mode);
 extern const char * default_invalid_within_doloop (const rtx_insn *);
 

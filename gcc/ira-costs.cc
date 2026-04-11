@@ -35,6 +35,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "ira-int.h"
 #include "addresses.h"
 #include "reload.h"
+#include "targhooks.h"
 #include "print-rtl.h"
 
 /* The flags is set up every time when we calculate pseudo register
@@ -1333,6 +1334,93 @@ record_address_regs (machine_mode mode, addr_space_t as, rtx x,
 
 
 
+/* Recursively search for recog operand OP inside expression EXPR.
+   When found, set *FLAG to the use-context flag derived from the
+   innermost containing RTL code.  Returns true if OP was found.  */
+static bool
+classify_in_expr (rtx op, rtx expr, int *flag, int context_flag)
+{
+  if (op == expr)
+    {
+      *flag |= context_flag ? context_flag : REG_USE_OTHER;
+      return true;
+    }
+
+  const char *fmt = GET_RTX_FORMAT (GET_CODE (expr));
+  int next_flag;
+
+  switch (GET_CODE (expr))
+    {
+    case COMPARE:
+      next_flag = REG_USE_COMPARE;
+      break;
+    case MEM:
+      next_flag = REG_USE_MEM;
+      break;
+    case PLUS: case MINUS: case MULT: case NEG:
+    case ASHIFT: case ASHIFTRT: case LSHIFTRT:
+    case AND: case IOR: case XOR: case NOT:
+      next_flag = REG_USE_ARITH;
+      break;
+    case IF_THEN_ELSE:
+      /* Don't set a flag for if_then_else itself; the comparison
+	 operator inside it will set REG_USE_COMPARE.  */
+      next_flag = context_flag;
+      break;
+    default:
+      if (COMPARISON_P (expr))
+	next_flag = REG_USE_COMPARE;
+      else
+	next_flag = context_flag;
+      break;
+    }
+
+  for (int i = GET_RTX_LENGTH (GET_CODE (expr)) - 1; i >= 0; i--)
+    {
+      if (fmt[i] == 'e')
+	{
+	  if (classify_in_expr (op, XEXP (expr, i), flag, next_flag))
+	    return true;
+	}
+      else if (fmt[i] == 'E')
+	{
+	  for (int j = XVECLEN (expr, i) - 1; j >= 0; j--)
+	    if (classify_in_expr (op, XVECEXP (expr, i, j), flag, next_flag))
+	      return true;
+	}
+    }
+
+  return false;
+}
+
+/* Compute operand use-context flags for each operand of INSN.
+   SRC_USE[i] describes how operand i is used on the source side,
+   DST_USE[i] describes the destination side.  */
+static void
+record_operand_uses (rtx_insn *insn, int *src_use, int *dst_use)
+{
+  memset (src_use, 0, sizeof (int) * MAX_RECOG_OPERANDS);
+  memset (dst_use, 0, sizeof (int) * MAX_RECOG_OPERANDS);
+
+  rtx set = single_set (insn);
+  if (!set)
+    return;
+
+  rtx src = SET_SRC (set);
+  rtx dst = SET_DEST (set);
+
+  for (int i = 0; i < recog_data.n_operands; i++)
+    {
+      rtx op = recog_data.operand[i];
+      classify_in_expr (op, src, &src_use[i], 0);
+      classify_in_expr (op, dst, &dst_use[i], 0);
+
+      /* An operand that IS the SET_DEST gets REG_USE_SET.  */
+      if (op == dst)
+	dst_use[i] |= REG_USE_SET;
+    }
+}
+
 /* Calculate the costs of insn operands.  */
 static void
 record_operand_costs (rtx_insn *insn, enum reg_class *pref)
@@ -1502,6 +1590,50 @@ record_operand_costs (rtx_insn *insn, enum reg_class *pref)
   record_reg_classes (recog_data.n_alternatives, recog_data.n_operands,
 		      recog_data.operand, modes,
 		      constraints, insn, pref);
+
+  /* Apply use-context register class preference.  Skip the RTL walk
+     entirely when the target uses the default hook (no-op).  */
+  if (targetm.preferred_reload_class_for_use
+      != default_preferred_reload_class_for_use)
+    {
+      int src_use[MAX_RECOG_OPERANDS], dst_use[MAX_RECOG_OPERANDS];
+      record_operand_uses (insn, src_use, dst_use);
+
+      for (i = 0; i < recog_data.n_operands; i++)
+	{
+	  if (src_use[i] == 0 && dst_use[i] == 0)
+	    continue;
+
+	  rtx op = recog_data.operand[i];
+	  if (GET_CODE (op) == SUBREG)
+	    op = SUBREG_REG (op);
+	  if (!REG_P (op) || REGNO (op) < FIRST_PSEUDO_REGISTER)
+	    continue;
+
+	  unsigned int regno = REGNO (op);
+	  cost_classes_t cost_classes_ptr = regno_cost_classes[regno];
+	  enum reg_class *cost_classes = cost_classes_ptr->classes;
+	  reg_class_t preferred
+	    = targetm.preferred_reload_class_for_use (op, GENERAL_REGS,
+						      src_use[i], dst_use[i]);
+
+	  if (preferred != NO_REGS && preferred != GENERAL_REGS)
+	    {
+	      int *pp_costs = op_costs[i]->cost;
+	      for (int k = cost_classes_ptr->num - 1; k >= 0; k--)
+		{
+		  if (!reg_class_subset_p (cost_classes[k], preferred))
+		    {
+		      int add = frequency;
+		      if (INT_MAX - add < pp_costs[k])
+			pp_costs[k] = INT_MAX;
+		      else
+			pp_costs[k] += add;
+		    }
+		}
+	    }
+	}
+    }
 }
 
 

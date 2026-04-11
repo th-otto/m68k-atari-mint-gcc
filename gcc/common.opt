@@ -2225,6 +2225,10 @@ fira-share-spill-slots
 Common Var(flag_ira_share_spill_slots) Init(1) Optimization
 Share stack slots for spilled pseudo-registers.
 
+fira-merge-passthrough
+Common Var(flag_ira_merge_passthrough) Init(0) Optimization
+Merge pass-through allocnos (zero references) with parent region even under register pressure.
+
 fira-verbose=
 Common RejectNegative Joined UInteger Var(flag_ira_verbose) Init(5)
 -fira-verbose=<number>	Control IRA's level of diagnostic messages.
@@ -2232,6 +2236,14 @@ Common RejectNegative Joined UInteger Var(flag_ira_verbose) Init(5)
 fivopts
 Common Var(flag_ivopts) Init(1) Optimization
 Optimize induction variables on trees.
+
+fivopts-autoinc-step
+Common Var(flag_ivopts_autoinc_step) Init(1) Optimization
+When target supports auto-increment addressing, discount IV step costs in IVOPTS.
+
+fivopts-autoinc-multiuse
+Common Var(flag_ivopts_autoinc_multiuse) Init(0) Optimization
+Generate auto-increment IV candidates for all uses in multi-use address groups.
 
 fjump-tables
 Common Var(flag_jump_tables) Init(0) Optimization

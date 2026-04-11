@@ -705,12 +705,12 @@ doloop_optimize (class loop *loop)
   if (est_niter == -1)
     est_niter = get_likely_max_loop_iterations_int (loop);
 
-  if (est_niter >= 0 && est_niter < 3)
+  if (est_niter >= 0 && est_niter < targetm.doloop_min_iterations)
     {
       if (dump_file)
 	fprintf (dump_file,
-		 "Doloop: Too few iterations (%u) to be profitable.\n",
-		 (unsigned int)est_niter);
+		 "Doloop: Too few iterations (%u, min %d) to be profitable.\n",
+		 (unsigned int)est_niter, targetm.doloop_min_iterations);
       return false;
     }
 
@@ -769,6 +769,37 @@ doloop_optimize (class loop *loop)
 	count = lowpart_subreg (word_mode, count, mode);
       PUT_MODE (doloop_reg, word_mode);
       doloop_seq = targetm.gen_doloop_end (doloop_reg, start_label);
+    }
+  /* If the pattern still failed, try the target's preferred doloop mode.
+     This handles targets like m68k where dbra operates in HImode but
+     the loop IV is in SImode (word_mode).  The preferred mode is narrower
+     and the iteration count must fit.  */
+  if (! doloop_seq)
+    {
+      machine_mode pref_mode = targetm.preferred_doloop_mode (mode);
+      scalar_int_mode pref_int_mode;
+      if (pref_mode != mode && pref_mode != word_mode
+	  && is_a <scalar_int_mode> (pref_mode, &pref_int_mode))
+	{
+	  unsigned pref_mode_size = GET_MODE_PRECISION (pref_int_mode);
+	  unsigned HOST_WIDE_INT pref_max
+	    = (pref_mode_size >= HOST_BITS_PER_WIDE_INT
+	       ? HOST_WIDE_INT_M1U
+	       : (HOST_WIDE_INT_1U << pref_mode_size) - 1);
+	  if (wi::leu_p (iterations_max, pref_max))
+	    {
+	      /* Use the actual mode of count, which may differ from mode
+		 if the word_mode attempt above zero-extended it.  For
+		 CONST_INT (VOIDmode), use word_mode as the logical width
+		 since the value was potentially widened above.  */
+	      machine_mode count_mode = GET_MODE (count);
+	      if (count_mode == VOIDmode)
+		count_mode = word_mode;
+	      count = lowpart_subreg (pref_int_mode, count, count_mode);
+	      PUT_MODE (doloop_reg, pref_int_mode);
+	      doloop_seq = targetm.gen_doloop_end (doloop_reg, start_label);
+	    }
+	}
     }
   if (! doloop_seq)
     {

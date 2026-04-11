@@ -1,6 +1,44 @@
-# 
+#
 # Use multiple libraries
-# 
+#
+
+# Extra object file for m68k cost functions
+m68k_costs.o: $(srcdir)/config/m68k/m68k_costs.cc
+	$(COMPILE) $<
+	$(POSTCOMPILE)
+
+# Shared utility functions for m68k passes
+m68k-util.o: $(srcdir)/config/m68k/m68k-util.cc $(srcdir)/config/m68k/m68k-util.h
+	$(COMPILE) $<
+	$(POSTCOMPILE)
+
+# Extra object files for m68k optimization passes
+m68k-pass-regalloc.o: $(srcdir)/config/m68k/m68k-pass-regalloc.cc
+	$(COMPILE) $<
+	$(POSTCOMPILE)
+
+m68k-doloop.o: $(srcdir)/config/m68k/m68k-doloop.cc
+	$(COMPILE) $<
+	$(POSTCOMPILE)
+
+m68k-pass-memreorder.o: $(srcdir)/config/m68k/m68k-pass-memreorder.cc
+	$(COMPILE) $<
+	$(POSTCOMPILE)
+
+m68k-pass-autoinc.o: $(srcdir)/config/m68k/m68k-pass-autoinc.cc
+	$(COMPILE) $<
+	$(POSTCOMPILE)
+
+m68k-pass-shortopt.o: $(srcdir)/config/m68k/m68k-pass-shortopt.cc
+	$(COMPILE) $<
+	$(POSTCOMPILE)
+
+m68k-pass-miscopt.o: $(srcdir)/config/m68k/m68k-pass-miscopt.cc
+	$(COMPILE) $<
+	$(POSTCOMPILE)
+
+# Register the m68k-specific passes
+PASSES_EXTRA += $(srcdir)/config/m68k/m68k-passes.def
 
 M68K_AWK = $(strip $(shell $(AWK) 'BEGIN { FS="[ \t]*[,()][ \t]*"; ORS=" " }; \
 	/^M68K_DEVICE/ { CPU=$$3; FLAGS=$$8; \

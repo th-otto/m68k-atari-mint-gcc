@@ -2232,7 +2232,11 @@ only if neither labeling works.
 
 @hook TARGET_PREFERRED_RENAME_CLASS
 
+@hook TARGET_REGISTER_RENAME_PROFITABLE_P
+
 @hook TARGET_PREFERRED_RELOAD_CLASS
+
+@hook TARGET_PREFERRED_RELOAD_CLASS_FOR_USE
 
 @defmac PREFERRED_RELOAD_CLASS (@var{x}, @var{class})
 A C expression that places additional restrictions on the register class
@@ -4745,6 +4749,8 @@ Define this macro if a non-short-circuit operation produced by
 @hook TARGET_RTX_COSTS
 
 @hook TARGET_ADDRESS_COST
+
+@hook TARGET_IVOPTS_ALLOW_CONST_PTR_ADDRESS_USE
 
 @hook TARGET_INSN_COST
 
@@ -7893,6 +7899,10 @@ to by @var{ce_info}.
 
 @hook TARGET_DOLOOP_COST_FOR_ADDRESS
 
+@hook TARGET_IV_COMPARE_COST
+
+@hook TARGET_DOLOOP_MIN_ITERATIONS
+
 @hook TARGET_CAN_USE_DOLOOP_P
 
 @hook TARGET_INVALID_WITHIN_DOLOOP
@@ -7943,6 +7953,8 @@ lists.
 @hook TARGET_HAVE_CCMP
 
 @hook TARGET_LOOP_UNROLL_ADJUST
+
+@hook TARGET_PREFER_RUNTIME_UNROLL_TABLEJUMP
 
 @defmac POWI_MAX_MULTS
 If defined, this macro is interpreted as a signed integer C expression

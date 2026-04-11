@@ -2667,6 +2667,13 @@ smaller than instructions using @code{GENERIC_REGS}.  By returning
 be reduced.
 @end deftypefn
 
+@deftypefn {Target Hook} bool TARGET_REGISTER_RENAME_PROFITABLE_P (rtx_insn *@var{insn}, unsigned int @var{old_reg}, unsigned int @var{new_reg})
+Return true if renaming hard register @var{old_reg} to @var{new_reg}
+in @var{insn} is profitable.  Called by the register renaming pass for
+each instruction in a rename chain.  If any instruction returns false,
+the rename is rejected.  The default returns true.
+@end deftypefn
+
 @deftypefn {Target Hook} reg_class_t TARGET_PREFERRED_RELOAD_CLASS (rtx @var{x}, reg_class_t @var{rclass})
 A target hook that places additional restrictions on the register class
 to use when it is necessary to copy value @var{x} into a register in class
@@ -2699,6 +2706,21 @@ to find the best one.  Returning @code{NO_REGS}, in this case, makes
 reload add a @code{!} in front of the constraint: the x86 back-end uses
 this feature to discourage usage of 387 registers when math is done in
 the SSE registers (and vice versa).
+@end deftypefn
+
+@deftypefn {Target Hook} reg_class_t TARGET_PREFERRED_RELOAD_CLASS_FOR_USE (rtx @var{x}, reg_class_t @var{rclass}, int @var{src_use}, int @var{dst_use})
+Like @code{TARGET_PREFERRED_RELOAD_CLASS} but additionally receives
+@var{src_use} and @var{dst_use} flags indicating how the operand is used
+on the source and destination sides of the instruction.  Flags include
+@code{REG_USE_SET} (simple assignment), @code{REG_USE_MEM} (memory address
+component), @code{REG_USE_ARITH} (arithmetic operand),
+@code{REG_USE_COMPARE} (comparison operand), and @code{REG_USE_OTHER}.
+
+On targets with split register files, this allows preferring data
+registers for comparison operands while still requiring address
+registers for memory base operands.
+
+The default calls @code{TARGET_PREFERRED_RELOAD_CLASS}.
 @end deftypefn
 
 @defmac PREFERRED_RELOAD_CLASS (@var{x}, @var{class})
@@ -7367,6 +7389,16 @@ should be considered in the definition of this macro.  Equivalent costs
 should probably only be given to addresses with different numbers of
 registers on machines with lots of registers.
 @end deftypefn
+
+@deftypevr {Target Hook} bool TARGET_IVOPTS_ALLOW_CONST_PTR_ADDRESS_USE
+Return true if IVOPTS should classify constant-base pointer IVs
+(e.g., @code{(short*)0xffff8240}) as @code{REFERENCE ADDRESS} uses
+instead of @code{GENERIC} uses.  This allows IVOPTS to evaluate
+@code{TARGET_ADDRESS_COST} for the memory access and make better
+IV elimination decisions on targets where indexed addressing is
+significantly more expensive than autoincrement addressing.
+The default value is false.
+@end deftypevr
 
 @deftypefn {Target Hook} int TARGET_INSN_COST (rtx_insn *@var{insn}, bool @var{speed})
 This target hook describes the relative costs of RTL instructions.
@@ -12310,6 +12342,30 @@ this escpecially for address IV uses.
 The default value is zero.
 @end deftypevr
 
+@deftypefn {Target Hook} int TARGET_IV_COMPARE_COST (tree @var{type}, bool @var{doloop_p}, bool @var{speed})
+Return the per-iteration cost of the loop exit comparison when an IV
+candidate of tree type @var{type} is used.  @var{doloop_p} is true when
+the comparison is absorbed into a decrement-and-branch instruction
+(e.g., @code{dbra} on m68k).
+
+On targets with split register files, pointer-typed IVs may require a
+more expensive comparison instruction than integer-typed IVs.  For
+example, on m68k 68020+, @code{cmpa.l} (address register) costs 4 NCC
+while @code{cmp.l} (data register) costs 2 NCC.
+
+The return value is added to the COMPARE group elimination cost and is
+not amortized over loop iterations.  The default returns zero.
+@end deftypefn
+
+@deftypevr {Target Hook} int TARGET_DOLOOP_MIN_ITERATIONS
+Minimum number of estimated iterations for doloop optimization
+to be considered profitable.  The doloop pass will reject loops
+with fewer estimated iterations than this value.  Set this to a
+lower value (e.g., 1) for targets like m68k where the dbra
+instruction is always beneficial regardless of iteration count.
+The default value is 3.
+@end deftypevr
+
 @deftypefn {Target Hook} bool TARGET_CAN_USE_DOLOOP_P (const widest_int @var{&iterations}, const widest_int @var{&iterations_max}, unsigned int @var{loop_depth}, bool @var{entered_at_top})
 Return true if it is possible to use low-overhead loops (@code{doloop_end}
 and @code{doloop_begin}) for a particular loop.  @var{iterations} gives the
@@ -12497,6 +12553,14 @@ the loop, which is going to be checked for unrolling. This target hook
 is required only when the target has special constraints like maximum
 number of memory accesses.
 @end deftypefn
+
+@deftypevr {Target Hook} bool TARGET_PREFER_RUNTIME_UNROLL_TABLEJUMP
+Return true if the target prefers a jump table dispatch for the
+remainder iterations of runtime-unrolled loops, instead of a serial
+compare-and-branch cascade.  The jump table is constant-time whereas
+the compare cascade is O(unroll_factor).  Only effective when the
+target also supports @code{tablejump}.
+@end deftypevr
 
 @defmac POWI_MAX_MULTS
 If defined, this macro is interpreted as a signed integer C expression

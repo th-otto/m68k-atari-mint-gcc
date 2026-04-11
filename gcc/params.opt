@@ -337,6 +337,10 @@ Max loops number for regional RA.
 Common Joined UInteger Var(param_ira_consider_dup_in_all_alts) Init(1) IntegerRange(0, 1) Param Optimization
 Control ira to consider matching constraint (duplicated operand number) heavily in all available alternatives for preferred register class.  If it is set as zero, it means ira only respects the matching constraint when it's in the only available alternative with an appropriate register class.  Otherwise, it means ira will check all available alternatives for preferred register class even if it has found some choice with an appropriate register class and respect the found qualified matching constraint.
 
+-param=ira-ignore-duplicate-uses-in-insn=
+Common Joined UInteger Var(param_ira_ignore_duplicate_uses_in_insn) Init(0) IntegerRange(0, 1) Param Optimization
+When enabled, IRA counts each pseudo register only once per instruction for ALLOCNO_NREFS and ALLOCNO_FREQ, even if the same pseudo appears in multiple input operand positions (e.g. (plus r35 r35)).  This avoids inflated allocno priority from RTL patterns that reference the same register twice but correspond to single-read hardware instructions.
+
 -param=iv-always-prune-cand-set-bound=
 Common Joined UInteger Var(param_iv_always_prune_cand_set_bound) Init(10) Param Optimization
 If number of candidates in the set is smaller, we always try to remove unused ivs during its optimization.
@@ -572,6 +576,10 @@ The maximum ratio of insertions to deletions of expressions in GCSE.
 Common Joined UInteger Var(param_max_gcse_memory) Init(131072) Param Optimization
 The maximum amount of memory to be allocated by GCSE, in kilobytes.
 
+-param=gcse-no-selfloop-split=
+Common Joined UInteger Var(param_gcse_no_selfloop_split) Init(0) IntegerRange(0, 1) Param Optimization
+When non-zero, prevent PRE from inserting expressions on self-loop back edges which would split single-BB loops into header+latch.
+
 -param=max-goto-duplication-insns=
 Common Joined UInteger Var(param_max_goto_duplication_insns) Init(8) Param Optimization
 The maximum number of insns to duplicate when unfactoring computed gotos.
@@ -651,6 +659,10 @@ The maximum number of RTL nodes that can be recorded as combiner's last value.
 -param=max-loop-header-insns=
 Common Joined UInteger Var(param_max_loop_header_insns) Init(20) Param Optimization
 The maximum number of insns in loop header duplicated by the copy loop headers pass.
+
+-param=max-loop-header-insns-for-size=
+Common Joined UInteger Var(param_max_loop_header_insns_for_size) Init(0) Param Optimization
+The maximum number of insns in loop header duplicated by the copy loop headers pass when optimizing for size.
 
 -param=max-modulo-backtrack-attempts=
 Common Joined UInteger Var(param_max_modulo_backtrack_attempts) Init(40) Param Optimization

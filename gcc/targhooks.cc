@@ -714,6 +714,23 @@ default_invalid_within_doloop (const rtx_insn *insn)
   return NULL;
 }
 
+/* Default per-iteration IV comparison cost: zero (no adjustment).  */
+
+int
+default_iv_compare_cost (tree, bool, bool)
+{
+  return 0;
+}
+
+/* Default preferred reload class for use: delegates to
+   preferred_reload_class, ignoring use-context flags.  */
+
+reg_class_t
+default_preferred_reload_class_for_use (rtx x, reg_class_t rclass, int, int)
+{
+  return targetm.preferred_reload_class (x, rclass);
+}
+
 /* Mapping of builtin functions to vectorized variants.  */
 
 tree

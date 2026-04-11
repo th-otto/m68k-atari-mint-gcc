@@ -1832,6 +1832,13 @@ ira_traverse_loop_tree (bool bb_p, ira_loop_tree_node_t loop_node,
 /* The basic block currently being processed.  */
 static basic_block curr_bb;
 
+/* Bitmap of pseudo register numbers already counted as input (use)
+   references in the current instruction.  Used when
+   param_ira_ignore_duplicate_uses_in_insn is set to avoid inflating
+   ALLOCNO_NREFS/FREQ when the same pseudo appears in multiple input
+   operand positions (e.g. (plus r35 r35)).  */
+static bitmap_head insn_seen_use_regs;
+
 /* This recursive function creates allocnos corresponding to
    pseudo-registers containing in X.  True OUTPUT_P means that X is
    an lvalue.  OUTER corresponds to the parent expression of X.  */
@@ -1861,6 +1868,18 @@ create_insn_allocnos (rtx x, rtx outer, bool output_p)
 	      if (partial_subreg_p (ALLOCNO_WMODE (a), wmode))
 		ALLOCNO_WMODE (a) = wmode;
 	    }
+
+	  /* When param_ira_ignore_duplicate_uses_in_insn is set, count
+	     each pseudo only once per instruction as an input reference.
+	     This prevents (plus r35 r35) from inflating r35's
+	     ALLOCNO_FREQ relative to (ashift r35 1).  */
+	  if (param_ira_ignore_duplicate_uses_in_insn
+	      && !output_p
+	      && bitmap_bit_p (&insn_seen_use_regs, regno))
+	    return;
+
+	  if (param_ira_ignore_duplicate_uses_in_insn && !output_p)
+	    bitmap_set_bit (&insn_seen_use_regs, regno);
 
 	  ALLOCNO_NREFS (a)++;
 	  ALLOCNO_FREQ (a) += REG_FREQ_FROM_BB (curr_bb);
@@ -1919,7 +1938,11 @@ create_bb_allocnos (ira_loop_tree_node_t bb_node)
   ira_assert (bb != NULL);
   FOR_BB_INSNS_REVERSE (bb, insn)
     if (NONDEBUG_INSN_P (insn))
-      create_insn_allocnos (PATTERN (insn), NULL, false);
+      {
+	if (param_ira_ignore_duplicate_uses_in_insn)
+	  bitmap_clear (&insn_seen_use_regs);
+	create_insn_allocnos (PATTERN (insn), NULL, false);
+      }
   /* It might be a allocno living through from one subloop to
      another.  */
   EXECUTE_IF_SET_IN_REG_SET (df_get_live_in (bb), FIRST_PSEUDO_REGISTER, i, bi)
@@ -2111,10 +2134,14 @@ propagate_allocno_info (void)
 static void
 create_allocnos (void)
 {
+  if (param_ira_ignore_duplicate_uses_in_insn)
+    bitmap_initialize (&insn_seen_use_regs, &reg_obstack);
   /* We need to process BB first to correctly link allocnos by member
      next_regno_allocno.  */
   ira_traverse_loop_tree (true, ira_loop_tree_root,
 			  create_loop_tree_node_allocnos, NULL);
+  if (param_ira_ignore_duplicate_uses_in_insn)
+    bitmap_release (&insn_seen_use_regs);
   if (optimize)
     ira_traverse_loop_tree (false, ira_loop_tree_root, NULL,
 			    propagate_modified_regnos);

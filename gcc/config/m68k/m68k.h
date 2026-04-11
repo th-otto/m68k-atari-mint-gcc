@@ -470,18 +470,12 @@ extern enum reg_class regno_reg_class[];
 #define INDEX_REG_CLASS GENERAL_REGS
 #define BASE_REG_CLASS ADDR_REGS
 
-#define PREFERRED_RELOAD_CLASS(X,CLASS) \
-  m68k_preferred_reload_class (X, CLASS)
-
 /* On the m68k, this is the size of MODE in words,
    except in the FP regs, where a single reg is always enough.  */
 #define CLASS_MAX_NREGS(CLASS, MODE)	\
  ((CLASS) == FP_REGS ? GET_MODE_NUNITS (MODE) \
   : ((GET_MODE_SIZE (MODE) + UNITS_PER_WORD - 1) / UNITS_PER_WORD))
 
-/* Moves between fp regs and other regs are two insns.  */
-#define REGISTER_MOVE_COST(MODE, CLASS1, CLASS2)	\
-  ((((CLASS1) == FP_REGS) != ((CLASS2) == FP_REGS)) ? 4 : 2)
 
 
 /* Stack layout; function entry, exit and calling.  */
@@ -989,7 +983,7 @@ extern enum M68K_SYMBOLIC_CALL m68k_symbolic_call_var;
 typedef enum { MOVL, SWAP, NEGW, NOTW, NOTB, MOVQ, MVS, MVZ }
   M68K_CONST_METHOD;
 
-extern M68K_CONST_METHOD m68k_const_method (HOST_WIDE_INT);
+extern M68K_CONST_METHOD m68k_const_method (HOST_WIDE_INT, rtx = 0);
 #endif
 
 extern void m68k_emit_move_double (rtx [2]);

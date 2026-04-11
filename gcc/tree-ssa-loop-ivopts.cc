@@ -2328,9 +2328,37 @@ find_interesting_uses_address (struct ivopts_data *data, gimple *stmt,
     }
 
   civ = alloc_iv (data, base, step);
-  /* Fail if base object of this memory reference is unknown.  */
+  /* Fail if base object of this memory reference is unknown.
+     PR66768: IVOPTS may replace a literal base with a computed IV,
+     losing non-default address space qualifiers.
+
+     When the target sets ivopts_allow_const_ptr_address_use and the
+     address is in the default address space, assign a synthetic
+     base_object so the use is classified as REFERENCE ADDRESS instead
+     of GENERIC.  This lets IVOPTS evaluate TARGET_ADDRESS_COST for
+     the memory access, enabling better IV decisions on targets where
+     indexed addressing is much more expensive than autoincrement.  */
   if (civ->base_object == NULL_TREE)
-    goto fail;
+    {
+      if (targetm.ivopts_allow_const_ptr_address_use
+	  && TYPE_ADDR_SPACE (TREE_TYPE (civ->base)) == ADDR_SPACE_GENERIC)
+	{
+	  /* Constant pointer bases (hardware registers mapped to fixed
+	     addresses, static arrays, etc.) benefit from ADDRESS
+	     classification on targets with autoincrement addressing.
+	     Accept INTEGER_CST (e.g., (short*)0xffff8240) and
+	     ADDR_EXPR of static objects (e.g., &silence).  */
+	  if (TREE_CODE (civ->base) == INTEGER_CST)
+	    civ->base_object = fold_convert (ptr_type_node, civ->base);
+	  else if (TREE_CODE (civ->base) == ADDR_EXPR
+		   && is_gimple_invariant_address (civ->base))
+	    civ->base_object = civ->base;
+	  else
+	    goto fail;
+	}
+      else
+	goto fail;
+    }
 
   record_group_use (data, op_p, civ, stmt, USE_REF_ADDRESS, TREE_TYPE (*op_p));
   return;
@@ -2487,6 +2515,10 @@ find_interesting_uses_stmt (struct ivopts_data *data, gimple *stmt)
     {
       iv = get_iv (data, PHI_RESULT (stmt));
 
+      if (dump_file && (dump_flags & TDF_DETAILS))
+	fprintf (dump_file, "  PHI check: iv=%p step_nz=%d\n",
+		 (void *)iv, iv ? !integer_zerop (iv->step) : -1);
+
       if (iv && !integer_zerop (iv->step))
 	return;
     }
@@ -2501,6 +2533,11 @@ find_interesting_uses_stmt (struct ivopts_data *data, gimple *stmt)
       iv = get_iv (data, op);
       if (!iv)
 	continue;
+
+      if (dump_file && (dump_flags & TDF_DETAILS))
+	fprintf (dump_file, "  operand use: %d step_nz=%d nonlin_use=%p\n",
+		 SSA_NAME_VERSION (op), !integer_zerop (iv->step),
+		 (void *)iv->nonlin_use);
 
       if (!find_address_like_use (data, stmt, use_p->use, iv))
 	find_interesting_uses_op (data, op);
@@ -3572,6 +3609,13 @@ add_iv_candidate_for_groups (struct ivopts_data *data)
 
       gcc_assert (group->vuses[0] != NULL);
       add_iv_candidate_for_use (data, group->vuses[0]);
+
+      /* Also add candidates for the last use, so that auto-increment
+	 candidates (IP_AFTER_USE) cover both ends of the group.
+	 The cost model selects the better placement.  */
+      unsigned last = group->vuses.length () - 1;
+      if (last > 0 && flag_ivopts_autoinc_multiuse)
+	add_iv_candidate_for_use (data, group->vuses[last]);
     }
   add_iv_candidate_derived_from_uses (data);
 }
@@ -4720,18 +4764,67 @@ get_address_cost (struct ivopts_data *data, struct iv_use *use,
 	  && ratio == 1
 	  && ptrdiff_tree_p (cand->iv->step, &ainc_step))
 	{
-	  poly_int64 ainc_offset = (aff_inv->offset).force_shwi ();
-
-	  if (stmt_after_increment (data->current_loop, cand, use->stmt))
-	    ainc_offset += ainc_step;
-	  cost = get_address_cost_ainc (ainc_step, ainc_offset,
-					addr_mode, mem_mode, as, speed);
-	  if (!cost.infinite_cost_p ())
+	  /* For auto-increment candidates, check if this use is in an inner
+	     loop relative to the auto-increment position.  Auto-increment
+	     only fires once per iteration of the loop containing the
+	     increment, so uses in inner nested loops cannot benefit from it
+	     and must use offset addressing.  The adjustment logic below
+	     (adding ainc_step when stmt_after_increment) would incorrectly
+	     make such uses appear valid for auto-increment.  */
+	  bool dominated_by_ainc_use = true;
+	  if ((cand->pos == IP_AFTER_USE || cand->pos == IP_BEFORE_USE)
+	      && cand->ainc_use != NULL
+	      && cand->ainc_use != use)
 	    {
-	      *can_autoinc = true;
-	      return cost;
+	      basic_block ainc_bb = gimple_bb (cand->ainc_use->stmt);
+	      basic_block use_bb = gimple_bb (use->stmt);
+	      /* If the use is in a deeper nested loop than the auto-inc
+		 position, auto-increment cannot be used for this access.  */
+	      if (use_bb->loop_father != ainc_bb->loop_father
+		  && flow_loop_nested_p (ainc_bb->loop_father,
+					 use_bb->loop_father))
+		dominated_by_ainc_use = false;
 	    }
-	  cost = no_cost;
+
+	  if (dominated_by_ainc_use)
+	    {
+	      /* Only compute ainc cost for the actual auto-increment
+		 use.  Non-ainc uses are regular memory accesses that
+		 should be costed with regular addressing.  If a
+		 non-ainc use is after the increment point, adjust
+		 the offset so the regular cost path reflects the
+		 displacement from the incremented IV value.  Without
+		 this, non-ainc uses get spurious ainc mode matches
+		 (e.g., POST_INC for plain register-indirect).  */
+	      bool is_ainc_use = (cand->ainc_use == NULL
+				  || cand->ainc_use == use);
+	      if (!flag_ivopts_autoinc_multiuse || is_ainc_use)
+		{
+		  poly_int64 ainc_offset
+		    = (aff_inv->offset).force_shwi ();
+
+		  if (stmt_after_increment (data->current_loop, cand,
+					    use->stmt))
+		    ainc_offset += ainc_step;
+		  cost = get_address_cost_ainc (ainc_step, ainc_offset,
+						addr_mode, mem_mode,
+						as, speed);
+		  if (!cost.infinite_cost_p ())
+		    {
+		      *can_autoinc = true;
+		      return cost;
+		    }
+		}
+	      else if (stmt_after_increment (data->current_loop,
+					     cand, use->stmt))
+		{
+		  /* Non-ainc use sees the post-increment IV value.
+		     Adjust offset so regular cost path accounts for
+		     the displacement (e.g., -2 for step=2).  */
+		  aff_inv->offset -= ainc_step;
+		}
+	      cost = no_cost;
+	    }
 	}
       if (!aff_combination_zero_p (aff_inv))
 	{
@@ -5037,6 +5130,7 @@ determine_group_iv_cost_address (struct ivopts_data *data,
 	  }
       sum_cost += cost;
     }
+
   set_group_iv_cost (data, group, cand, sum_cost, inv_vars,
 		     NULL_TREE, ERROR_MARK, inv_exprs);
 
@@ -5532,6 +5626,17 @@ determine_group_iv_cost_cond (struct ivopts_data *data,
       /* The bound is a loop invariant, so it will be only computed
 	 once.  */
       elim_cost.cost = adjust_setup_cost (data, elim_cost.cost);
+      /* On targets with detailed cost models (e.g., accurate per-
+	 instruction cycle timings), the elimination bound cost can
+	 cross the integer-division rounding boundary even for simple
+	 2-3 instruction setup sequences.  When the adjusted cost is
+	 small (just 1), the bound is effectively free over many
+	 iterations — the rounding artifact should not tip candidate
+	 assignment from pointer-based IVs (tight bne back-branch
+	 loops) to counter-based IVs (loose beq/bra loops).  Halve
+	 the adjusted cost to absorb this rounding.  */
+      if (flag_ivopts_autoinc_step)
+	elim_cost.cost /= 2;
     }
 
   /* When the condition is a comparison of the candidate IV against
@@ -5567,9 +5672,13 @@ determine_group_iv_cost_cond (struct ivopts_data *data,
       inv_vars = inv_vars_elim;
       inv_vars_elim = NULL;
       inv_expr = inv_expr_elim;
-      /* For doloop candidate/use pair, adjust to zero cost.  */
-      if (group->doloop_p && cand->doloop_p && elim_cost.cost > no_cost.cost)
-	cost = no_cost;
+      /* For doloop candidate/use pair, zero the setup cost since
+	 dbra absorbs the comparison.  */
+      if (group->doloop_p && cand->doloop_p)
+	{
+	  if (elim_cost.cost > no_cost.cost)
+	    cost = no_cost;
+	}
     }
   else
     {
@@ -5580,6 +5689,15 @@ determine_group_iv_cost_cond (struct ivopts_data *data,
       comp = ERROR_MARK;
       inv_expr = inv_expr_express;
     }
+
+  /* Add per-iteration comparison instruction cost.  For doloop
+     candidates the hook returns 0 (comparison absorbed into dbra).
+     For pointer-typed IVs on targets with split register files,
+     the hook may return a higher cost (e.g., cmpa vs cmp).  */
+  if (!cost.infinite_cost_p ())
+    cost.cost += targetm.iv_compare_cost (TREE_TYPE (cand->iv->base),
+					  group->doloop_p && cand->doloop_p,
+					  data->speed);
 
   if (inv_expr)
     {
@@ -7170,15 +7288,37 @@ find_optimal_iv_set (struct ivopts_data *data)
 	       cost.cost, cost.complexity);
     }
 
-  /* Choose the one with the best cost.  */
-  if (origcost <= cost)
+  /* Choose the one with the best cost.
+     If costs are equal, prefer fewer IVs.  */
+  if (origcost < cost)
     {
       if (set)
-	iv_ca_free (&set);
+        iv_ca_free (&set);
       set = origset;
     }
-  else if (origset)
-    iv_ca_free (&origset);
+  else if (origcost == cost)
+    {
+      /* Equal cost - prefer fewer IV candidates.  */
+      unsigned orig_n_cands = iv_ca_n_cands (origset);
+      unsigned new_n_cands = iv_ca_n_cands (set);
+      
+      if (orig_n_cands <= new_n_cands)
+        {
+          if (set)
+            iv_ca_free (&set);
+          set = origset;
+        }
+      else
+        {
+          if (origset)
+            iv_ca_free (&origset);
+        }
+    }
+  else
+    {
+      if (origset)
+        iv_ca_free (&origset);
+    }
 
   for (i = 0; i < data->vgroups.length (); i++)
     {

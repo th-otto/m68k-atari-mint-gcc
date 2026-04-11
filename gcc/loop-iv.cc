@@ -2285,6 +2285,91 @@ determine_max_iter (class loop *loop, class niter_desc *desc, rtx old_niter)
   return nmax;
 }
 
+/* Given a register REG used as a loop counter, find if its initial value
+   (from before the loop) comes from an AND with a constant.  If so, return
+   the constant (which bounds the initial value).  Return 0 if no bound
+   can be determined.
+
+   This helps bound loops like: i = x & 7; while (i--) { ... }
+   where the AND operation guarantees i is in range [0, 7].  */
+
+static uint64_t
+get_iv_initial_value_and_bound (class loop *loop, rtx reg)
+{
+  /* Get the loop preheader edge.  */
+  edge e = loop_preheader_edge (loop);
+  if (!e || e->src == ENTRY_BLOCK_PTR_FOR_FN (cfun))
+    return 0;
+
+  /* The register we're looking for.  We update this when following copies.  */
+  unsigned int target_regno = REGNO (reg);
+
+  /* Track which registers have been modified, to avoid using stale values.  */
+  auto_bitmap altered;
+
+  /* Walk backwards through the preheader chain, similar to
+     simplify_using_initial_values.  */
+  while (1)
+    {
+      /* Scan backwards through this basic block.  */
+      for (rtx_insn *insn = BB_END (e->src); insn; insn = PREV_INSN (insn))
+	{
+	  if (!NONDEBUG_INSN_P (insn))
+	    {
+	      if (insn == BB_HEAD (e->src))
+		break;
+	      continue;
+	    }
+
+	  rtx set = single_set (insn);
+	  if (set && REG_P (SET_DEST (set)))
+	    {
+	      unsigned int dest_regno = REGNO (SET_DEST (set));
+
+	      if (dest_regno == target_regno)
+		{
+		  rtx src = SET_SRC (set);
+
+		  /* Check if source is an AND with a constant.  */
+		  if (GET_CODE (src) == AND && CONST_INT_P (XEXP (src, 1)))
+		    return UINTVAL (XEXP (src, 1));
+
+		  /* Check if source is a register - follow the copy chain,
+		     but only if that register hasn't been altered.  */
+		  if (REG_P (src) && !bitmap_bit_p (altered, REGNO (src)))
+		    {
+		      target_regno = REGNO (src);
+		      /* Continue scanning - the source reg might be set
+			 earlier in this block or in a predecessor.  */
+		    }
+		  else
+		    {
+		      /* Found a definition but not an AND or simple copy
+			 - stop searching.  */
+		      return 0;
+		    }
+		}
+	      else
+		{
+		  /* Mark this register as altered.  */
+		  bitmap_set_bit (altered, dest_regno);
+		}
+	    }
+
+	  if (insn == BB_HEAD (e->src))
+	    break;
+	}
+
+      /* Move to the single predecessor, if any.  */
+      if (!single_pred_p (e->src)
+	  || single_pred (e->src) == ENTRY_BLOCK_PTR_FOR_FN (cfun))
+	break;
+      e = single_pred_edge (e->src);
+    }
+
+  return 0;
+}
+
 /* Computes number of iterations of the CONDITION in INSN in LOOP and stores
    the result into DESC.  Very similar to determine_number_of_iterations
    (basically its rtl version), complicated by things like subregs.  */
@@ -2811,6 +2896,30 @@ iv_number_of_iterations (class loop *loop, rtx_insn *insn, rtx condition,
       max = determine_max_iter (loop, desc, old_niter);
       if (!max)
 	goto zero_iter_simplify;
+
+      /* Check if any register in the niter expression comes from an AND
+	 operation in the loop preheader.  This helps bound loops like:
+	 i = x & 7; while (i--) { ... }
+	 where the AND guarantees the initial value is bounded.  */
+      subrtx_iterator::array_type array;
+      FOR_EACH_SUBRTX (iter, array, old_niter, NONCONST)
+	{
+	  const_rtx x = *iter;
+	  if (REG_P (x))
+	    {
+	      uint64_t and_bound = get_iv_initial_value_and_bound (loop,
+								   const_cast<rtx> (x));
+	      if (and_bound > 0 && and_bound < max)
+		{
+		  max = and_bound;
+		  if (dump_file)
+		    fprintf (dump_file,
+			     ";; Improved upper bound to %" PRIu64
+			     " from AND in IV initial value.\n", max);
+		}
+	    }
+	}
+
       if (!desc->infinite
 	  && !desc->assumptions)
 	record_niter_bound (loop, max, false, true);
