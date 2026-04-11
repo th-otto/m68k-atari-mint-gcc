@@ -60,6 +60,25 @@
 
 namespace {
 
+/* Extract the base register number from a MEM's address, handling bare reg,
+   reg+offset, POST_INC, and PRE_DEC forms.  Returns -1 if the address
+   form is not recognized.  */
+
+static int
+mem_base_reg (rtx mem)
+{
+  rtx addr = XEXP (mem, 0);
+  if (REG_P (addr))
+    return REGNO (addr);
+  if (GET_CODE (addr) == PLUS && REG_P (XEXP (addr, 0)))
+    return REGNO (XEXP (addr, 0));
+  if (GET_CODE (addr) == POST_INC && REG_P (XEXP (addr, 0)))
+    return REGNO (XEXP (addr, 0));
+  if (GET_CODE (addr) == PRE_DEC && REG_P (XEXP (addr, 0)))
+    return REGNO (XEXP (addr, 0));
+  return -1;
+}
+
 /* =======================================================================
    GIMPLE pass: m68k_pass_reorder_mem
 
@@ -1220,7 +1239,7 @@ m68k_reorder_incr (function *func)
       try_sequential_access_to_postinc (bb);
   }
 
-  /* Phase 3: Split combined insns with two MEMs from the same base at
+  /* Phase 3a: Split combined insns with two MEMs from the same base at
      consecutive offsets into separate load + op insns.  This enables
      opt_autoinc to convert each MEM to POST_INC individually.  */
   {
@@ -1280,6 +1299,126 @@ m68k_reorder_incr (function *func)
 		recog_memoized (insn);
 		delete_insn (load_insn);
 		continue;
+	      }
+
+	    df_insn_rescan (load_insn);
+	    df_insn_rescan (insn);
+	  }
+      }
+  }
+
+  if (dump_file)
+    fprintf (dump_file, "\n=== Phase 3b: scanning for RMW combined insns ===\n");
+
+  /* Phase 3b: Split RMW combined insns where the destination MEM and one
+     source MEM share the same base register, but the other source MEM
+     uses a different register.  Example:
+
+       (set (mem base_A) (plus (mem base_A) (mem base_B)))
+
+     becomes:
+
+       (set pseudo (mem base_B))                       ; load
+       (set (mem base_A) (plus (mem base_A) pseudo))   ; clean RMW
+
+     This enables opt_autoinc to convert the RMW to POST_INC:
+       add.l (%a1)+,(%a0)  →  move.l (%a1)+,%dN ; add.l %dN,(%a0)+  */
+  {
+    basic_block bb;
+    FOR_EACH_BB_FN (bb, func)
+      {
+	rtx_insn *insn, *next;
+	for (insn = BB_HEAD (bb); insn != NEXT_INSN (BB_END (bb)); insn = next)
+	  {
+	    next = NEXT_INSN (insn);
+	    if (!NONJUMP_INSN_P (insn))
+	      continue;
+	    rtx set = single_set (insn);
+	    if (!set)
+	      continue;
+	    rtx dest = SET_DEST (set);
+	    rtx src = SET_SRC (set);
+
+	    /* Dest must be a MEM with a binary/commutative src.  */
+	    if (!MEM_P (dest))
+	      continue;
+	    if (GET_RTX_CLASS (GET_CODE (src)) != RTX_COMM_ARITH
+		&& GET_RTX_CLASS (GET_CODE (src)) != RTX_BIN_ARITH)
+	      continue;
+
+	    rtx op0 = XEXP (src, 0);
+	    rtx op1 = XEXP (src, 1);
+	    if (!MEM_P (op0) || !MEM_P (op1))
+	      continue;
+
+	    int dest_reg = mem_base_reg (dest);
+	    if (dest_reg < 0)
+	      continue;
+
+	    /* Identify which source operand shares the dest base (the RMW
+	       MEM) and which is the "other" MEM to split out.  */
+	    int r0 = mem_base_reg (op0);
+	    int r1 = mem_base_reg (op1);
+
+	    rtx split_op = NULL_RTX;
+	    int split_idx = -1;
+	    if (r0 == dest_reg && r1 != dest_reg && r1 >= 0)
+	      { split_op = op1; split_idx = 1; }
+	    else if (r1 == dest_reg && r0 != dest_reg && r0 >= 0)
+	      { split_op = op0; split_idx = 0; }
+	    else
+	      continue;
+
+	    if (dump_file)
+	      fprintf (dump_file, "Phase 3b: splitting RMW insn %d "
+		       "(dest_reg=%d, split r%d)\n",
+		       INSN_UID (insn), dest_reg, split_idx == 0 ? r0 : r1);
+
+	    /* Split: load the "other" MEM into a fresh pseudo.  */
+	    machine_mode mode = GET_MODE (split_op);
+	    rtx tmp = gen_reg_rtx (mode);
+	    rtx_insn *load_insn = emit_insn_before (gen_rtx_SET (tmp, split_op),
+						    insn);
+	    INSN_CODE (load_insn) = -1;
+	    if (recog_memoized (load_insn) < 0)
+	      {
+		if (dump_file)
+		  fprintf (dump_file, "  load insn %d failed recog\n",
+			   INSN_UID (load_insn));
+		delete_insn (load_insn);
+		continue;
+	      }
+
+	    /* Propagate REG_INC note from the original insn to the load
+	       if the split operand had POST_INC.  */
+	    rtx inc_reg = NULL_RTX;
+	    if (GET_CODE (XEXP (split_op, 0)) == POST_INC)
+	      inc_reg = XEXP (XEXP (split_op, 0), 0);
+
+	    /* Replace the MEM operand with the pseudo in the original insn.  */
+	    rtx old_op = XEXP (src, split_idx);
+	    XEXP (src, split_idx) = tmp;
+	    INSN_CODE (insn) = -1;
+	    if (recog_memoized (insn) < 0)
+	      {
+		if (dump_file)
+		  fprintf (dump_file, "  RMW insn %d failed recog after split\n",
+			   INSN_UID (insn));
+		XEXP (src, split_idx) = old_op;
+		INSN_CODE (insn) = -1;
+		recog_memoized (insn);
+		delete_insn (load_insn);
+		continue;
+	      }
+
+	    /* Move any REG_INC note for the split register from the
+	       original insn to the load insn.  */
+	    if (inc_reg)
+	      {
+		rtx note = find_reg_note (insn, REG_INC, inc_reg);
+		if (note)
+		  remove_note (insn, note);
+		add_reg_note (load_insn, REG_INC, inc_reg);
 	      }
 
 	    df_insn_rescan (load_insn);

@@ -1798,8 +1798,15 @@ m68k_iv_compare_cost_impl (tree type, bool doloop_p, bool speed)
 
   const struct m68k_cost_table *costs = get_cost_table ();
 
-  /* Base CMP.L Rn,Dn cost from the cost table.  */
-  int cmp_cycles = costs->compare.reg_ea_add[1];
+  /* IV exit comparisons are against constants.  The actual instruction
+     may be cmp.w #imm,Dn (with extension word) or cmp.w Dn,Dm (if the
+     constant was hoisted into a register).  Add half the immediate
+     extension word penalty to the register-compare base cost, since
+     we cannot predict constant hoisting at this stage.  */
+  int idx = TYPE_PRECISION (type) > 16 ? 1 : 0;
+  int reg_cost = costs->compare.reg_ea_add[idx];
+  int imm_ext = (idx == 0 ? 1 : 2) * costs->buscycle_cost;
+  int cmp_cycles = reg_cost + imm_ext / 2;
 
   /* CMPA penalty: pointer types use address registers, requiring the
      more expensive CMPA instruction on 68020+.  On 68000, CMP and CMPA

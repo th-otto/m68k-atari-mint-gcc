@@ -351,8 +351,22 @@ static bool m68k_register_rename_profitable_p (rtx_insn *, unsigned int,
    the doloop candidate as the sole IV for both exit test and body
    computation.  Since doloop counts down, body values derived from a
    forward-counting IV require expensive recomputation (e.g. muls).  */
+/* Penalty for reusing the doloop counter for non-loop-exit purposes.
+   On m68k, sharing prevents dbra emission (the doloop pass can't use
+   dbra when the counter is read in the loop body), forcing a more
+   expensive subq+jne exit sequence.  The penalty also partially
+   compensates for the COMPARE group costing 0 (assumes dbra) even
+   though dbra cannot actually be used when the counter is shared —
+   an inter-group cost dependency that IVOPTS cannot model directly.  */
 #undef TARGET_DOLOOP_COST_FOR_GENERIC
-#define TARGET_DOLOOP_COST_FOR_GENERIC (COSTS_N_INSNS (1))
+#define TARGET_DOLOOP_COST_FOR_GENERIC (COSTS_N_INSNS (2))
+
+/* Allow IVOPTS to classify constant-base pointer IVs (like &static_array)
+   as REFERENCE ADDRESS uses.  This enables address-mode-aware IV rewriting,
+   which is critical for producing the single-pseudo form that auto_inc_dec
+   can convert to post-increment addressing.  */
+#undef TARGET_IVOPTS_ALLOW_CONST_PTR_ADDRESS_USE
+#define TARGET_IVOPTS_ALLOW_CONST_PTR_ADDRESS_USE true
 
 /* Enable doloop for loops with 1+ iterations (default is 3).
    The dbra instruction is always beneficial on m68k.  */

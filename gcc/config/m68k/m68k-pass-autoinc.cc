@@ -749,6 +749,126 @@ try_merge_postinc (basic_block bb, rtx_insn *add_insn,
   return true;
 }
 
+/* Recursively search RTX for MEMs whose address is bare (reg REGNO)
+   and whose mode size equals INCR.  If exactly one such MEM is found,
+   set *MEM_LOC to its location and return 1.  */
+
+static int
+find_bare_mem_candidate (rtx *loc, int regno, HOST_WIDE_INT incr,
+			 rtx **mem_loc)
+{
+  rtx x = *loc;
+  if (x == NULL_RTX)
+    return 0;
+
+  if (MEM_P (x))
+    {
+      rtx addr = XEXP (x, 0);
+      if (REG_P (addr)
+	  && (int) REGNO (addr) == regno
+	  && GET_MODE_SIZE (GET_MODE (x)) == incr)
+	{
+	  *mem_loc = loc;
+	  return 1;
+	}
+      return 0;
+    }
+
+  int count = 0;
+  const char *fmt = GET_RTX_FORMAT (GET_CODE (x));
+  for (int i = GET_RTX_LENGTH (GET_CODE (x)) - 1; i >= 0; i--)
+    {
+      if (fmt[i] == 'e')
+	{
+	  count += find_bare_mem_candidate (&XEXP (x, i), regno, incr,
+					    mem_loc);
+	  if (count > 1)
+	    return count;
+	}
+      else if (fmt[i] == 'E')
+	{
+	  for (int j = XVECLEN (x, i) - 1; j >= 0; j--)
+	    {
+	      count += find_bare_mem_candidate (&XVECEXP (x, i, j), regno,
+						incr, mem_loc);
+	      if (count > 1)
+		return count;
+	    }
+	}
+    }
+
+  return count;
+}
+
+/* Try to merge an increment instruction with the PRECEDING instruction's
+   bare-register memory operand into a POST_INC addressing mode.
+
+   This transforms:
+     <insn with (%aN)>              ; MEM mode size == N
+     addq.l #N,%aN
+
+   Into:
+     <insn with (%aN)+>             ; POST_INC, addq deleted
+
+   This handles the pattern where pass_inc_dec missed the use-then-increment
+   sequence, e.g., when the insn already has a POST_INC on a different
+   register: move.l (%a1),(%a0)+ ; addq #4,%a1 → move.l (%a1)+,(%a0)+
+
+   Returns true if the transformation was made.  */
+
+static bool
+try_merge_postinc_before (basic_block bb, rtx_insn *add_insn,
+			  int regno, HOST_WIDE_INT incr)
+{
+  if (regno < 8 || regno > 15)
+    return false;
+  if (incr <= 0)
+    return false;
+
+  rtx_insn *prev_insn = prev_nonnote_nondebug_insn (add_insn);
+  if (!prev_insn || !INSN_P (prev_insn)
+      || BLOCK_FOR_INSN (prev_insn) != bb)
+    return false;
+
+  rtx set = single_set (prev_insn);
+  if (set && REG_P (SET_DEST (set))
+      && (int) REGNO (SET_DEST (set)) == regno)
+    return false;
+
+  rtx *mem_loc = nullptr;
+  int count = find_bare_mem_candidate (&PATTERN (prev_insn), regno, incr,
+				       &mem_loc);
+  if (count != 1 || !mem_loc)
+    return false;
+
+  rtx orig_mem = *mem_loc;
+  rtx reg = gen_rtx_REG (Pmode, regno);
+  machine_mode mode = GET_MODE (orig_mem);
+  rtx postinc_addr = gen_rtx_POST_INC (Pmode, reg);
+  rtx postinc_mem = gen_rtx_MEM (mode, postinc_addr);
+  MEM_COPY_ATTRIBUTES (postinc_mem, orig_mem);
+
+  *mem_loc = postinc_mem;
+
+  INSN_CODE (prev_insn) = -1;
+  if (recog_memoized (prev_insn) < 0
+      || (extract_insn (prev_insn),
+	  !constrain_operands (1, get_enabled_alternatives (prev_insn))))
+    {
+      *mem_loc = orig_mem;
+      INSN_CODE (prev_insn) = -1;
+      recog_memoized (prev_insn);
+      return false;
+    }
+
+  add_reg_note (prev_insn, REG_INC, reg);
+  df_insn_rescan (prev_insn);
+  delete_insn (add_insn);
+
+  return true;
+}
+
+
 /* Main function for the normalize_autoinc pass.
 
    LRA decomposition recovery: merges an increment instruction with the
@@ -794,6 +914,15 @@ m68k_normalize_autoinc (function *func)
 		      bb_changed = true;
 		      continue;
 		    }
+		  /* Try merging with the preceding instruction (use then
+		     increment pattern, e.g. move.l (%a1),(%a0)+ ; addq).  */
+		  if (try_merge_postinc_before (bb, insn, regno, incr))
+		    {
+		      changes++;
+		      made_changes = true;
+		      bb_changed = true;
+		      continue;
+		    }
 		  /* Fall back to increment normalization for patterns
 		     that LRA/reload may have re-introduced post-RA.  */
 		  if (m68k_try_normalize_increment (bb, insn, regno, incr,
@@ -812,6 +941,13 @@ m68k_normalize_autoinc (function *func)
 	      if (m68k_is_reg_increment (BB_END (bb), &regno, &incr))
 		{
 		  if (try_merge_postinc (bb, BB_END (bb), regno, incr))
+		    {
+		      changes++;
+		      made_changes = true;
+		      bb_changed = true;
+		    }
+		  else if (try_merge_postinc_before (bb, BB_END (bb),
+						     regno, incr))
 		    {
 		      changes++;
 		      made_changes = true;
@@ -1595,6 +1731,60 @@ validate_insn (rtx_insn *insn)
   return constrain_operands (0, get_enabled_alternatives (insn));
 }
 
+/* Return true if SET is a read-modify-write pattern where REGNO is used
+   as the base register in both the destination MEM and a nested source MEM
+   at the same offset.  E.g., (set (mem (reg REGNO))
+   (plus (mem (reg REGNO)) (reg other))).  Such patterns are safe for
+   POST_INC because both MEMs reference the same memory location.  If
+   EXPECTED_OFFSET is >= 0, requires the MEMs to be at that offset;
+   otherwise accepts any matching offset.  */
+
+static bool
+is_rmw_with_reg (rtx set, int regno, HOST_WIDE_INT expected_offset = -1)
+{
+  rtx dest = SET_DEST (set);
+  rtx src = SET_SRC (set);
+
+  if (!MEM_P (dest))
+    return false;
+  if (GET_RTX_CLASS (GET_CODE (src)) != RTX_COMM_ARITH
+      && GET_RTX_CLASS (GET_CODE (src)) != RTX_BIN_ARITH)
+    return false;
+
+  int dest_regno;
+  HOST_WIDE_INT dest_offset;
+  if (!m68k_mem_base_offset_p (dest, &dest_regno, &dest_offset))
+    return false;
+  if (dest_regno != regno)
+    return false;
+  if (expected_offset >= 0 && dest_offset != expected_offset)
+    return false;
+
+  /* Check that one operand of the binary op is a MEM at the same base+offset
+     and the other is NOT a MEM (the RMW postinc pattern requires a register
+     operand, not two MEMs — combined insns need splitting first).  */
+  rtx op0 = XEXP (src, 0);
+  rtx op1 = XEXP (src, 1);
+  rtx reg_rtx = gen_rtx_REG (Pmode, regno);
+
+  for (int i = 0; i < 2; i++)
+    {
+      rtx mem_op = i == 0 ? op0 : op1;
+      rtx other_op = i == 0 ? op1 : op0;
+      if (!MEM_P (mem_op) || MEM_P (other_op))
+	continue;
+      int src_regno;
+      HOST_WIDE_INT src_offset;
+      if (!m68k_mem_base_offset_p (mem_op, &src_regno, &src_offset))
+	continue;
+      if (src_regno == regno
+	  && src_offset == dest_offset
+	  && !reg_mentioned_p (reg_rtx, other_op))
+	return true;
+    }
+  return false;
+}
+
 /* Try to convert a sequence of offset-addressed memory accesses through
    the same register into POST_INC addressing.  Pre-RA: works on any
    pseudo, uses strict=0 for constraint validation.  If no explicit
@@ -1610,15 +1800,23 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
     return false;
 
   /* POST_INC modifies the address register.  We cannot use POST_INC if the
-     other operand of the first instruction is the same register.  */
+     other operand of the first instruction is the same register — unless
+     it is an RMW pattern where both src and dest MEMs reference the same
+     location (e.g., add.l d0,(a0) → add.l d0,(a0)+).  */
   rtx first_set = single_set (first_insn);
+  bool first_is_rmw = false;
   if (first_set)
     {
       rtx other_op = is_dest ? SET_SRC (first_set) : SET_DEST (first_set);
       if (REG_P (other_op) && (int) REGNO (other_op) == regno)
 	return false;
       if (reg_mentioned_p (gen_rtx_REG (Pmode, regno), other_op))
-	return false;
+	{
+	  if (is_dest && is_rmw_with_reg (first_set, regno, 0))
+	    first_is_rmw = true;
+	  else
+	    return false;
+	}
     }
 
   machine_mode mode = GET_MODE (mem);
@@ -1653,11 +1851,20 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
 	  return false;
 	}
 
-      /* Check if register is used in BOTH src and dest.  */
+      /* Check if register is used in BOTH src and dest.  Allow RMW
+	 patterns where both MEMs reference the same address.  */
       bool src_uses_reg = reg_mentioned_p (gen_rtx_REG (Pmode, regno), src);
       bool dest_uses_reg = reg_mentioned_p (gen_rtx_REG (Pmode, regno), dest);
       if (src_uses_reg && dest_uses_reg)
-	return false;
+	{
+	  if (is_rmw_with_reg (set, regno, expected_offset))
+	    {
+	      fixup_insns.safe_push (insn);
+	      expected_offset += size;
+	      continue;
+	    }
+	  return false;
+	}
 
       /* Check source operand.  */
       int mem_regno;
@@ -1786,30 +1993,41 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
   rtx postinc_mem = gen_rtx_MEM (mode, postinc_addr);
   MEM_COPY_ATTRIBUTES (postinc_mem, mem);
 
-  /* Find and replace the specific MEM within the insn pattern.
-     For top-level MEMs, this replaces SET_SRC or SET_DEST directly.
-     For nested MEMs (inside PLUS etc.), it finds the exact MEM rtx.  */
+  /* Find and replace MEM within the insn pattern.  For RMW, only the
+     dest MEM gets POST_INC; the nested src MEM keeps bare (reg) so
+     the m68k.md pattern's (match_dup 0) matches the post_inc register.  */
+  rtx saved_pattern = first_is_rmw ? copy_rtx (PATTERN (first_insn)) : NULL;
   rtx *mem_ptr = NULL;
-  {
-    subrtx_ptr_iterator::array_type array;
-    FOR_EACH_SUBRTX_PTR (iter, array, &PATTERN (first_insn), NONCONST)
-      {
-	if (**iter == mem)
-	  {
-	    mem_ptr = *iter;
-	    break;
-	  }
-      }
-  }
-  if (!mem_ptr)
-    return false;
-
-  *mem_ptr = postinc_mem;
+  if (first_is_rmw)
+    {
+      rtx first_set = single_set (first_insn);
+      if (!first_set || !MEM_P (SET_DEST (first_set)))
+	return false;
+      SET_DEST (first_set) = postinc_mem;
+    }
+  else
+    {
+      subrtx_ptr_iterator::array_type array;
+      FOR_EACH_SUBRTX_PTR (iter, array, &PATTERN (first_insn), NONCONST)
+	{
+	  if (**iter == mem)
+	    {
+	      mem_ptr = *iter;
+	      break;
+	    }
+	}
+      if (!mem_ptr)
+	return false;
+      *mem_ptr = postinc_mem;
+    }
 
   /* Validate pre-RA: recog + constraints with strict=0.  */
   if (!validate_insn (first_insn))
     {
-      *mem_ptr = mem;
+      if (first_is_rmw)
+	PATTERN (first_insn) = saved_pattern;
+      else
+	*mem_ptr = mem;
       INSN_CODE (first_insn) = -1;
       recog_memoized (first_insn);
       return false;
@@ -1820,32 +2038,33 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
 
   /* 2. Fix up subsequent instructions — reduce their offsets.
      Find the MEM at any nesting depth (handles both top-level and
-     nested MEMs from split combined insns).  */
+     nested MEMs from split combined insns).  For RMW insns, both the
+     dest MEM and nested src MEM are replaced simultaneously.  */
   HOST_WIDE_INT current_adj = size;
   for (rtx_insn *insn : fixup_insns)
     {
-      /* Find the MEM that references our register.  */
-      rtx *mem_loc = NULL;
       rtx set = single_set (insn);
-      if (set)
+      if (!set)
+	continue;
+
+      bool fixup_is_rmw = is_rmw_with_reg (set, regno);
+
+      /* Find the primary MEM that references our register.  */
+      rtx *mem_loc = NULL;
+      if (is_dest && MEM_P (SET_DEST (set)))
+	mem_loc = &SET_DEST (set);
+      else if (!is_dest && MEM_P (SET_SRC (set)))
+	mem_loc = &SET_SRC (set);
+      else if (!fixup_is_rmw)
 	{
-	  /* Try top-level first (common case).  */
-	  if (is_dest && MEM_P (SET_DEST (set)))
-	    mem_loc = &SET_DEST (set);
-	  else if (!is_dest && MEM_P (SET_SRC (set)))
-	    mem_loc = &SET_SRC (set);
-	  else
+	  rtx fixup_src = SET_SRC (set);
+	  if (GET_RTX_CLASS (GET_CODE (fixup_src)) == RTX_COMM_ARITH
+	      || GET_RTX_CLASS (GET_CODE (fixup_src)) == RTX_BIN_ARITH)
 	    {
-	      /* Search nested — check binary op operands.  */
-	      rtx src = SET_SRC (set);
-	      if (GET_RTX_CLASS (GET_CODE (src)) == RTX_COMM_ARITH
-		  || GET_RTX_CLASS (GET_CODE (src)) == RTX_BIN_ARITH)
-		{
-		  if (MEM_P (XEXP (src, 0)))
-		    mem_loc = &XEXP (src, 0);
-		  else if (MEM_P (XEXP (src, 1)))
-		    mem_loc = &XEXP (src, 1);
-		}
+	      if (MEM_P (XEXP (fixup_src, 0)))
+		mem_loc = &XEXP (fixup_src, 0);
+	      else if (MEM_P (XEXP (fixup_src, 1)))
+		mem_loc = &XEXP (fixup_src, 1);
 	    }
 	}
       if (!mem_loc || !MEM_P (*mem_loc))
@@ -1857,10 +2076,7 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
 
       int mem_regno;
       HOST_WIDE_INT old_offset;
-      /* Handle both bare (reg) at offset 0 and (plus reg offset).  */
-      if (mem_reg_p (old_mem, &mem_regno))
-	old_offset = 0;
-      else if (!m68k_mem_reg_offset_p (old_mem, &mem_regno, &old_offset))
+      if (!m68k_mem_base_offset_p (old_mem, &mem_regno, &old_offset))
 	continue;
 
       HOST_WIDE_INT new_offset = old_offset - current_adj;
@@ -1876,18 +2092,50 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
 
       rtx new_mem = gen_rtx_MEM (mem_mode, new_addr);
       MEM_COPY_ATTRIBUTES (new_mem, old_mem);
-      *mem_loc = new_mem;
+
+      /* For RMW, dest MEM + nested src MEM both need updating; save
+	 the full pattern for revert.  For non-RMW, save just the pointer.  */
+      rtx saved_fixup_pattern = fixup_is_rmw
+	? copy_rtx (PATTERN (insn)) : NULL;
+      if (fixup_is_rmw)
+	{
+	  *mem_loc = new_mem;
+	  /* Adjust the nested src MEM to match (bare reg or offset,
+	     NOT POST_INC — only the dest gets POST_INC).  */
+	  rtx fixup_src = SET_SRC (set);
+	  for (int i = 0; i < 2; i++)
+	    {
+	      rtx *op_loc = &XEXP (fixup_src, i);
+	      if (!MEM_P (*op_loc))
+		continue;
+	      int mr;
+	      HOST_WIDE_INT mo;
+	      if (!m68k_mem_base_offset_p (*op_loc, &mr, &mo) || mr != regno)
+		continue;
+	      rtx nested_addr = new_offset == 0
+		? reg : gen_rtx_PLUS (Pmode, reg, GEN_INT (new_offset));
+	      rtx nested_mem = gen_rtx_MEM (mem_mode, nested_addr);
+	      MEM_COPY_ATTRIBUTES (nested_mem, *op_loc);
+	      *op_loc = nested_mem;
+	      break;
+	    }
+	}
+      else
+	*mem_loc = new_mem;
 
       if (!validate_insn (insn))
 	{
-	  /* Revert this insn and first_insn.  Earlier fixup insns are left
-	     with adjusted offsets — they are still valid (just not POST_INC)
-	     and will be rechecked on the next iteration if applicable.  */
-	  *mem_loc = old_mem;
+	  if (fixup_is_rmw)
+	    PATTERN (insn) = saved_fixup_pattern;
+	  else
+	    *mem_loc = old_mem;
 	  INSN_CODE (insn) = -1;
 	  recog_memoized (insn);
-	  /* Revert first_insn's POST_INC back to the original MEM.  */
-	  *mem_ptr = mem;
+	  /* Revert first_insn too.  */
+	  if (first_is_rmw)
+	    PATTERN (first_insn) = saved_pattern;
+	  else
+	    *mem_ptr = mem;
 	  remove_reg_equal_equiv_notes (first_insn);
 	  remove_note (first_insn, find_reg_note (first_insn, REG_INC, reg));
 	  INSN_CODE (first_insn) = -1;

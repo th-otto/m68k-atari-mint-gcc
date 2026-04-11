@@ -2341,9 +2341,21 @@ find_interesting_uses_address (struct ivopts_data *data, gimple *stmt,
   if (civ->base_object == NULL_TREE)
     {
       if (targetm.ivopts_allow_const_ptr_address_use
-	  && TREE_CODE (civ->base) == INTEGER_CST
 	  && TYPE_ADDR_SPACE (TREE_TYPE (civ->base)) == ADDR_SPACE_GENERIC)
-	civ->base_object = fold_convert (ptr_type_node, civ->base);
+	{
+	  /* Constant pointer bases (hardware registers mapped to fixed
+	     addresses, static arrays, etc.) benefit from ADDRESS
+	     classification on targets with autoincrement addressing.
+	     Accept INTEGER_CST (e.g., (short*)0xffff8240) and
+	     ADDR_EXPR of static objects (e.g., &silence).  */
+	  if (TREE_CODE (civ->base) == INTEGER_CST)
+	    civ->base_object = fold_convert (ptr_type_node, civ->base);
+	  else if (TREE_CODE (civ->base) == ADDR_EXPR
+		   && is_gimple_invariant_address (civ->base))
+	    civ->base_object = civ->base;
+	  else
+	    goto fail;
+	}
       else
 	goto fail;
     }
@@ -2503,6 +2515,10 @@ find_interesting_uses_stmt (struct ivopts_data *data, gimple *stmt)
     {
       iv = get_iv (data, PHI_RESULT (stmt));
 
+      if (dump_file && (dump_flags & TDF_DETAILS))
+	fprintf (dump_file, "  PHI check: iv=%p step_nz=%d\n",
+		 (void *)iv, iv ? !integer_zerop (iv->step) : -1);
+
       if (iv && !integer_zerop (iv->step))
 	return;
     }
@@ -2517,6 +2533,11 @@ find_interesting_uses_stmt (struct ivopts_data *data, gimple *stmt)
       iv = get_iv (data, op);
       if (!iv)
 	continue;
+
+      if (dump_file && (dump_flags & TDF_DETAILS))
+	fprintf (dump_file, "  operand use: %d step_nz=%d nonlin_use=%p\n",
+		 SSA_NAME_VERSION (op), !integer_zerop (iv->step),
+		 (void *)iv->nonlin_use);
 
       if (!find_address_like_use (data, stmt, use_p->use, iv))
 	find_interesting_uses_op (data, op);
