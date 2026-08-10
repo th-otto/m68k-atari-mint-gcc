@@ -1768,6 +1768,73 @@ rewrite_subword_defs_to_strict_low_part (rtx_insn *start_insn,
   return true;
 }
 
+/* Return true if a single clear in LOOP's preheader is enough to keep the
+   upper bits of REGNO zero for every iteration.
+
+   Hoisting the clear out of the loop only works while everything inside
+   writes REGNO in a mode narrower than CLR_MODE — those are m68k partial
+   writes and leave the upper bits alone.  One full-width write is enough to
+   destroy the invariant, and the back edge then re-enters the loop without
+   the clear being repeated, so from the second iteration onwards the upper
+   bits carry that value instead of zero.
+
+   String_Pixel_Width in Vanilla Conquer is the cautionary example: the loop
+   body computes "add.l %d3,%d1" and then reloads only the low byte with
+   "move.b (%a0)+,%d1", after which %d1 is used as a full 32-bit index into
+   the font width table.  With the clear hoisted, every character but the
+   first indexed far outside the table.  */
+
+static bool
+m68k_loop_keeps_upper_bits_clear_p (class loop *loop, unsigned regno,
+				    machine_mode clr_mode)
+{
+  basic_block *body = get_loop_body (loop);
+  bool ok = true;
+
+  for (unsigned i = 0; ok && i < loop->num_nodes; i++)
+    {
+      rtx_insn *insn;
+      FOR_BB_INSNS (body[i], insn)
+	{
+	  if (!NONDEBUG_INSN_P (insn))
+	    continue;
+
+	  /* A call clobbers the caller-saved registers wholesale.  */
+	  if (CALL_P (insn)
+	      && TEST_HARD_REG_BIT (regs_invalidated_by_call, regno))
+	    {
+	      ok = false;
+	      break;
+	    }
+
+	  df_ref def;
+	  FOR_EACH_INSN_DEF (def, insn)
+	    {
+	      if (DF_REF_REGNO (def) != regno)
+		continue;
+
+	      rtx reg = DF_REF_REG (def);
+	      machine_mode mode = GET_MODE (reg);
+
+	      /* Anything not strictly narrower than the clear touches the
+		 upper bits.  Partial writes flagged as such are fine.  */
+	      if ((DF_REF_FLAGS (def) & DF_REF_PARTIAL) == 0
+		  && !(GET_MODE_SIZE (mode) < GET_MODE_SIZE (clr_mode)))
+		{
+		  ok = false;
+		  break;
+		}
+	    }
+
+	  if (!ok)
+	    break;
+	}
+    }
+
+  free (body);
+  return ok;
+}
+
 /* Try to eliminate andi instructions in a basic block by inserting
    moveq #0 before the first appropriately-sized definition.
    ALREADY_CLEARED_BEFORE tracks def_insns that already have moveq inserted
@@ -2039,6 +2106,12 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
       /* Insert moveq #0,reg before each definition.  */
       bool all_succeeded = true;
       auto_vec<rtx_insn *> inserted_insns;
+      /* clr.w definitions that were widened to a long clear.  The original
+	 must outlive the decision: it is only removed once the candidate has
+	 succeeded, so that abandoning the candidate leaves the function with
+	 the clear it started with.  */
+      auto_vec<rtx_insn *> widened_originals;
+      auto_vec<unsigned> claimed_keys;
 
       if (dump_file)
 	fprintf (dump_file, "  Starting transform loop for %d def_insns\n",
@@ -2077,6 +2150,39 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
 		fprintf (dump_file, "  SKIP: already cleared before uid=%d "
 			 "for d%d\n", INSN_UID (def_insn), regno);
 	      continue;  /* Already have moveq, just skip.  */
+	    }
+
+	  /* The clear is executed once, but an andi inside a loop is reached
+	     again on every iteration.  That only stays sound while the loop
+	     writes the register exclusively through partial writes; a single
+	     full-width write leaves the upper bits dirty for the next
+	     iteration, and the clear is not repeated.  */
+	  if (current_loops == NULL && !*created_loops)
+	    {
+	      loop_optimizer_init (AVOID_CFG_MODIFICATIONS);
+	      *created_loops = true;
+	    }
+	  if (current_loops)
+	    {
+	      machine_mode loop_clr_mode
+		= (cand.ext_type == EXT_BYTE_TO_WORD) ? HImode : SImode;
+	      class loop *use_loop = bb->loop_father;
+
+	      if (use_loop
+		  && use_loop != current_loops->tree_root
+		  && !m68k_loop_keeps_upper_bits_clear_p (use_loop, regno,
+							  loop_clr_mode))
+		{
+		  if (dump_file)
+		    fprintf (dump_file, "  SKIP: loop %d writes d%d at full "
+			     "width, a single clear would not hold\n",
+			     use_loop->num, regno);
+		  /* Abandon the whole candidate — skipping just this clear
+		     would leave the andi eliminated with nothing to
+		     compensate for it.  */
+		  all_succeeded = false;
+		  break;
+		}
 	    }
 
 	  /* Extra validation for cross-BB insertions.  */
@@ -2145,8 +2251,16 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
 
 		      /* Only use preheader if there's exactly one non-latch
 			 predecessor (i.e., a proper preheader exists).  */
+		      /* Determine clear mode based on extension type.  */
+		      machine_mode clr_mode
+			= (cand.ext_type == EXT_BYTE_TO_WORD)
+			  ? HImode : SImode;
+
 		      if (prehdr_edge && non_latch_preds == 1
-			  && prehdr_edge->src != ENTRY_BLOCK_PTR_FOR_FN (cfun))
+			  && prehdr_edge->src != ENTRY_BLOCK_PTR_FOR_FN (cfun)
+			  && m68k_loop_keeps_upper_bits_clear_p (def_loop,
+								 regno,
+								 clr_mode))
 			{
 			  basic_block preheader = prehdr_edge->src;
 
@@ -2160,10 +2274,6 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
 			  if (!bitmap_bit_p (already_cleared_before,
 					     preamble_key))
 			    {
-			      /* Determine clear mode based on extension type.  */
-			      machine_mode clr_mode
-				= (cand.ext_type == EXT_BYTE_TO_WORD)
-				  ? HImode : SImode;
 			      rtx clr_reg
 				= gen_rtx_REG (clr_mode, regno);
 			      rtx clr_pat
@@ -2257,7 +2367,12 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
 		{
 		  unsigned key2 = (INSN_UID (def_insn) << 4) | (regno & 0xf);
 		  bitmap_set_bit (already_cleared_before, key2);
-		  delete_insn (def_insn);
+		  claimed_keys.safe_push (key2);
+		  /* Do NOT delete def_insn yet — see widened_originals.
+		     Until then both clears are present, which is redundant
+		     but correct: the long clear runs first, the word clear
+		     immediately after.  */
+		  widened_originals.safe_push (def_insn);
 		  inserted_insns.safe_push (wide_insn);
 		  if (dump_file)
 		    fprintf (dump_file, "  Widened clr.w to moveq #0 "
@@ -2305,9 +2420,13 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
       if (!all_succeeded)
 	{
 	  /* Remove any insns we inserted.  Use delete_insn() to properly
-	     update the dataflow framework.  */
+	     update the dataflow framework.  The widened originals are left
+	     untouched — dropping them here would strip the function of a
+	     clear that nothing replaces.  */
 	  for (rtx_insn *ins : inserted_insns)
 	    delete_insn (ins);
+	  for (unsigned k : claimed_keys)
+	    bitmap_clear_bit (already_cleared_before, k);
 	  continue;
 	}
 
@@ -2333,6 +2452,8 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
 	{
 	  for (rtx_insn *ins : inserted_insns)
 	    delete_insn (ins);
+	  for (unsigned k : claimed_keys)
+	    bitmap_clear_bit (already_cleared_before, k);
 	  continue;
 	}
 
@@ -2342,6 +2463,11 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
 	fprintf (dump_file, "deleting insn with uid = %d.\n",
 		 INSN_UID (cand.andi_insn));
       delete_insn (cand.andi_insn);
+
+      /* The candidate held; now the superseded word clears can go.  */
+      for (rtx_insn *orig : widened_originals)
+	delete_insn (orig);
+
       changes++;
 	}
     }
