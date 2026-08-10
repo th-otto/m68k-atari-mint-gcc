@@ -131,10 +131,25 @@ m68k_product_fits_16bit (wide_int min_val, wide_int max_val, wide_int cst_val,
   if (overflow != wi::OVF_NONE)
     return false;
 
+  /* The narrowed multiply is performed in signed 16-bit, so the product has
+     to fit in [-32768, 32767].
+
+     Compare in the same signedness the products were computed with.  Using
+     signed comparisons on an unsigned product silently accepts the worst
+     cases: 65535 * 65537 is 0xFFFFFFFF, which does not overflow 32 bits and
+     reads as -1 when interpreted as signed — apparently well inside 16 bits,
+     while the real value is over four billion.  That let x * 65537, the idiom
+     for replicating a 16-bit pattern into both halves of a word, be narrowed
+     to x * 1.  */
+  if (sign == UNSIGNED)
+    {
+      wide_int prod_max_u = wi::umax (prod1, prod2);
+      return !wi::gtu_p (prod_max_u, wi::uhwi (32767, result_prec));
+    }
+
   wide_int prod_min = wi::smin (prod1, prod2);
   wide_int prod_max = wi::smax (prod1, prod2);
 
-  /* Product must fit in signed 16-bit [-32768, 32767].  */
   wide_int signed_min = wi::shwi (-32768, result_prec);
   wide_int signed_max = wi::shwi (32767, result_prec);
 
