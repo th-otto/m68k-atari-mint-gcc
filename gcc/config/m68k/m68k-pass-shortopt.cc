@@ -2807,6 +2807,20 @@ highword_optimize_extraction (basic_block bb)
 	  if (!NONDEBUG_INSN_P (scan))
 	    continue;
 
+	  /* A call passes its register arguments through
+	     CALL_INSN_FUNCTION_USAGE, not through PATTERN, so a 32-bit
+	     argument held in this register would go unnoticed here — and the
+	     call's implicit clobber of the return register must not be taken
+	     for a safe redefinition.  Not exotic under -mfastcall, where
+	     arguments travel in registers.  */
+	  if (CALL_P (scan)
+	      && CALL_INSN_FUNCTION_USAGE (scan)
+	      && uses_reg_as_long_p (CALL_INSN_FUNCTION_USAGE (scan), regno))
+	    {
+	      upper_bits_matter = true;
+	      break;
+	    }
+
 	  /* Check SImode use BEFORE redef — an insn like add.l %d0,%d0
 	     both reads and writes, and the read needs correct upper bits.  */
 	  if (uses_reg_as_long_p (PATTERN (scan), regno))
@@ -2828,12 +2842,20 @@ highword_optimize_extraction (basic_block bb)
 	    {
 	      /* Live out of block.  For return values (d0), check if
 		 the function returns HImode - in that case upper bits
-		 don't matter even if live out.  */
+		 don't matter even if live out.
+
+		 A HImode return type alone is not enough: d0 being live out
+		 does not mean it carries the return value.  It may be live
+		 into a successor block that uses it as SImode, and the upper
+		 bits would then be garbage.  Only trust the return type when
+		 this block flows straight to the exit, so the live-out value
+		 really is the returned one.  */
 	      if (regno == 0)
 		{
-		  /* Check if function returns HImode.  */
 		  tree ret_type = TREE_TYPE (TREE_TYPE (cfun->decl));
-		  if (ret_type && INTEGRAL_TYPE_P (ret_type)
+		  if (single_succ_p (bb)
+		      && single_succ (bb) == EXIT_BLOCK_PTR_FOR_FN (cfun)
+		      && ret_type && INTEGRAL_TYPE_P (ret_type)
 		      && TYPE_PRECISION (ret_type) <= 16)
 		    {
 		      /* Function returns HImode or smaller - upper bits
@@ -2932,14 +2954,30 @@ highword_optimize_computation (basic_block bb)
 	  if (!NONDEBUG_INSN_P (scan))
 	    continue;
 
-	  if (reg_set_p (ext_reg, scan))
-	    break;  /* Redefined - safe.  */
+	  /* Register arguments of a call live in CALL_INSN_FUNCTION_USAGE
+	     rather than in PATTERN, so a 32-bit argument in this register
+	     is invisible to the check below, and the call's implicit
+	     clobber would otherwise pass for a safe redefinition.  */
+	  if (CALL_P (scan)
+	      && CALL_INSN_FUNCTION_USAGE (scan)
+	      && uses_reg_as_long_p (CALL_INSN_FUNCTION_USAGE (scan), regno))
+	    {
+	      safe = false;
+	      break;
+	    }
 
+	  /* Check the SImode use BEFORE the redefinition — an insn like
+	     add.l %d0,%d0 both reads and writes, and the read still needs
+	     the sign-extended upper bits.  Testing reg_set_p first would
+	     accept such an insn as a harmless redefinition.  */
 	  if (uses_reg_as_long_p (PATTERN (scan), regno))
 	    {
 	      safe = false;
 	      break;
 	    }
+
+	  if (reg_set_p (ext_reg, scan))
+	    break;  /* Redefined - safe.  */
 	}
 
       if (!safe)
