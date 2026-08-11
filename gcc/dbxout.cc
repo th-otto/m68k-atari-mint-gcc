@@ -84,6 +84,8 @@ along with GCC; see the file COPYING3.  If not see
 #include "varasm.h"
 #include "stor-layout.h"
 #include "reload.h"
+#include "ira.h"
+#include "lra.h"
 #include "output.h"
 #include "dbxout.h"
 #include "toplev.h"
@@ -2967,7 +2969,9 @@ dbxout_symbol (tree decl, int local ATTRIBUTE_UNUSED)
 	DBXOUT_DECR_NESTING_AND_RETURN (0);
 
       if (!is_global_var (decl))
-	decl_rtl = eliminate_regs (decl_rtl, VOIDmode, NULL_RTX);
+	decl_rtl = (ira_use_lra_p
+		    ? lra_eliminate_regs (decl_rtl, VOIDmode, NULL_RTX)
+		    : eliminate_regs (decl_rtl, VOIDmode, NULL_RTX));
 #ifdef LEAF_REG_REMAP
       if (crtl->uses_only_leaf_regs)
 	leaf_renumber_regs_insn (decl_rtl);
@@ -3475,9 +3479,16 @@ dbxout_parms (tree parms)
 	/* Perform any necessary register eliminations on the parameter's rtl,
 	   so that the debugging output will be accurate.  */
 	DECL_INCOMING_RTL (parms)
-	  = eliminate_regs (DECL_INCOMING_RTL (parms), VOIDmode, NULL_RTX);
+	  = (ira_use_lra_p
+	     ? lra_eliminate_regs (DECL_INCOMING_RTL (parms), VOIDmode,
+				   NULL_RTX)
+	     : eliminate_regs (DECL_INCOMING_RTL (parms), VOIDmode, NULL_RTX));
 	SET_DECL_RTL (parms,
-		      eliminate_regs (DECL_RTL (parms), VOIDmode, NULL_RTX));
+		      (ira_use_lra_p
+		       ? lra_eliminate_regs (DECL_RTL (parms), VOIDmode,
+					     NULL_RTX)
+		       : eliminate_regs (DECL_RTL (parms), VOIDmode,
+					 NULL_RTX)));
 #ifdef LEAF_REG_REMAP
 	if (crtl->uses_only_leaf_regs)
 	  {

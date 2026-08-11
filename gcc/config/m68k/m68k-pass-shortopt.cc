@@ -131,10 +131,25 @@ m68k_product_fits_16bit (wide_int min_val, wide_int max_val, wide_int cst_val,
   if (overflow != wi::OVF_NONE)
     return false;
 
+  /* The narrowed multiply is performed in signed 16-bit, so the product has
+     to fit in [-32768, 32767].
+
+     Compare in the same signedness the products were computed with.  Using
+     signed comparisons on an unsigned product silently accepts the worst
+     cases: 65535 * 65537 is 0xFFFFFFFF, which does not overflow 32 bits and
+     reads as -1 when interpreted as signed — apparently well inside 16 bits,
+     while the real value is over four billion.  That let x * 65537, the idiom
+     for replicating a 16-bit pattern into both halves of a word, be narrowed
+     to x * 1.  */
+  if (sign == UNSIGNED)
+    {
+      wide_int prod_max_u = wi::umax (prod1, prod2);
+      return !wi::gtu_p (prod_max_u, wi::uhwi (32767, result_prec));
+    }
+
   wide_int prod_min = wi::smin (prod1, prod2);
   wide_int prod_max = wi::smax (prod1, prod2);
 
-  /* Product must fit in signed 16-bit [-32768, 32767].  */
   wide_int signed_min = wi::shwi (-32768, result_prec);
   wide_int signed_max = wi::shwi (32767, result_prec);
 
@@ -1753,6 +1768,73 @@ rewrite_subword_defs_to_strict_low_part (rtx_insn *start_insn,
   return true;
 }
 
+/* Return true if a single clear in LOOP's preheader is enough to keep the
+   upper bits of REGNO zero for every iteration.
+
+   Hoisting the clear out of the loop only works while everything inside
+   writes REGNO in a mode narrower than CLR_MODE — those are m68k partial
+   writes and leave the upper bits alone.  One full-width write is enough to
+   destroy the invariant, and the back edge then re-enters the loop without
+   the clear being repeated, so from the second iteration onwards the upper
+   bits carry that value instead of zero.
+
+   String_Pixel_Width in Vanilla Conquer is the cautionary example: the loop
+   body computes "add.l %d3,%d1" and then reloads only the low byte with
+   "move.b (%a0)+,%d1", after which %d1 is used as a full 32-bit index into
+   the font width table.  With the clear hoisted, every character but the
+   first indexed far outside the table.  */
+
+static bool
+m68k_loop_keeps_upper_bits_clear_p (class loop *loop, unsigned regno,
+				    machine_mode clr_mode)
+{
+  basic_block *body = get_loop_body (loop);
+  bool ok = true;
+
+  for (unsigned i = 0; ok && i < loop->num_nodes; i++)
+    {
+      rtx_insn *insn;
+      FOR_BB_INSNS (body[i], insn)
+	{
+	  if (!NONDEBUG_INSN_P (insn))
+	    continue;
+
+	  /* A call clobbers the caller-saved registers wholesale.  */
+	  if (CALL_P (insn)
+	      && TEST_HARD_REG_BIT (regs_invalidated_by_call, regno))
+	    {
+	      ok = false;
+	      break;
+	    }
+
+	  df_ref def;
+	  FOR_EACH_INSN_DEF (def, insn)
+	    {
+	      if (DF_REF_REGNO (def) != regno)
+		continue;
+
+	      rtx reg = DF_REF_REG (def);
+	      machine_mode mode = GET_MODE (reg);
+
+	      /* Anything not strictly narrower than the clear touches the
+		 upper bits.  Partial writes flagged as such are fine.  */
+	      if ((DF_REF_FLAGS (def) & DF_REF_PARTIAL) == 0
+		  && !(GET_MODE_SIZE (mode) < GET_MODE_SIZE (clr_mode)))
+		{
+		  ok = false;
+		  break;
+		}
+	    }
+
+	  if (!ok)
+	    break;
+	}
+    }
+
+  free (body);
+  return ok;
+}
+
 /* Try to eliminate andi instructions in a basic block by inserting
    moveq #0 before the first appropriately-sized definition.
    ALREADY_CLEARED_BEFORE tracks def_insns that already have moveq inserted
@@ -2024,6 +2106,12 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
       /* Insert moveq #0,reg before each definition.  */
       bool all_succeeded = true;
       auto_vec<rtx_insn *> inserted_insns;
+      /* clr.w definitions that were widened to a long clear.  The original
+	 must outlive the decision: it is only removed once the candidate has
+	 succeeded, so that abandoning the candidate leaves the function with
+	 the clear it started with.  */
+      auto_vec<rtx_insn *> widened_originals;
+      auto_vec<unsigned> claimed_keys;
 
       if (dump_file)
 	fprintf (dump_file, "  Starting transform loop for %d def_insns\n",
@@ -2062,6 +2150,39 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
 		fprintf (dump_file, "  SKIP: already cleared before uid=%d "
 			 "for d%d\n", INSN_UID (def_insn), regno);
 	      continue;  /* Already have moveq, just skip.  */
+	    }
+
+	  /* The clear is executed once, but an andi inside a loop is reached
+	     again on every iteration.  That only stays sound while the loop
+	     writes the register exclusively through partial writes; a single
+	     full-width write leaves the upper bits dirty for the next
+	     iteration, and the clear is not repeated.  */
+	  if (current_loops == NULL && !*created_loops)
+	    {
+	      loop_optimizer_init (AVOID_CFG_MODIFICATIONS);
+	      *created_loops = true;
+	    }
+	  if (current_loops)
+	    {
+	      machine_mode loop_clr_mode
+		= (cand.ext_type == EXT_BYTE_TO_WORD) ? HImode : SImode;
+	      class loop *use_loop = bb->loop_father;
+
+	      if (use_loop
+		  && use_loop != current_loops->tree_root
+		  && !m68k_loop_keeps_upper_bits_clear_p (use_loop, regno,
+							  loop_clr_mode))
+		{
+		  if (dump_file)
+		    fprintf (dump_file, "  SKIP: loop %d writes d%d at full "
+			     "width, a single clear would not hold\n",
+			     use_loop->num, regno);
+		  /* Abandon the whole candidate — skipping just this clear
+		     would leave the andi eliminated with nothing to
+		     compensate for it.  */
+		  all_succeeded = false;
+		  break;
+		}
 	    }
 
 	  /* Extra validation for cross-BB insertions.  */
@@ -2130,8 +2251,16 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
 
 		      /* Only use preheader if there's exactly one non-latch
 			 predecessor (i.e., a proper preheader exists).  */
+		      /* Determine clear mode based on extension type.  */
+		      machine_mode clr_mode
+			= (cand.ext_type == EXT_BYTE_TO_WORD)
+			  ? HImode : SImode;
+
 		      if (prehdr_edge && non_latch_preds == 1
-			  && prehdr_edge->src != ENTRY_BLOCK_PTR_FOR_FN (cfun))
+			  && prehdr_edge->src != ENTRY_BLOCK_PTR_FOR_FN (cfun)
+			  && m68k_loop_keeps_upper_bits_clear_p (def_loop,
+								 regno,
+								 clr_mode))
 			{
 			  basic_block preheader = prehdr_edge->src;
 
@@ -2145,10 +2274,6 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
 			  if (!bitmap_bit_p (already_cleared_before,
 					     preamble_key))
 			    {
-			      /* Determine clear mode based on extension type.  */
-			      machine_mode clr_mode
-				= (cand.ext_type == EXT_BYTE_TO_WORD)
-				  ? HImode : SImode;
 			      rtx clr_reg
 				= gen_rtx_REG (clr_mode, regno);
 			      rtx clr_pat
@@ -2242,7 +2367,12 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
 		{
 		  unsigned key2 = (INSN_UID (def_insn) << 4) | (regno & 0xf);
 		  bitmap_set_bit (already_cleared_before, key2);
-		  delete_insn (def_insn);
+		  claimed_keys.safe_push (key2);
+		  /* Do NOT delete def_insn yet — see widened_originals.
+		     Until then both clears are present, which is redundant
+		     but correct: the long clear runs first, the word clear
+		     immediately after.  */
+		  widened_originals.safe_push (def_insn);
 		  inserted_insns.safe_push (wide_insn);
 		  if (dump_file)
 		    fprintf (dump_file, "  Widened clr.w to moveq #0 "
@@ -2290,9 +2420,13 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
       if (!all_succeeded)
 	{
 	  /* Remove any insns we inserted.  Use delete_insn() to properly
-	     update the dataflow framework.  */
+	     update the dataflow framework.  The widened originals are left
+	     untouched — dropping them here would strip the function of a
+	     clear that nothing replaces.  */
 	  for (rtx_insn *ins : inserted_insns)
 	    delete_insn (ins);
+	  for (unsigned k : claimed_keys)
+	    bitmap_clear_bit (already_cleared_before, k);
 	  continue;
 	}
 
@@ -2318,6 +2452,8 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
 	{
 	  for (rtx_insn *ins : inserted_insns)
 	    delete_insn (ins);
+	  for (unsigned k : claimed_keys)
+	    bitmap_clear_bit (already_cleared_before, k);
 	  continue;
 	}
 
@@ -2327,6 +2463,11 @@ m68k_elim_andi_bb (basic_block bb, bitmap already_cleared_before,
 	fprintf (dump_file, "deleting insn with uid = %d.\n",
 		 INSN_UID (cand.andi_insn));
       delete_insn (cand.andi_insn);
+
+      /* The candidate held; now the superseded word clears can go.  */
+      for (rtx_insn *orig : widened_originals)
+	delete_insn (orig);
+
       changes++;
 	}
     }
@@ -2807,6 +2948,20 @@ highword_optimize_extraction (basic_block bb)
 	  if (!NONDEBUG_INSN_P (scan))
 	    continue;
 
+	  /* A call passes its register arguments through
+	     CALL_INSN_FUNCTION_USAGE, not through PATTERN, so a 32-bit
+	     argument held in this register would go unnoticed here — and the
+	     call's implicit clobber of the return register must not be taken
+	     for a safe redefinition.  Not exotic under -mfastcall, where
+	     arguments travel in registers.  */
+	  if (CALL_P (scan)
+	      && CALL_INSN_FUNCTION_USAGE (scan)
+	      && uses_reg_as_long_p (CALL_INSN_FUNCTION_USAGE (scan), regno))
+	    {
+	      upper_bits_matter = true;
+	      break;
+	    }
+
 	  /* Check SImode use BEFORE redef — an insn like add.l %d0,%d0
 	     both reads and writes, and the read needs correct upper bits.  */
 	  if (uses_reg_as_long_p (PATTERN (scan), regno))
@@ -2828,12 +2983,20 @@ highword_optimize_extraction (basic_block bb)
 	    {
 	      /* Live out of block.  For return values (d0), check if
 		 the function returns HImode - in that case upper bits
-		 don't matter even if live out.  */
+		 don't matter even if live out.
+
+		 A HImode return type alone is not enough: d0 being live out
+		 does not mean it carries the return value.  It may be live
+		 into a successor block that uses it as SImode, and the upper
+		 bits would then be garbage.  Only trust the return type when
+		 this block flows straight to the exit, so the live-out value
+		 really is the returned one.  */
 	      if (regno == 0)
 		{
-		  /* Check if function returns HImode.  */
 		  tree ret_type = TREE_TYPE (TREE_TYPE (cfun->decl));
-		  if (ret_type && INTEGRAL_TYPE_P (ret_type)
+		  if (single_succ_p (bb)
+		      && single_succ (bb) == EXIT_BLOCK_PTR_FOR_FN (cfun)
+		      && ret_type && INTEGRAL_TYPE_P (ret_type)
 		      && TYPE_PRECISION (ret_type) <= 16)
 		    {
 		      /* Function returns HImode or smaller - upper bits
@@ -2932,14 +3095,30 @@ highword_optimize_computation (basic_block bb)
 	  if (!NONDEBUG_INSN_P (scan))
 	    continue;
 
-	  if (reg_set_p (ext_reg, scan))
-	    break;  /* Redefined - safe.  */
+	  /* Register arguments of a call live in CALL_INSN_FUNCTION_USAGE
+	     rather than in PATTERN, so a 32-bit argument in this register
+	     is invisible to the check below, and the call's implicit
+	     clobber would otherwise pass for a safe redefinition.  */
+	  if (CALL_P (scan)
+	      && CALL_INSN_FUNCTION_USAGE (scan)
+	      && uses_reg_as_long_p (CALL_INSN_FUNCTION_USAGE (scan), regno))
+	    {
+	      safe = false;
+	      break;
+	    }
 
+	  /* Check the SImode use BEFORE the redefinition — an insn like
+	     add.l %d0,%d0 both reads and writes, and the read still needs
+	     the sign-extended upper bits.  Testing reg_set_p first would
+	     accept such an insn as a harmless redefinition.  */
 	  if (uses_reg_as_long_p (PATTERN (scan), regno))
 	    {
 	      safe = false;
 	      break;
 	    }
+
+	  if (reg_set_p (ext_reg, scan))
+	    break;  /* Redefined - safe.  */
 	}
 
       if (!safe)

@@ -3057,42 +3057,22 @@ m68k_decompose_address (machine_mode mode, rtx x,
 	  return true;
 	}
 
-      /* Recognize (plus (plus base index) index) as base + index*2.
-	 When fwprop substitutes (plus reg reg) for x*2 into a memory
-	 address, simplify_gen_binary reassociates it from
-	 (plus base (plus idx idx)) to (plus (plus base idx) idx).
-	 Only accept this on 68020+ which supports scaled indexing.
-	 The m68k-canon-scaled-index pass (after fwprop, before IRA)
-	 rewrites this to (plus base (ashift idx 1)) so that LRA's
-	 decompose_normal_address can handle it.  */
-      if ((TARGET_68020 || TARGET_COLDFIRE)
-	  && GET_CODE (XEXP (x, 0)) == PLUS)
-	{
-	  rtx inner = XEXP (x, 0);
-	  rtx outer_right = XEXP (x, 1);
+      /* (plus (plus base index) index) — base + index*2 spelled with the
+	 index twice — is deliberately NOT accepted.
 
-	  /* (plus (plus A B) C) where B == C → base=A, index=C, scale=2.  */
-	  if (rtx_equal_p (XEXP (inner, 1), outer_right)
-	      && m68k_legitimate_base_reg_p (XEXP (inner, 0), strict_p)
-	      && m68k_legitimate_index_reg_p (outer_right, strict_p))
-	    {
-	      address->base = XEXP (inner, 0);
-	      address->index = outer_right;
-	      address->scale = 2;
-	      return true;
-	    }
+	 It used to be, on the assumption that the m68k-canon-scaled-index
+	 pass would rewrite it into the canonical (plus base (ashift idx 1))
+	 before LRA ever saw it.  That assumption does not hold: passes
+	 running after that one can rebuild the form, and LRA constructs it
+	 itself while reloading — it asks this hook whether the address is
+	 valid, is told yes, and then trips over its own gcc_assert in
+	 decompose_normal_address, which cannot classify three register
+	 operands.  No placement of a cleanup pass can cover a producer that
+	 runs after the last cleanup opportunity.
 
-	  /* (plus (plus A B) C) where A == C → base=B, index=C, scale=2.  */
-	  if (rtx_equal_p (XEXP (inner, 0), outer_right)
-	      && m68k_legitimate_base_reg_p (XEXP (inner, 1), strict_p)
-	      && m68k_legitimate_index_reg_p (outer_right, strict_p))
-	    {
-	      address->base = XEXP (inner, 1);
-	      address->index = outer_right;
-	      address->scale = 2;
-	      return true;
-	    }
-	}
+	 Refusing the form here stops every producer from forming it.  The
+	 canonical ashift spelling is still accepted above, so scaled
+	 indexing itself is unaffected.  */
     }
   return false;
 }

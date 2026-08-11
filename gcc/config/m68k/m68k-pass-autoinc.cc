@@ -1785,6 +1785,70 @@ is_rmw_with_reg (rtx set, int regno, HOST_WIDE_INT expected_offset = -1)
   return false;
 }
 
+/* Return true if REGNO is mentioned anywhere from INSN up to the end of BB.
+   Calls carry their register arguments in CALL_INSN_FUNCTION_USAGE rather
+   than in PATTERN, so both have to be inspected.  */
+
+static bool
+reg_used_to_bb_end_p (rtx_insn *insn, int regno)
+{
+  rtx r = gen_rtx_REG (Pmode, regno);
+
+  for (rtx_insn *i = insn; i; i = next_nonnote_nondebug_insn_bb (i))
+    {
+      if (!NONDEBUG_INSN_P (i))
+	continue;
+      if (reg_mentioned_p (r, PATTERN (i)))
+	return true;
+      if (CALL_P (i)
+	  && CALL_INSN_FUNCTION_USAGE (i)
+	  && reg_mentioned_p (r, CALL_INSN_FUNCTION_USAGE (i)))
+	return true;
+    }
+
+  return false;
+}
+
+/* Locate, inside SET, the MEM that is addressed through REGNO and therefore
+   needs its offset adjusted once the first access becomes POST_INC.  Returns
+   a pointer to the MEM slot, or NULL if none was found.
+
+   Both operands must be searched: the collection loop in
+   try_convert_to_postinc accepts the MEM in either the source or the
+   destination, so keying the lookup off that function's IS_DEST — which
+   describes the *first* insn only — silently skipped a load following a
+   store and left its displacement pointing one element too far.  */
+
+static rtx *
+find_fixup_mem_loc (rtx set, int regno, bool fixup_is_rmw)
+{
+  int r;
+  HOST_WIDE_INT off;
+
+  if (MEM_P (SET_DEST (set))
+      && m68k_mem_base_offset_p (SET_DEST (set), &r, &off) && r == regno)
+    return &SET_DEST (set);
+
+  if (MEM_P (SET_SRC (set))
+      && m68k_mem_base_offset_p (SET_SRC (set), &r, &off) && r == regno)
+    return &SET_SRC (set);
+
+  if (!fixup_is_rmw)
+    {
+      rtx src = SET_SRC (set);
+      if (GET_RTX_CLASS (GET_CODE (src)) == RTX_COMM_ARITH
+	  || GET_RTX_CLASS (GET_CODE (src)) == RTX_BIN_ARITH)
+	{
+	  if (MEM_P (XEXP (src, 0)))
+	    return &XEXP (src, 0);
+	  if (MEM_P (XEXP (src, 1)))
+	    return &XEXP (src, 1);
+	}
+    }
+
+  return NULL;
+}
+
 /* Try to convert a sequence of offset-addressed memory accesses through
    the same register into POST_INC addressing.  Pre-RA: works on any
    pseudo, uses strict=0 for constraint validation.  If no explicit
@@ -1833,7 +1897,18 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
     {
       rtx set = single_set (insn);
       if (!set)
-	break;
+	{
+	  /* Not a plain SET — a call, a PARALLEL, ...  Collecting has to
+	     stop here, but only if REGNO is genuinely unused in the rest of
+	     the block.  Breaking out unconditionally left the later accesses
+	     with their original displacements while the register had already
+	     been advanced by the POST_INCs, and the BB-level live_out test
+	     below cannot catch that: those uses are inside this very block,
+	     so the register is not live *out* of it.  */
+	  if (reg_used_to_bb_end_p (insn, regno))
+	    return false;
+	  break;
+	}
 
       rtx dest = SET_DEST (set);
       rtx src = SET_SRC (set);
@@ -1983,6 +2058,19 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
       add_incr = expected_offset;
     }
 
+  /* Every collected insn must have a locatable MEM.  Verify this before
+     touching anything: otherwise the first access is converted to POST_INC
+     and a dependent displacement is left unadjusted, silently reading or
+     writing one element past the intended address.  */
+  for (rtx_insn *fixup : fixup_insns)
+    {
+      rtx fset = single_set (fixup);
+      if (!fset)
+	return false;
+      if (!find_fixup_mem_loc (fset, regno, is_rmw_with_reg (fset, regno)))
+	return false;
+    }
+
   /* Now perform the transformation.  */
 
   /* 1. Convert first instruction to use POST_INC.
@@ -2050,23 +2138,7 @@ try_convert_to_postinc (basic_block bb, rtx_insn *first_insn,
       bool fixup_is_rmw = is_rmw_with_reg (set, regno);
 
       /* Find the primary MEM that references our register.  */
-      rtx *mem_loc = NULL;
-      if (is_dest && MEM_P (SET_DEST (set)))
-	mem_loc = &SET_DEST (set);
-      else if (!is_dest && MEM_P (SET_SRC (set)))
-	mem_loc = &SET_SRC (set);
-      else if (!fixup_is_rmw)
-	{
-	  rtx fixup_src = SET_SRC (set);
-	  if (GET_RTX_CLASS (GET_CODE (fixup_src)) == RTX_COMM_ARITH
-	      || GET_RTX_CLASS (GET_CODE (fixup_src)) == RTX_BIN_ARITH)
-	    {
-	      if (MEM_P (XEXP (fixup_src, 0)))
-		mem_loc = &XEXP (fixup_src, 0);
-	      else if (MEM_P (XEXP (fixup_src, 1)))
-		mem_loc = &XEXP (fixup_src, 1);
-	    }
-	}
+      rtx *mem_loc = find_fixup_mem_loc (set, regno, fixup_is_rmw);
       if (!mem_loc || !MEM_P (*mem_loc))
 	continue;
 
